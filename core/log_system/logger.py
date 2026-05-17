@@ -15,8 +15,8 @@ Features:
 import os
 import sys
 import json
+import re
 import logging
-import datetime
 from enum import IntEnum
 from logging.handlers import RotatingFileHandler
 import traceback
@@ -78,8 +78,11 @@ class ColoredFormatter(logging.Formatter):
         levelname = record.levelname
 
         # Build the log prefix
-        prefix = "[{}] [{}] [{}]".format(
-            self.formatTime(record, self.datefmt), record.name, record.levelname
+        prefix = "[{}] [{}] [{}:{}]".format(
+            self.formatTime(record, self.datefmt),
+            record.levelname,
+            record.name,
+            record.lineno,
         )
 
         # Apply color and bold styling to the prefix
@@ -216,6 +219,11 @@ class AzLogsLogger:
         # Otherwise check if log level is high enough
         return level >= effective_level
 
+    def _sanitize_logger_name(self, value):
+        """Sanitize logger/module names for safe filesystem usage."""
+        sanitized = re.sub(r'[<>:"/\\|?*\s]+', "_", str(value or "")).strip("._")
+        return sanitized or "default"
+
     def _get_logger(self, module):
         """Get or create a logger for the module"""
         if module in self.loggers:
@@ -238,19 +246,28 @@ class AzLogsLogger:
 
         # Add file handler if file logging is enabled
         if self.config["log_to_file"]:
-            log_file = os.path.join(self.config["log_dir"], f"azlogs_{module}.log")
-            file_handler = RotatingFileHandler(
-                log_file,
-                maxBytes=self.config["max_file_size_mb"] * 1024 * 1024,
-                backupCount=self.config["backup_count"],
-                encoding="utf-8",
-            )
-            file_formatter = logging.Formatter(
-                fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
-            file_handler.setFormatter(file_formatter)
-            logger.addHandler(file_handler)
+            safe_module = self._sanitize_logger_name(module)
+            log_file = os.path.join(self.config["log_dir"], f"azlogs_{safe_module}.log")
+            try:
+                file_handler = RotatingFileHandler(
+                    log_file,
+                    maxBytes=self.config["max_file_size_mb"] * 1024 * 1024,
+                    backupCount=self.config["backup_count"],
+                    encoding="utf-8",
+                )
+                file_formatter = logging.Formatter(
+                    fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s",
+                    datefmt="%Y-%m-%d %H:%M:%S",
+                )
+                file_handler.setFormatter(file_formatter)
+                logger.addHandler(file_handler)
+            except OSError as e:
+                self.config["log_to_file"] = False
+                logger.warning(
+                    "AzLogs: disabling file logging after handler setup failed for %s: %s",
+                    log_file,
+                    e,
+                )
 
         self.loggers[module] = logger
         return logger
@@ -267,12 +284,13 @@ class AzLogsLogger:
 
         # Add exception info if provided
         exc_info = kwargs.get("exc_info", None)
+        stacklevel = kwargs.get("stacklevel", 1)
 
         # Map LogLevel to logging level
         log_level = LEVEL_MAP.get(level, logging.INFO)
 
         # Write log
-        logger.log(log_level, message, exc_info=exc_info)
+        logger.log(log_level, message, exc_info=exc_info, stacklevel=stacklevel)
 
     def debug(self, module, *args, **kwargs):
         """Log at DEBUG level"""
@@ -290,9 +308,10 @@ class AzLogsLogger:
         """Log at ERROR level"""
         self.log(module, LogLevel.ERROR, *args, **kwargs)
 
-    def exception(self, module, *args):
+    def exception(self, module, *args, **kwargs):
         """Log exception at ERROR level"""
-        self.log(module, LogLevel.ERROR, *args, exc_info=True)
+        kwargs["exc_info"] = True
+        self.log(module, LogLevel.ERROR, *args, **kwargs)
 
 
 # Singleton
@@ -320,9 +339,10 @@ def error(module, *args, **kwargs):
     logger.log(module, LogLevel.ERROR, *args, **kwargs)
 
 
-def exception(module, *args):
+def exception(module, *args, **kwargs):
     """Log exception at ERROR level"""
-    logger.log(module, LogLevel.ERROR, *args, exc_info=True)
+    kwargs["exc_info"] = True
+    logger.log(module, LogLevel.ERROR, *args, **kwargs)
 
 
 # Function to quickly enable/disable debugging

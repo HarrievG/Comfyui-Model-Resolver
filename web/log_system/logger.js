@@ -73,12 +73,19 @@ const LEVEL_NAMES = {
     [LogLevel.WARN]: 'WARN',
     [LogLevel.ERROR]: 'ERROR',
 };
+const CONSOLE_METHODS = {
+    [LogLevel.DEBUG]: 'debug',
+    [LogLevel.INFO]: 'info',
+    [LogLevel.WARN]: 'warn',
+    [LogLevel.ERROR]: 'error',
+};
 class Logger {
     constructor() {
         this.config = { ...DEFAULT_CONFIG };
         this.logs = [];
         this.enabled = true;
         this.loadConfig();
+        this.loadLogs();
     }
     /**
      * Configure the logger
@@ -178,12 +185,62 @@ class Logger {
     printToConsole(logData) {
         const { timestamp, module, level, levelName, args } = logData;
         const prefix = `[${timestamp}] [${module}] [${levelName}]`;
-        if (this.config.useColors && typeof console.log === 'function') {
+        const consoleMethod = CONSOLE_METHODS[level] || 'log';
+        const consoleFn = typeof console[consoleMethod] === 'function'
+            ? console[consoleMethod].bind(console)
+            : console.log.bind(console);
+        if (this.config.useColors && typeof consoleFn === 'function') {
             const color = COLORS[level] || '#000000';
-            console.log(`%c${prefix}`, `color: ${color}; font-weight: bold;`, ...args);
+            consoleFn(`%c${prefix}`, `color: ${color}; font-weight: bold;`, ...args);
             return;
         }
-        console.log(prefix, ...args);
+        consoleFn(prefix, ...args);
+    }
+    serializeLogEntry(log) {
+        return {
+            timestamp: log.timestamp,
+            module: log.module,
+            level: log.level,
+            levelName: log.levelName,
+            args: log.args.map((arg) => {
+                if (typeof arg === 'object' && arg !== null) {
+                    try {
+                        return JSON.parse(JSON.stringify(arg));
+                    }
+                    catch (e) {
+                        return String(arg);
+                    }
+                }
+                return arg;
+            }),
+            time: log.time instanceof Date ? log.time.toISOString() : log.time
+        };
+    }
+    deserializeLogEntry(log) {
+        if (!log || typeof log !== 'object') {
+            return null;
+        }
+        if ('timestamp' in log && 'module' in log && 'level' in log) {
+            return {
+                timestamp: log.timestamp,
+                module: log.module,
+                level: log.level,
+                levelName: log.levelName || LEVEL_NAMES[log.level] || 'INFO',
+                args: Array.isArray(log.args) ? log.args : [],
+                time: log.time ? new Date(log.time) : new Date()
+            };
+        }
+        if ('t' in log && 'm' in log && 'l' in log) {
+            return {
+                timestamp: log.t,
+                module: log.m,
+                level: log.l,
+                levelName: LEVEL_NAMES[log.l] || 'INFO',
+                args: Array.isArray(log.a) ? log.a : [],
+                time: new Date()
+            };
+        }
+        return null;
     }
     /**
      * Save logs to localStorage
@@ -191,23 +248,8 @@ class Logger {
     saveLogs() {
         if (typeof localStorage !== 'undefined' && this.config.saveToStorage) {
             try {
-                const simplifiedLogs = this.logs.map((log) => ({
-                    t: log.timestamp,
-                    m: log.module,
-                    l: log.level,
-                    a: log.args.map((arg) => {
-                        if (typeof arg === 'object') {
-                            try {
-                                return JSON.stringify(arg);
-                            }
-                            catch (e) {
-                                return String(arg);
-                            }
-                        }
-                        return arg;
-                    })
-                }));
-                localStorage.setItem(this.config.storageKey, JSON.stringify(simplifiedLogs));
+                const storedLogs = this.logs.map((log) => this.serializeLogEntry(log));
+                localStorage.setItem(this.config.storageKey, JSON.stringify(storedLogs));
             }
             catch (e) {
                 console.error('Failed to save logs to localStorage:', e);
@@ -222,7 +264,9 @@ class Logger {
             try {
                 const storedLogs = localStorage.getItem(this.config.storageKey);
                 if (storedLogs) {
-                    this.logs = JSON.parse(storedLogs);
+                    this.logs = JSON.parse(storedLogs)
+                        .map((log) => this.deserializeLogEntry(log))
+                        .filter(Boolean);
                 }
             }
             catch (e) {

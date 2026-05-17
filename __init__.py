@@ -7,11 +7,9 @@
 """
 
 import asyncio
-import logging
 from .core.log_system.log_funcs import (
-    log_debug,
+    create_module_logger,
     log_info,
-    log_warn,
     log_error,
     log_exception,
 )
@@ -31,7 +29,7 @@ class ModelLinkerExtension:
 
     def __init__(self):
         self.routes_setup = False
-        self.logger = logging.getLogger(__name__)
+        self.logger = create_module_logger(__name__)
         self.analysis_progress = {}
 
     def initialize(self):
@@ -173,16 +171,13 @@ class ModelLinkerExtension:
                         is_lora = missing.get("is_lora_v2")
                         exists = missing.get("exists")
                         name = missing.get("name") or missing.get("original_path", "")
-                        # Log for debugging
-                        import logging
-
-                        logging.getLogger(__name__).debug(
+                        self.logger.debug(
                             f"Filtering: {name} is_lora_v2={is_lora} exists={exists}"
                         )
 
                         # Skip LoraManager lorAs that already exist locally
                         if is_lora and exists:
-                            logging.getLogger(__name__).info(
+                            self.logger.info(
                                 f"Filtered out LoraManager lora: {name}"
                             )
                             continue
