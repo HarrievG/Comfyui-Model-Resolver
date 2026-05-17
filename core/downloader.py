@@ -86,6 +86,8 @@ def get_download_directory(category: str) -> Optional[str]:
         "embedding": "embeddings",
         "diffusion_models": "diffusion_models",
         "unet": "diffusion_models",
+        "latent_upscale_model": "latent_upscale_models",
+        "latent_upscale_models": "latent_upscale_models",
         "text_encoders": "text_encoders",
         "text_encoder": "text_encoders",
         "ipadapter": "ipadapter",

@@ -1788,6 +1788,42 @@ class LinkerManagerDialog extends ComfyDialog {
         return Boolean(this.capabilities?.sources?.[source]);
     }
 
+    getCategoryDisplayName(category = '') {
+        const displayNames = {
+            'checkpoints': 'checkpoint',
+            'loras': 'lora',
+            'vae': 'vae',
+            'controlnet': 'controlnet',
+            'embeddings': 'embedding',
+            'upscale_models': 'upscale_model',
+            'latent_upscale_models': 'latent_upscale_model',
+            'diffusion_models': 'unet',
+            'text_encoders': 'text_encoders (also scans clip)',
+            'clip': 'clip',
+            'clip_vision': 'clip_vision',
+            'hypernetworks': 'hypernetwork'
+        };
+        return displayNames[category] || category || 'unknown';
+    }
+
+    getCategoryTokenName(category = '') {
+        const tokenNames = {
+            'checkpoints': 'checkpoint',
+            'loras': 'lora',
+            'vae': 'vae',
+            'controlnet': 'controlnet',
+            'embeddings': 'embedding',
+            'upscale_models': 'upscale_model',
+            'latent_upscale_models': 'latent_upscale_model',
+            'diffusion_models': 'unet',
+            'text_encoders': 'text_encoders',
+            'clip': 'clip',
+            'clip_vision': 'clip_vision',
+            'hypernetworks': 'hypernetwork'
+        };
+        return tokenNames[category] || category || 'unknown';
+    }
+
     getDownloadCategoryOptions(defaultCategory = 'checkpoints') {
         const directories = this.downloadDirectories || {};
         const keys = Object.keys(directories);
@@ -1917,7 +1953,7 @@ class LinkerManagerDialog extends ComfyDialog {
         const subfolderId = `download-subfolder-${missing.node_id}-${missing.widget_index}`;
         const subfolderListId = `download-subfolder-list-${missing.node_id}-${missing.widget_index}`;
         const options = this.getDownloadCategoryOptions(defaultCategory)
-            .map(category => `<option value="${category}" ${category === defaultCategory ? 'selected' : ''}>${category}</option>`)
+            .map(category => `<option value="${category}" ${category === defaultCategory ? 'selected' : ''}>${this.getCategoryDisplayName(category)}</option>`)
             .join('');
 
         let html = `<div class="ml-download-target">`;
@@ -2453,19 +2489,6 @@ class LinkerManagerDialog extends ComfyDialog {
             return;
         }
 
-        const categoryDisplayNames = {
-            'checkpoints': 'checkpoint',
-            'loras': 'lora',
-            'vae': 'vae',
-            'controlnet': 'controlnet',
-            'embeddings': 'embedding',
-            'upscale_models': 'upscale_model',
-            'diffusion_models': 'unet',
-            'clip': 'clip',
-            'clip_vision': 'clip_vision',
-            'hypernetworks': 'hypernetwork'
-        };
-
         const byCategory = {};
         
         for (const model of loadedModels) {
@@ -2499,7 +2522,7 @@ class LinkerManagerDialog extends ComfyDialog {
         const buildCategoryStrings = (filter) => {
             const result = {};
             for (const [category, modelsObj] of Object.entries(byCategory)) {
-                const displayCat = categoryDisplayNames[category] || category;
+                const displayCat = this.getCategoryTokenName(category);
                 const models = filter === 'active' ? modelsObj.active : filter === 'inactive' ? modelsObj.inactive : [...modelsObj.active, ...modelsObj.inactive];
                 const parts = models.map(model => {
                     const fullName = model.name || model.original_path?.split(/[\/\\]/).pop() || 'Unknown';
@@ -2539,7 +2562,7 @@ class LinkerManagerDialog extends ComfyDialog {
         `;
 
         for (const [category, modelsObj] of Object.entries(byCategory)) {
-            const displayName = categoryDisplayNames[category] || category;
+            const displayName = this.getCategoryDisplayName(category);
             const hasActive = modelsObj.active.length > 0;
             const hasInactive = modelsObj.inactive.length > 0;
             
@@ -2555,7 +2578,7 @@ class LinkerManagerDialog extends ComfyDialog {
                     const fullName = m.name || m.original_path?.split(/[\/\\]/).pop() || 'Unknown';
                     let name = fullName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
                     const strength = m.strength !== null && m.strength !== undefined ? m.strength.toFixed(2) : '1.00';
-                    return `<${displayName}:${name}:${strength}>`;
+                    return `<${this.getCategoryTokenName(category)}:${name}:${strength}>`;
                 }).join(' ');
                 
                 html += `<div class="ml-model-group">
@@ -2580,7 +2603,7 @@ class LinkerManagerDialog extends ComfyDialog {
                     const fullName = m.name || m.original_path?.split(/[\/\\]/).pop() || 'Unknown';
                     let name = fullName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
                     const strength = m.strength !== null && m.strength !== undefined ? m.strength.toFixed(2) : '1.00';
-                    return `<${displayName}:${name}:${strength}>`;
+                    return `<${this.getCategoryTokenName(category)}:${name}:${strength}>`;
                 }).join(' ');
                 
                 html += `<div>
@@ -3765,7 +3788,7 @@ class LinkerManagerDialog extends ComfyDialog {
 
         html += `<div class="ml-card-subtitle">`;
         if (missing.category) {
-            html += `<span class="ml-category-chip">${missing.category}</span>`;
+            html += `<span class="ml-category-chip" title="${missing.category}">${this.getCategoryDisplayName(missing.category)}</span>`;
         }
         html += `<span id="${locateId}" class="${nodeChipClasses}"${nodeChipTitle ? ` title="${nodeChipTitle}"` : ''}>`;
         if (missing.is_top_level !== false) {

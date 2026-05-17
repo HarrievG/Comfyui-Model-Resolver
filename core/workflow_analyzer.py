@@ -62,6 +62,7 @@ NODE_TYPE_TO_CATEGORY_HINTS = {
     "CheckpointLoader": "checkpoints",
     "unCLIPCheckpointLoader": "checkpoints",
     "VAELoader": "vae",
+    "VAELoaderKJ": "vae",
     "LoraLoader": "loras",
     "LoraLoaderModelOnly": "loras",
     "LoraLoaderV2": "loras",
@@ -69,6 +70,8 @@ NODE_TYPE_TO_CATEGORY_HINTS = {
     "Lora Stacker (LoraManager)": "loras",  # LoraManager Stacker node
     "Power Lora Loader (rgthree)": "loras",  # rgthree's Power Lora Loader
     "UNETLoader": "diffusion_models",
+    "LatentUpscaleModelLoader": "latent_upscale_models",
+    "DualCLIPLoader": "text_encoders",
     "ControlNetLoader": "controlnet",
     "ControlNetLoaderAdvanced": "controlnet",
     "CLIPVisionLoader": "clip_vision",
@@ -81,6 +84,23 @@ NODE_TYPE_TO_CATEGORY_HINTS = {
     "LTXVGemmaCLIPModelLoader": "text_encoders",
 }
 
+# Model category hints by widget/input name. Workflow JSON does not always preserve
+# widget names, but when it does this catches custom loaders without a node-type entry.
+MODEL_WIDGET_NAME_TO_CATEGORY = {
+    "ckpt_name": "checkpoints",
+    "checkpoint": "checkpoints",
+    "model_name": "diffusion_models",
+    "unet_name": "diffusion_models",
+    "vae_name": "vae",
+    "clip_name": "text_encoders",
+    "clip_name1": "text_encoders",
+    "clip_name2": "text_encoders",
+    "clip_vision_name": "clip_vision",
+    "lora_name": "loras",
+    "control_net_name": "controlnet",
+    "upscale_model_name": "upscale_models",
+}
+
 # Keys within dict-type widget values that contain model file references.
 # Some nodes (e.g. rgthree Power Lora Loader) store model info as objects like
 # {"on": true, "lora": "name.safetensors", "strength": 1.0} inside widgets_values.
@@ -90,8 +110,40 @@ NESTED_MODEL_KEYS = {
     "ckpt_name": "checkpoints",
     "checkpoint": "checkpoints",
     "vae_name": "vae",
+    "clip_name": "text_encoders",
+    "clip_name1": "text_encoders",
+    "clip_name2": "text_encoders",
     "control_net_name": "controlnet",
 }
+
+
+def get_widget_category_hint(node: Dict[str, Any], widget_index: int) -> Optional[str]:
+    """
+    Best-effort category hint for a widget index based on saved input/widget names.
+
+    ComfyUI workflows usually store only widget values, but some node/workflow formats
+    include input/widget metadata. Use it when present; otherwise callers fall back to
+    node-type hints and folder_paths resolution.
+    """
+    candidates = []
+
+    for key in ("widgets", "inputs"):
+        items = node.get(key)
+        if isinstance(items, list) and widget_index < len(items):
+            item = items[widget_index]
+            if isinstance(item, dict):
+                candidates.extend(
+                    str(item.get(name, "")).strip()
+                    for name in ("name", "widget", "label")
+                    if item.get(name)
+                )
+
+    for candidate in candidates:
+        category = MODEL_WIDGET_NAME_TO_CATEGORY.get(candidate)
+        if category:
+            return category
+
+    return None
 
 
 def is_model_filename(value: Any) -> bool:
@@ -305,10 +357,15 @@ def get_node_model_info(
 
     # Get category hints for this node type
     category_hint = NODE_TYPE_TO_CATEGORY_HINTS.get(node_type)
-    categories_to_try = [category_hint] if category_hint else None
 
     # For each widget value, check if it looks like a model file or URN
     for idx, value in enumerate(widgets_values):
+        widget_category_hint = get_widget_category_hint(node, idx)
+        effective_category_hint = category_hint or widget_category_hint
+        categories_to_try_for_widget = (
+            [effective_category_hint] if effective_category_hint else None
+        )
+
         if not is_model_filename(value):
             # Check for dict-type widget values containing model references (e.g. Power Lora Loader)
             # Some nodes store model info as objects like {"on": true, "lora": "name.safetensors", "strength": 1.0}
@@ -359,7 +416,11 @@ def get_node_model_info(
         urn_match = URN_REGEX.match(value_str)
         if urn_match:
             base, typ, provider, model_id, version_id = urn_match.groups()
-            category = URN_TYPE_MAP.get(typ.lower(), "unknown")
+            category = (
+                category_hint
+                or widget_category_hint
+                or URN_TYPE_MAP.get(typ.lower(), "unknown")
+            )
 
             model_refs.append(
                 {
@@ -386,13 +447,13 @@ def get_node_model_info(
             continue
 
         # Existing logic for local filenames
-        resolved = try_resolve_model_path(value_str, categories_to_try)
+        resolved = try_resolve_model_path(value_str, categories_to_try_for_widget)
 
         if resolved:
             category, full_path = resolved
             exists = os.path.exists(full_path)
         else:
-            category = category_hint or "unknown"
+            category = effective_category_hint or "unknown"
             full_path = None
             exists = False
 
