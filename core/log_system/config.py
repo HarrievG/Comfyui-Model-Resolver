@@ -1,7 +1,7 @@
 """
 @author: Azornes
 @title: AzLogs
-@version: 1.4.1
+@version: 1.5.0
 @description: Logging Configuration
 """
 # Log level for development.
@@ -10,3 +10,6 @@ LOG_LEVEL = "DEBUG"
 
 # Logger module name. Set to None to auto-detect from folder name.
 LOG_MODULE_NAME = "MLinker"
+
+# Enable ANSI colors in console logs.
+USE_COLORS = True

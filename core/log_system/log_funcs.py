@@ -1,7 +1,7 @@
 """
 @author: Azornes
 @title: AzLogs
-@version: 1.4.1
+@version: 1.5.0
 @description: Logging Initializator
 """
 
@@ -18,7 +18,7 @@ _project_root = None
 
 try:
     from .logger import logger, LogLevel, debug, info, warn, error, exception
-    from .config import LOG_LEVEL, LOG_MODULE_NAME
+    from .config import LOG_LEVEL, LOG_MODULE_NAME, USE_COLORS
 
     def _find_project_root(start_path):
         current = os.path.dirname(os.path.abspath(start_path))
@@ -44,6 +44,11 @@ try:
         {
             "log_to_file": True,
             "log_dir": os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs"),
+            "use_colors": (
+                logger.config["use_colors"]
+                if "AZLOGS_USE_COLORS" in os.environ
+                else USE_COLORS
+            ),
         }
     )
 
