@@ -784,6 +784,11 @@
     color: var(--ml-text);
     font-weight: 650;
 }
+.ml-model-version {
+    color: var(--ml-text-secondary);
+    font-style: italic;
+    font-weight: 500;
+}
 .ml-search-result-model small,
 .ml-search-size,
 .ml-search-result-empty {

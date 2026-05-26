@@ -402,6 +402,37 @@ class LinkerManagerDialog extends ComfyDialog {
         this.syncSearchSourceUi(missing, container);
     }
 
+    normalizeVersionName(versionName) {
+        return String(versionName || '').trim().replace(/^v{2,}(?=\d)/i, 'v');
+    }
+
+    getModelVersionParts(modelName, versionName) {
+        const name = String(modelName || '').trim();
+        const version = this.normalizeVersionName(versionName);
+        if (!version || version === name) {
+            return { name: name || version, version: '' };
+        }
+        if (name && name.toLowerCase().includes(version.toLowerCase())) {
+            return { name, version: '' };
+        }
+        return { name, version };
+    }
+
+    getVersionedModelName(modelName, versionName) {
+        const parts = this.getModelVersionParts(modelName, versionName);
+        if (!parts.version) return parts.name;
+        return parts.name ? `${parts.name} ${parts.version}` : parts.version;
+    }
+
+    renderVersionedModelNameHtml(modelName, versionName) {
+        const parts = this.getModelVersionParts(modelName, versionName);
+        const nameHtml = parts.name ? this.escapeHtml(parts.name) : '';
+        const versionHtml = parts.version
+            ? `<em class="ml-model-version">${this.escapeHtml(parts.version)}</em>`
+            : '';
+        return [nameHtml, versionHtml].filter(Boolean).join(' ');
+    }
+
     formatSearchResultSize(result = {}) {
         if (result.size === 0) return '0 B';
         if (!result.size) return '';
@@ -455,13 +486,21 @@ class LinkerManagerDialog extends ComfyDialog {
         const modelUrl = downloadSource.model_url
             || downloadSource.workflow_model_url
             || this.getModelCardUrl(downloadSource.url);
+        const versionName = downloadSource.version_name || missing.civitai_info?.version_name || '';
+        const modelParts = this.getModelVersionParts(
+            downloadSource.name || missing.civitai_info?.model_name || '',
+            versionName
+        );
+        const modelName = modelParts.name || downloadFilename;
+        const fullModelName = this.getVersionedModelName(modelName, modelParts.version);
 
         return {
             sourceKey,
             sourceLabel,
-            model: downloadSource.name || downloadFilename,
+            model: modelName,
+            version: modelParts.version,
             filename: downloadFilename,
-            secondary: sourceSecondary || (downloadSource.name && downloadSource.name !== downloadFilename ? downloadFilename : ''),
+            secondary: sourceSecondary || (fullModelName && fullModelName !== downloadFilename ? downloadFilename : ''),
             match: isFromWorkflow
                 ? { label: 'Provided', className: 'strong' }
                 : this.getSearchResultMatchDisplay(downloadSource, 'Known', 'strong'),
@@ -517,7 +556,11 @@ class LinkerManagerDialog extends ComfyDialog {
         for (const row of rows) {
             const sourceKey = String(row.sourceKey || '').replace(/[^a-z0-9_-]/gi, '');
             const sourceLabel = this.escapeHtml(row.sourceLabel || row.sourceKey || 'Source');
-            const model = this.escapeHtml(row.model || row.filename || 'Model');
+            const rawModel = row.model || row.filename || 'Model';
+            const rawVersion = row.version || '';
+            const model = this.escapeHtml(rawModel);
+            const modelTitle = this.escapeHtml(this.getVersionedModelName(rawModel, rawVersion) || rawModel);
+            const modelHtml = this.renderVersionedModelNameHtml(rawModel, rawVersion) || model;
             const secondary = row.secondary ? this.escapeHtml(row.secondary) : '';
             const filename = row.filename && row.filename !== row.model ? this.escapeHtml(row.filename) : '';
             const match = row.match || { label: 'Match', className: 'neutral' };
@@ -557,8 +600,8 @@ class LinkerManagerDialog extends ComfyDialog {
                 <tr>
                     <td><span class="ml-search-source-pill ml-search-source-${sourceKey}">${sourceLabel}</span></td>
                     <td>
-                        <div class="ml-search-result-model" title="${model}">
-                            <span>${model}</span>
+                        <div class="ml-search-result-model" title="${modelTitle}">
+                            <span>${modelHtml}</span>
                             ${secondary || filename ? `<small>${secondary || filename}</small>` : ''}
                         </div>
                     </td>
@@ -1358,7 +1401,7 @@ class LinkerManagerDialog extends ComfyDialog {
         if (titleEl) {
             const modelName = data.model_name || data.modelName || 'Unknown Model';
             const versionName = data.version_name || data.versionName || '';
-            titleEl.textContent = versionName ? `${modelName} - ${versionName}` : modelName;
+            titleEl.innerHTML = this.renderVersionedModelNameHtml(modelName, versionName) || this.escapeHtml(modelName);
         }
         
         // Update type tag
@@ -3990,15 +4033,9 @@ class LinkerManagerDialog extends ComfyDialog {
         } else if (missing.is_urn && missing.civitai_info) {
             // URN with resolved info - show model name/version
             const civitaiInfo = missing.civitai_info;
-            let civitaiLabel = '';
-            if (civitaiInfo.model_name) {
-                civitaiLabel += civitaiInfo.model_name;
-            }
-            if (civitaiInfo.version_name && civitaiInfo.version_name !== civitaiInfo.model_name) {
-                civitaiLabel += ` v${civitaiInfo.version_name}`;
-            }
-            if (civitaiLabel) {
-                const linkHtml = modelUrl ? `<a href="${modelUrl}" target="_blank" class="ml-inline-civitai-link">${civitaiLabel}</a>` : `<span class="ml-inline-civitai-link">${civitaiLabel}</span>`;
+            const civitaiLabelHtml = this.renderVersionedModelNameHtml(civitaiInfo.model_name, civitaiInfo.version_name);
+            if (civitaiLabelHtml) {
+                const linkHtml = modelUrl ? `<a href="${modelUrl}" target="_blank" class="ml-inline-civitai-link">${civitaiLabelHtml}</a>` : `<span class="ml-inline-civitai-link">${civitaiLabelHtml}</span>`;
                 titlePrimaryHtml = `<span class="ml-card-title-primary">${linkHtml}</span>`;
             }
             if (civitaiInfo.expected_filename) {
@@ -4978,9 +5015,10 @@ class LinkerManagerDialog extends ComfyDialog {
                 const loadingEl = document.getElementById(loadingElementId);
                 if (loadingEl && data.civitai) {
                     const civitai = data.civitai;
-                    const label = civitai.name || civitai.filename || 'Model';
+                    const labelHtml = this.renderVersionedModelNameHtml(civitai.name, civitai.version_name)
+                        || this.escapeHtml(civitai.filename || 'Model');
                     const url = modelUrl || `https://civitai.com/models/${modelId}?modelVersionId=${versionId}`;
-                    loadingEl.innerHTML = `<a href="${url}" target="_blank" class="ml-inline-civitai-link">${label}</a>`;
+                    loadingEl.innerHTML = `<a href="${url}" target="_blank" class="ml-inline-civitai-link">${labelHtml}</a>`;
                 } else if (loadingEl) {
                     loadingEl.textContent = 'Not found';
                     loadingEl.style.color = 'var(--ml-text-muted)';
@@ -5005,6 +5043,7 @@ class LinkerManagerDialog extends ComfyDialog {
                             url: data.civitai.download_url,
                             filename: data.civitai.filename,
                             name: data.civitai.name,
+                            version_name: data.civitai.version_name,
                             type: data.civitai.type,
                             directory: missing.category || 'checkpoints',
                             match_type: 'exact',
@@ -5202,12 +5241,14 @@ class LinkerManagerDialog extends ComfyDialog {
 
         if (loraManagerArchiveResult && loraManagerArchiveResult.url) {
             const archiveFilename = loraManagerArchiveResult.filename || missing.original_path?.split('/').pop()?.split('\\').pop() || '';
+            const archiveName = loraManagerArchiveResult.name || archiveFilename;
             addRow({
                 sourceKey: 'lora-archive',
                 sourceLabel: 'LoRA Archive',
-                model: loraManagerArchiveResult.name || loraManagerArchiveResult.version_name || archiveFilename,
+                model: archiveName,
+                version: loraManagerArchiveResult.version_name || '',
                 filename: archiveFilename,
-                secondary: loraManagerArchiveResult.version_name || '',
+                secondary: archiveName && archiveName !== archiveFilename ? archiveFilename : '',
                 match: this.getSearchResultMatchDisplay(loraManagerArchiveResult),
                 size: this.formatSearchResultSize(loraManagerArchiveResult),
                 downloadUrl: loraManagerArchiveResult.download_url || '',
@@ -5220,11 +5261,12 @@ class LinkerManagerDialog extends ComfyDialog {
         if (civitaiResult && civitaiResult.download_url) {
             const modelUrl = civitaiResult.url || (civitaiResult.model_id ? `https://civitai.com/models/${civitaiResult.model_id}${civitaiResult.version_id ? `?modelVersionId=${civitaiResult.version_id}` : ''}` : '');
             const downloadFilename = missing.civitai_info?.expected_filename || civitaiResult.filename || civitaiResult.name;
-            const modelName = missing.civitai_info?.version_name ? `${missing.civitai_info.model_name} v${missing.civitai_info.version_name}` : (civitaiResult.name || downloadFilename || 'Model');
+            const modelName = missing.civitai_info?.model_name || civitaiResult.name || downloadFilename || 'Model';
             addRow({
                 sourceKey: 'civitai',
                 sourceLabel: 'CivitAI',
                 model: modelName,
+                version: missing.civitai_info?.version_name || civitaiResult.version_name || '',
                 filename: downloadFilename,
                 secondary: civitaiResult.type || civitaiResult.base_model || '',
                 match: this.getSearchResultMatchDisplay(civitaiResult),
