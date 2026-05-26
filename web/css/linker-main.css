@@ -3103,3 +3103,386 @@
 .ml-download-target-option.is-highlighted {
     background: rgba(114,211,138,0.12);
 }
+
+/* Missing detail panel polish */
+#model-linker-modal .ml-missing-detail-pane {
+    background:
+        radial-gradient(circle at 40% 0%, rgba(255,255,255,0.035), transparent 30%),
+        transparent;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-card {
+    padding: 18px 20px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-card-header {
+    margin-bottom: 12px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-card-title {
+    font-size: 17px;
+    font-weight: 750;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-node-chip,
+#model-linker-modal .ml-missing-detail-pane .ml-category-chip {
+    min-height: 20px;
+    padding: 2px 8px;
+    background: rgba(255,255,255,0.045);
+    border-color: rgba(255,255,255,0.08);
+    font-size: 10px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-column {
+    padding: 14px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.036) 0%, rgba(255,255,255,0.018) 100%);
+    border-color: rgba(255,255,255,0.075);
+    border-radius: 7px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-column-header {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    color: #c3c3c3;
+    border-bottom-color: rgba(255,255,255,0.075);
+    font-size: 11px;
+    letter-spacing: 0.075em;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-match-row {
+    min-height: 42px;
+    margin-bottom: 8px;
+    padding: 7px 10px;
+    background: rgba(255,255,255,0.032);
+    border-color: rgba(255,255,255,0.065);
+    border-radius: 7px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-match-row.ml-best-match {
+    background: linear-gradient(90deg, rgba(114,211,138,0.135) 0%, rgba(114,211,138,0.07) 55%, rgba(114,211,138,0.035) 100%);
+    border-color: rgba(114,211,138,0.26);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-match-row:hover {
+    background: rgba(255,255,255,0.042);
+    border-color: rgba(255,255,255,0.10);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-match-row.ml-best-match:hover {
+    background: linear-gradient(90deg, rgba(114,211,138,0.15) 0%, rgba(114,211,138,0.08) 55%, rgba(114,211,138,0.04) 100%);
+    border-color: rgba(114,211,138,0.32);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-match-filename {
+    font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    font-size: 11.5px;
+    font-weight: 650;
+    color: #e7e7e7;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-badge,
+#model-linker-modal .ml-missing-detail-pane .ml-match-status {
+    min-height: 20px;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 750;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-local-link-btn {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    color: #cfcfcf;
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.12);
+    border-radius: 7px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-local-link-btn:hover:not(:disabled) {
+    color: #ffffff;
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(255,255,255,0.18);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-local-alternatives-toggle {
+    min-height: 28px;
+    margin: 6px 0;
+    padding: 0 9px;
+    background: rgba(255,255,255,0.027);
+    border: 1px solid rgba(255,255,255,0.065) !important;
+    border-radius: 7px;
+    box-shadow: none !important;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-local-alternatives-toggle:hover,
+#model-linker-modal .ml-missing-detail-pane .ml-local-alternatives-toggle:focus,
+#model-linker-modal .ml-missing-detail-pane .ml-local-alternatives-toggle:focus-visible {
+    background: rgba(255,255,255,0.038);
+    border-color: rgba(255,255,255,0.095) !important;
+    box-shadow: none !important;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-combo-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top-color: rgba(255,255,255,0.07);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-combo-input,
+#model-linker-modal .ml-missing-detail-pane .ml-search-source-select,
+#model-linker-modal .ml-missing-detail-pane .ml-download-target-input,
+#model-linker-modal .ml-missing-detail-pane .ml-download-target-select {
+    min-height: 38px;
+    height: 38px;
+    background: rgba(255,255,255,0.035);
+    border-color: rgba(255,255,255,0.10);
+    border-radius: 6px;
+    box-shadow: none;
+    font-size: 13px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-combo-input:focus,
+#model-linker-modal .ml-missing-detail-pane .ml-search-source-select:focus,
+#model-linker-modal .ml-missing-detail-pane .ml-download-target-input:focus,
+#model-linker-modal .ml-missing-detail-pane .ml-download-target-select:focus {
+    background: rgba(255,255,255,0.045);
+    border-color: rgba(114,211,138,0.34);
+    box-shadow: 0 0 0 2px rgba(114,211,138,0.08);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-download-section {
+    padding: 13px;
+    background: rgba(255,255,255,0.018);
+    border-color: rgba(255,255,255,0.065);
+    border-radius: 7px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-download-section .ml-search-source-bar > .ml-btn {
+    min-height: 34px;
+    height: 34px;
+    padding: 0 12px;
+    background: rgba(255,255,255,0.028);
+    border-color: rgba(255,255,255,0.10);
+    border-radius: 6px;
+    box-shadow: none !important;
+    font-size: 12px;
+    font-weight: 700;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-download-section .ml-search-source-bar > .ml-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.15);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-download-target {
+    padding-top: 12px;
+    border-top-color: rgba(255,255,255,0.07);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-download-target-grid {
+    gap: 10px 12px;
+}
+#model-linker-modal .ml-missing-detail-pane .model-linker-selected {
+    margin: 0 0 12px;
+    padding: 9px 11px;
+    background: linear-gradient(90deg, rgba(114,211,138,0.11) 0%, rgba(114,211,138,0.045) 100%);
+    border: 1px solid rgba(114,211,138,0.20);
+    border-radius: 7px;
+    color: var(--ml-text-soft);
+    font-size: 12px;
+    box-shadow: none;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-selected-bar-inner {
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-selected-label {
+    color: #72d38a;
+    font-size: 11px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-selected-code {
+    min-width: 0;
+    color: #d9d9d9;
+    font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    font-size: 11px;
+    white-space: nowrap;
+}
+#model-linker-modal .ml-missing-detail-pane .model-linker-selected .ml-btn {
+    min-height: 28px;
+    height: 28px;
+    padding: 0 10px;
+    margin-left: auto;
+    background: rgba(255,255,255,0.035);
+    border-color: rgba(255,255,255,0.12);
+    border-radius: 6px;
+    color: var(--ml-text-muted);
+    box-shadow: none !important;
+    font-size: 11px;
+}
+#model-linker-modal .ml-missing-detail-pane .model-linker-selected .ml-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.18);
+    color: var(--ml-text);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-progress-list-compact {
+    gap: 7px;
+    margin: 10px 0 8px;
+    padding-bottom: 1px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-progress-list-compact .ml-search-progress-item {
+    min-height: 24px;
+    padding: 3px 9px;
+    background: rgba(255,255,255,0.028);
+    border-color: rgba(255,255,255,0.07);
+    border-radius: 999px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-progress-list-compact .ml-search-progress-source {
+    font-size: 10px;
+    font-weight: 750;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-progress-list-compact .ml-search-progress-status {
+    font-size: 10px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-results-table-wrap {
+    margin-top: 8px;
+    background: rgba(255,255,255,0.018);
+    border-color: rgba(255,255,255,0.065);
+    border-radius: 7px;
+    box-shadow: none;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-results-table {
+    font-size: 11px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-results-table th {
+    padding: 9px 10px;
+    background: rgba(255,255,255,0.04);
+    color: #bdbdbd;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-results-table td {
+    padding: 9px 10px;
+    border-bottom-color: rgba(255,255,255,0.055);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-results-table tr:hover td {
+    background: rgba(255,255,255,0.016);
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-source-pill {
+    min-height: 21px;
+    padding: 2px 8px;
+    background: rgba(255,255,255,0.055);
+    border-color: rgba(255,255,255,0.08);
+    border-radius: 999px;
+    font-size: 10px;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-result-model span {
+    font-size: 12px;
+    font-weight: 700;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-result-model small,
+#model-linker-modal .ml-missing-detail-pane .ml-search-size {
+    font-size: 10px;
+    color: #a9a9a9;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-result-action-btn {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    max-width: 28px;
+    background: rgba(255,255,255,0.035);
+    border-color: rgba(255,255,255,0.105);
+    border-radius: 7px;
+    box-shadow: none;
+}
+#model-linker-modal .ml-missing-detail-pane .ml-search-result-action-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.17);
+}
+#model-linker-modal #queue-toggle-icon {
+    right: 8px;
+    min-width: 28px;
+    height: 32px;
+    padding: 0 7px;
+    color: #cfcfcf;
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.12);
+    border-radius: 7px;
+    box-shadow: none;
+}
+#model-linker-modal #queue-toggle-icon:hover {
+    background: rgba(255,255,255,0.075);
+    border-color: rgba(255,255,255,0.18);
+}
+#model-linker-modal #model-linker-content,
+#model-linker-modal .ml-missing-detail-pane,
+#model-linker-modal .ml-missing-list,
+#model-linker-modal .ml-search-results-table-wrap {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.20) transparent;
+}
+#model-linker-modal #model-linker-content::-webkit-scrollbar,
+#model-linker-modal .ml-missing-detail-pane::-webkit-scrollbar,
+#model-linker-modal .ml-missing-list::-webkit-scrollbar,
+#model-linker-modal .ml-search-results-table-wrap::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+#model-linker-modal #model-linker-content::-webkit-scrollbar-track,
+#model-linker-modal .ml-missing-detail-pane::-webkit-scrollbar-track,
+#model-linker-modal .ml-missing-list::-webkit-scrollbar-track,
+#model-linker-modal .ml-search-results-table-wrap::-webkit-scrollbar-track {
+    background: transparent;
+}
+#model-linker-modal #model-linker-content::-webkit-scrollbar-thumb,
+#model-linker-modal .ml-missing-detail-pane::-webkit-scrollbar-thumb,
+#model-linker-modal .ml-missing-list::-webkit-scrollbar-thumb,
+#model-linker-modal .ml-search-results-table-wrap::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.18);
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+}
+#model-linker-modal #model-linker-content::-webkit-scrollbar-thumb:hover,
+#model-linker-modal .ml-missing-detail-pane::-webkit-scrollbar-thumb:hover,
+#model-linker-modal .ml-missing-list::-webkit-scrollbar-thumb:hover,
+#model-linker-modal .ml-search-results-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.28);
+    background-clip: content-box;
+}
+
+/* Local matches as one compact table-like list */
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] {
+    overflow: hidden;
+    background: rgba(255,255,255,0.018);
+    border: 1px solid rgba(255,255,255,0.075);
+    border-radius: 7px;
+}
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] .ml-match-row {
+    min-height: 42px;
+    margin: 0;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.018);
+    border: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.058);
+    border-radius: 0;
+}
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] .ml-match-row:hover {
+    background: rgba(255,255,255,0.034);
+    border-bottom-color: rgba(255,255,255,0.07);
+}
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] .ml-match-row.ml-best-match {
+    background: linear-gradient(90deg, rgba(114,211,138,0.13) 0%, rgba(114,211,138,0.065) 58%, rgba(114,211,138,0.025) 100%);
+    border-bottom-color: rgba(114,211,138,0.20);
+}
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] .ml-match-row.ml-best-match:hover {
+    background: linear-gradient(90deg, rgba(114,211,138,0.15) 0%, rgba(114,211,138,0.075) 58%, rgba(114,211,138,0.03) 100%);
+}
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] > .ml-match-row:last-child,
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] > .ml-stack-sm:last-child .ml-match-row:last-child {
+    border-bottom: 0;
+}
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] > .ml-stack-sm {
+    display: grid;
+    gap: 0;
+    margin: 0;
+}
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] .ml-local-alternatives-toggle {
+    min-height: 32px;
+    margin: 0;
+    padding: 0 10px;
+    background: rgba(255,255,255,0.026);
+    border: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.058) !important;
+    border-radius: 0;
+}
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] .ml-local-alternatives-toggle:hover,
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] .ml-local-alternatives-toggle:focus,
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] .ml-local-alternatives-toggle:focus-visible {
+    background: rgba(255,255,255,0.034);
+    border-bottom-color: rgba(255,255,255,0.07) !important;
+}
+#model-linker-modal .ml-missing-detail-pane [id^="local-matches-body-"] .ml-local-alternatives-label {
+    color: #bdbdbd;
+}
