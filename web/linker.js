@@ -389,7 +389,7 @@ class LinkerManagerDialog extends ComfyDialog {
         const state = this.getSearchState(missing);
         const selectEl = container.querySelector(`#search-source-select-${missing.node_id}-${missing.widget_index}`);
         if (selectEl) {
-            selectEl.value = state.selectedSource;
+            this.setDropdownValue(selectEl, state.selectedSource, this.getSearchSourceLabel(state.selectedSource));
         }
     }
 
@@ -400,6 +400,16 @@ class LinkerManagerDialog extends ComfyDialog {
         const state = this.getSearchState(missing);
         state.selectedSource = source || 'all';
         this.syncSearchSourceUi(missing, container);
+    }
+
+    getDropdownValue(el) {
+        return el?.dataset?.value || el?.value || '';
+    }
+
+    setDropdownValue(el, value, label = value) {
+        if (!el) return;
+        el.dataset.value = value || '';
+        el.value = label || value || '';
     }
 
     normalizeVersionName(versionName) {
@@ -693,7 +703,10 @@ class LinkerManagerDialog extends ComfyDialog {
     renderSearchControls(missing, options = {}) {
         const searchSourcesId = `search-sources-${missing.node_id}-${missing.widget_index}`;
         const searchSourceSelectId = `search-source-select-${missing.node_id}-${missing.widget_index}`;
+        const searchSourceListId = `search-source-list-${missing.node_id}-${missing.widget_index}`;
         const buttonText = options.buttonText || 'Search';
+        const state = this.getSearchState(missing);
+        const selectedSource = state.selectedSource || 'all';
 
         let html = `<div id="${searchSourcesId}" class="ml-search-source-bar">`;
         html += `<button id="search-${missing.node_id}-${missing.widget_index}" class="ml-btn ml-btn-link">`;
@@ -701,15 +714,10 @@ class LinkerManagerDialog extends ComfyDialog {
         html += `</button>`;
         html += `<div class="ml-search-source-picker">`;
         html += `<label class="ml-search-source-picker-label" for="${searchSourceSelectId}">Source</label>`;
-        html += `<select id="${searchSourceSelectId}" class="ml-search-source-select">`;
-        html += `<option value="all">Everything</option>`;
-        html += `<option value="local">Local Database</option>`;
-        html += `<option value="huggingface">HuggingFace</option>`;
-        html += `<option value="civitai">CivitAI</option>`;
-        if (this.isSourceAvailable('lora_manager_archive')) {
-            html += `<option value="lora_manager_archive">LoRA Manager Archive</option>`;
-        }
-        html += `</select>`;
+        html += `<div class="ml-download-target-wrap">`;
+        html += `<input id="${searchSourceSelectId}" class="ml-download-target-input ml-search-source-select" type="text" readonly autocomplete="off" data-value="${this.escapeHtml(selectedSource)}" value="${this.escapeHtml(this.getSearchSourceLabel(selectedSource))}">`;
+        html += `<div id="${searchSourceListId}" class="ml-download-target-list ml-search-source-list"></div>`;
+        html += `</div>`;
         html += `</div>`;
         html += `</div>`;
         return html;
@@ -2206,6 +2214,17 @@ class LinkerManagerDialog extends ComfyDialog {
         return ordered.length > 0 ? ordered : [preferred];
     }
 
+    getSearchSourceOptions() {
+        const sources = ['all', 'local', 'huggingface', 'civitai'];
+        if (this.isSourceAvailable('lora_manager_archive')) {
+            sources.push('lora_manager_archive');
+        }
+        return sources.map(source => ({
+            value: source,
+            label: this.getSearchSourceLabel(source)
+        }));
+    }
+
     getAvailableSubfolders(category = '') {
         return this.downloadSubfolders.get((category || '').toLowerCase()) || [];
     }
@@ -2278,9 +2297,10 @@ class LinkerManagerDialog extends ComfyDialog {
     async applySuggestedCivitaiSubfolder(missing, categoryEl, subfolderEl) {
         if (!categoryEl || !subfolderEl || subfolderEl.value.trim()) return;
 
-        await this.ensureDownloadSubfoldersLoaded(categoryEl.value);
-        const folders = this.getAvailableSubfolders(categoryEl.value);
-        const suggestion = this.getSuggestedCivitaiSubfolder(missing, categoryEl.value, folders);
+        const category = this.getDropdownValue(categoryEl);
+        await this.ensureDownloadSubfoldersLoaded(category);
+        const folders = this.getAvailableSubfolders(category);
+        const suggestion = this.getSuggestedCivitaiSubfolder(missing, category, folders);
         if (suggestion) {
             subfolderEl.value = suggestion;
         }
@@ -2321,16 +2341,18 @@ class LinkerManagerDialog extends ComfyDialog {
     renderDownloadTargetControls(missing, defaultCategory = 'checkpoints') {
         const selectId = `download-category-${missing.node_id}-${missing.widget_index}`;
         const subfolderId = `download-subfolder-${missing.node_id}-${missing.widget_index}`;
+        const categoryListId = `download-category-list-${missing.node_id}-${missing.widget_index}`;
         const subfolderListId = `download-subfolder-list-${missing.node_id}-${missing.widget_index}`;
-        const options = this.getDownloadCategoryOptions(defaultCategory)
-            .map(category => `<option value="${category}" ${category === defaultCategory ? 'selected' : ''}>${this.getCategoryDisplayName(category)}</option>`)
-            .join('');
+        const selectedCategory = defaultCategory || 'checkpoints';
 
         let html = `<div class="ml-download-target">`;
         html += `<div class="ml-download-target-grid">`;
         html += `<label class="ml-download-target-label" for="${selectId}">Folder</label>`;
         html += `<label class="ml-download-target-label" for="${subfolderId}">Subfolder (optional)</label>`;
-        html += `<select id="${selectId}" class="ml-download-target-select">${options}</select>`;
+        html += `<div class="ml-download-target-wrap">`;
+        html += `<input id="${selectId}" class="ml-download-target-input ml-download-target-select" type="text" readonly autocomplete="off" data-value="${this.escapeHtml(selectedCategory)}" value="${this.escapeHtml(this.getCategoryDisplayName(selectedCategory))}">`;
+        html += `<div id="${categoryListId}" class="ml-download-target-list"></div>`;
+        html += `</div>`;
         html += `<div class="ml-download-target-wrap">`;
         html += `<input id="${subfolderId}" class="ml-download-target-input" type="text" placeholder="e.g. ponyxl\\styles" autocomplete="off">`;
         html += `<div id="${subfolderListId}" class="ml-download-target-list"></div>`;
@@ -2344,7 +2366,7 @@ class LinkerManagerDialog extends ComfyDialog {
         const categoryEl = this.contentElement?.querySelector(`#download-category-${missing.node_id}-${missing.widget_index}`);
         const subfolderEl = this.contentElement?.querySelector(`#download-subfolder-${missing.node_id}-${missing.widget_index}`);
         return {
-            category: categoryEl?.value || fallbackCategory || 'checkpoints',
+            category: this.getDropdownValue(categoryEl) || fallbackCategory || 'checkpoints',
             subfolder: (subfolderEl?.value || '').trim()
         };
     }
@@ -2379,21 +2401,34 @@ class LinkerManagerDialog extends ComfyDialog {
     wireDownloadTargetAutocomplete(container, missing) {
         const categoryEl = container.querySelector(`#download-category-${missing.node_id}-${missing.widget_index}`);
         const subfolderEl = container.querySelector(`#download-subfolder-${missing.node_id}-${missing.widget_index}`);
+        const categoryListEl = container.querySelector(`#download-category-list-${missing.node_id}-${missing.widget_index}`);
         const listEl = container.querySelector(`#download-subfolder-list-${missing.node_id}-${missing.widget_index}`);
         if (!categoryEl || !subfolderEl || !listEl) return;
 
         this.enableWheelScrollChaining(listEl);
+        if (categoryListEl) {
+            this.enableWheelScrollChaining(categoryListEl);
+        }
 
         const renderOptions = (targetEl, values, onSelect) => {
-            if (!values.length) {
+            const options = values.map(value => (
+                typeof value === 'object'
+                    ? value
+                    : { value, label: value }
+            ));
+            if (!options.length) {
                 targetEl.innerHTML = '';
                 targetEl.style.display = 'none';
                 return;
             }
 
-            targetEl.innerHTML = values
+            targetEl.innerHTML = options
                 .slice(0, 50)
-                .map(value => `<div class="ml-download-target-option" data-value="${encodeURIComponent(value)}">${value}</div>`)
+                .map(option => {
+                    const value = String(option.value || '');
+                    const label = String(option.label || value);
+                    return `<div class="ml-download-target-option" data-value="${encodeURIComponent(value)}" data-label="${encodeURIComponent(label)}">${this.escapeHtml(label)}</div>`;
+                })
                 .join('');
 
             targetEl.style.display = 'block';
@@ -2402,16 +2437,33 @@ class LinkerManagerDialog extends ComfyDialog {
                 option.addEventListener('mousedown', (event) => {
                     event.preventDefault();
                     const value = decodeURIComponent(option.dataset.value || '');
-                    onSelect(value);
+                    const label = decodeURIComponent(option.dataset.label || option.dataset.value || '');
+                    onSelect(value, label);
                     targetEl.style.display = 'none';
                 });
             });
         };
 
+        const populateCategoryOptions = () => {
+            if (!categoryListEl) return;
+            const options = this.getDownloadCategoryOptions(this.getDropdownValue(categoryEl) || 'checkpoints')
+                .map(category => ({
+                    value: category,
+                    label: this.getCategoryDisplayName(category)
+                }));
+            renderOptions(categoryListEl, options, (value, label) => {
+                this.setDropdownValue(categoryEl, value, label);
+                subfolderEl.value = '';
+                populateSubfolderOptions('');
+                this.applySuggestedCivitaiSubfolder(missing, categoryEl, subfolderEl);
+            });
+        };
+
         const populateSubfolderOptions = async (filterText = '') => {
             const filter = (filterText || '').toLowerCase();
-            await this.ensureDownloadSubfoldersLoaded(categoryEl.value);
-            const folders = this.getAvailableSubfolders(categoryEl.value);
+            const category = this.getDropdownValue(categoryEl);
+            await this.ensureDownloadSubfoldersLoaded(category);
+            const folders = this.getAvailableSubfolders(category);
             const filtered = filter
                 ? folders.filter(folder => folder.toLowerCase().includes(filter))
                 : folders;
@@ -2427,10 +2479,18 @@ class LinkerManagerDialog extends ComfyDialog {
             }, 150);
         };
 
-        categoryEl.addEventListener('change', () => {
-            populateSubfolderOptions(subfolderEl.value);
-            this.applySuggestedCivitaiSubfolder(missing, categoryEl, subfolderEl);
-        });
+        if (categoryListEl && categoryEl.dataset.mlCategoryBound !== 'true') {
+            categoryEl.dataset.mlCategoryBound = 'true';
+            categoryEl.addEventListener('focus', () => populateCategoryOptions());
+            categoryEl.addEventListener('click', () => populateCategoryOptions());
+            categoryEl.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    populateCategoryOptions();
+                }
+            });
+            categoryEl.addEventListener('blur', () => hideList(categoryListEl));
+        }
 
         subfolderEl.addEventListener('focus', () => {
             populateSubfolderOptions(subfolderEl.value);
@@ -5194,11 +5254,44 @@ class LinkerManagerDialog extends ComfyDialog {
         }
 
         const sourceSelect = container.querySelector(`#search-source-select-${missing.node_id}-${missing.widget_index}`);
-        if (sourceSelect && sourceSelect.dataset.mlSearchSourceBound !== 'true') {
+        const sourceList = container.querySelector(`#search-source-list-${missing.node_id}-${missing.widget_index}`);
+        if (sourceSelect && sourceList && sourceSelect.dataset.mlSearchSourceBound !== 'true') {
             sourceSelect.dataset.mlSearchSourceBound = 'true';
-            sourceSelect.addEventListener('change', () => {
-                this.setSearchSource(missing, sourceSelect.value, container);
+
+            const renderSourceOptions = () => {
+                const options = this.getSearchSourceOptions();
+                sourceList.innerHTML = options
+                    .map(option => `<div class="ml-download-target-option" data-value="${encodeURIComponent(option.value)}" data-label="${encodeURIComponent(option.label)}">${this.escapeHtml(option.label)}</div>`)
+                    .join('');
+                sourceList.style.display = 'block';
+                sourceList.querySelectorAll('.ml-download-target-option').forEach(optionEl => {
+                    optionEl.addEventListener('mousedown', (event) => {
+                        event.preventDefault();
+                        const value = decodeURIComponent(optionEl.dataset.value || '');
+                        const label = decodeURIComponent(optionEl.dataset.label || optionEl.dataset.value || '');
+                        this.setDropdownValue(sourceSelect, value, label);
+                        this.setSearchSource(missing, value, container);
+                        sourceList.style.display = 'none';
+                    });
+                });
+            };
+
+            const hideSourceList = () => {
+                setTimeout(() => {
+                    sourceList.style.display = 'none';
+                }, 150);
+            };
+
+            this.enableWheelScrollChaining(sourceList);
+            sourceSelect.addEventListener('focus', () => renderSourceOptions());
+            sourceSelect.addEventListener('click', () => renderSourceOptions());
+            sourceSelect.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    renderSourceOptions();
+                }
             });
+            sourceSelect.addEventListener('blur', hideSourceList);
             this.syncSearchSourceUi(missing, container);
         }
 
