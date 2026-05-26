@@ -815,7 +815,7 @@ class LinkerManagerDialog extends ComfyDialog {
                 html += `<div class="ml-match-row ${isBestMatch ? 'ml-best-match' : ''}" data-model="${modelData}" oncontextmenu="window.MLOpenContextMenu(event, this)">`;
                 html += this.getConfidenceBadge(match.confidence);
                 html += `<span class="ml-match-filename" title="${formattedPath.full}">${formattedPath.display}</span>`;
-                html += `<button id="${buttonId}" class="ml-btn ml-btn-secondary ml-btn-sm ml-btn-utility ml-btn-link-compact">`;
+                html += `<button id="${buttonId}" class="ml-btn ml-btn-secondary ml-btn-sm ml-btn-icon-only ml-local-link-btn" title="Link this local match" aria-label="Link this local match">`;
                 html += `<span class="ml-btn-icon">🔗</span> Link`;
                 html += `</button>`;
                 html += `</div>`;
@@ -823,7 +823,12 @@ class LinkerManagerDialog extends ComfyDialog {
 
             if (perfectMatches.length > 0 && otherMatches.length > 0) {
                 const matchId = `more-matches-${missing.node_id}-${missing.widget_index}`;
-                html += `<div class="ml-no-matches ml-inline-note-action ml-inline-note-link" onclick="window.MLToggleHidden('${matchId}', this, '${otherMatches.length} other matches below 100%', 'Hide alternatives')">${otherMatches.length} other match${otherMatches.length > 1 ? 'es' : ''} below 100%</div>`;
+                const altLabel = `Alternatives (${otherMatches.length})`;
+                html += `<button type="button" class="ml-local-alternatives-toggle" aria-expanded="false" onclick="window.MLToggleHidden('${matchId}', this, '${altLabel}', '${altLabel}')">`;
+                html += `<span class="ml-local-alternatives-label">${altLabel}</span>`;
+                html += `<span class="ml-local-alternatives-state">Show</span>`;
+                html += `<span class="ml-local-alternatives-chevron" aria-hidden="true"></span>`;
+                html += `</button>`;
                 html += `<div id="${matchId}" class="ml-stack-sm ml-hidden">`;
                 for (let mIdx = 0; mIdx < otherMatches.length; mIdx++) {
                     const match = otherMatches[mIdx];
@@ -6398,7 +6403,15 @@ window.MLToggleHidden = function(id, trigger, collapsedText, expandedText) {
 
     const isHidden = element.classList.toggle('ml-hidden');
     if (trigger) {
-        trigger.textContent = isHidden ? collapsedText : expandedText;
+        trigger.setAttribute('aria-expanded', String(!isHidden));
+        const label = trigger.querySelector?.('.ml-local-alternatives-label');
+        const state = trigger.querySelector?.('.ml-local-alternatives-state');
+        if (label || state) {
+            if (label) label.textContent = isHidden ? collapsedText : expandedText;
+            if (state) state.textContent = isHidden ? 'Show' : 'Hide';
+        } else {
+            trigger.textContent = isHidden ? collapsedText : expandedText;
+        }
     }
 };
 
