@@ -1,7 +1,7 @@
 /**
 author: Azornes
 title: AzLogs
-version: 1.5.3
+version: 1.5.5
 description: Logging Setup - Central logging system
 
 Features:
@@ -58,7 +58,9 @@ const DEFAULT_CONFIG = {
     useColors: USE_COLORS,
     saveToStorage: false,
     maxStoredLogs: 1000,
-    timestampFormat: 'HH:mm:ss.SSS',
+    timestampFormat: 'HH:mm:ss',
+    includeMilliseconds: true,
+    compactCallsite: true,
     storageKey: LOGGER_STORAGE_KEY
 };
 const COLORS = {
@@ -146,12 +148,17 @@ class Logger {
      */
     formatTimestamp() {
         const now = new Date();
-        const format = this.config.timestampFormat;
-        return format
+        const format = this.config.timestampFormat || DEFAULT_CONFIG.timestampFormat;
+        const milliseconds = padStart(String(now.getMilliseconds()), 3, '0');
+        const timestamp = format
             .replace('HH', padStart(String(now.getHours()), 2, '0'))
             .replace('mm', padStart(String(now.getMinutes()), 2, '0'))
             .replace('ss', padStart(String(now.getSeconds()), 2, '0'))
-            .replace('SSS', padStart(String(now.getMilliseconds()), 3, '0'));
+            .replace('SSS', milliseconds);
+        if (this.config.includeMilliseconds !== false && !format.includes('SSS')) {
+            return `${timestamp}.${milliseconds}`;
+        }
+        return timestamp;
     }
     /**
      * Save log
@@ -193,26 +200,33 @@ class Logger {
         const consoleFn = typeof console[consoleMethod] === 'function'
             ? console[consoleMethod].bind(console)
             : console.log.bind(console);
+        const detailFn = typeof console.log === 'function'
+            ? console.log.bind(console)
+            : consoleFn;
+        const normalizedCallsite = this.normalizeCallsite(callsite);
+        const shouldGroupDetails = this.shouldGroupDetails(normalizedCallsite);
+        const outputFn = shouldGroupDetails
+            ? console.groupCollapsed.bind(console)
+            : consoleFn;
+        const { root, detail } = this.splitModuleName(module);
+        const consoleArgs = this.formatConsoleArgs(args);
+        const suffix = this.formatSuffix(detail, normalizedCallsite);
+        const suffixArgs = suffix ? [suffix.trimStart()] : [];
         if (this.config.useColors && typeof consoleFn === 'function') {
             const color = COLORS[level] || '#000000';
-            const { root, detail } = this.splitModuleName(module);
-            const message = this.stringifyArgs(args);
-            const suffix = this.formatSuffix(detail, callsite);
-            consoleFn(
-                `%c ${levelName.padEnd(LEVEL_WIDTH, ' ')} %c ${timestamp} %c %c ${root} %c %c ${message}%c${suffix}`,
-                `background:${color};color:#fff;font-weight:bold;`,
-                `background:${TIME_BG};color:#fff;font-weight:bold;`,
-                `background:${color};color:${color};`,
-                `background:${TIME_BG};color:#fff;font-weight:bold;`,
-                `background:${color};color:${color};`,
-                `color:${color};font-weight:bold;`,
-                '',
-            );
+            outputFn(...this.formatStyledConsoleArgs({
+                levelName,
+                timestamp,
+                root,
+                args: consoleArgs,
+                suffix: suffixArgs[0] || '',
+                color
+            }));
+            this.printExpandedDetails(detailFn, normalizedCallsite);
             return;
         }
-        const { root, detail } = this.splitModuleName(module);
-        const suffix = this.formatSuffix(detail, callsite);
-        consoleFn(`${levelName.padEnd(LEVEL_WIDTH, ' ')} ${timestamp} ${root} ${this.stringifyArgs(args)}${suffix}`);
+        outputFn(`${levelName.padEnd(LEVEL_WIDTH, ' ')} ${timestamp} ${root}`, ...consoleArgs, ...suffixArgs);
+        this.printExpandedDetails(detailFn, normalizedCallsite);
     }
 
     splitModuleName(module) {
@@ -251,6 +265,75 @@ class Logger {
         }).join(' ');
     }
 
+    formatConsoleArgs(args = []) {
+        return args.flatMap((arg) => this.formatConsoleArg(arg));
+    }
+
+    formatConsoleArg(arg) {
+        if (typeof arg === 'string') {
+            const payload = this.parseJsonPayloadFromString(arg);
+            if (payload) {
+                return payload.prefix ? [payload.prefix, payload.value] : [payload.value];
+            }
+        }
+        return [arg];
+    }
+
+    formatStyledConsoleArgs({ levelName, timestamp, root, args = [], suffix = '', color }) {
+        const outputArgs = [
+            `%c ${levelName.padEnd(LEVEL_WIDTH, ' ')} %c ${timestamp} %c %c ${root} %c %c `,
+            `background:${color};color:#fff;font-weight:bold;`,
+            `background:${TIME_BG};color:#fff;font-weight:bold;`,
+            `background:${color};color:${color};`,
+            `background:${TIME_BG};color:#fff;font-weight:bold;`,
+            `background:${color};color:${color};`,
+            `color:${color};font-weight:bold;`
+        ];
+
+        let format = outputArgs[0];
+        let hasContent = false;
+        args.forEach((arg) => {
+            if (hasContent) {
+                format += ' ';
+            }
+            if (this.isExpandableConsoleArg(arg)) {
+                format += '%o';
+                outputArgs.push(arg);
+            }
+            else {
+                format += this.escapeConsoleFormat(this.stringifyConsolePrimitive(arg));
+            }
+            hasContent = true;
+        });
+
+        if (suffix) {
+            if (hasContent) {
+                format += ' ';
+            }
+            format += `%c${this.escapeConsoleFormat(suffix)}`;
+            outputArgs.push('');
+        }
+
+        outputArgs[0] = format;
+        return outputArgs;
+    }
+
+    isExpandableConsoleArg(arg) {
+        return (typeof arg === 'object' && arg !== null && !(arg instanceof Error))
+            || typeof arg === 'function';
+    }
+
+    stringifyConsolePrimitive(arg) {
+        if (arg instanceof Error) {
+            return arg.stack || arg.message;
+        }
+        return String(arg);
+    }
+
+    escapeConsoleFormat(value) {
+        return String(value).replace(/%/g, '%%');
+    }
+
     getCallsite() {
         const stack = new Error().stack;
         if (!stack) {
@@ -269,7 +352,7 @@ class Logger {
                 continue;
             }
 
-            return this.formatCallsite(parsed);
+            return this.createCallsite(parsed);
         }
 
         return '';
@@ -291,11 +374,123 @@ class Logger {
     }
 
     formatCallsite(callsite) {
+        if (!callsite) {
+            return '';
+        }
+        if (typeof callsite === 'string') {
+            return callsite;
+        }
+        if (callsite.full) {
+            return callsite.full;
+        }
         return `${callsite.url}:${callsite.line}:${callsite.column}`;
     }
 
-    formatSuffix(detail, callsite) {
-        const suffixDetail = callsite || detail;
+    createCallsite(callsite) {
+        const full = this.formatCallsite(callsite);
+        return {
+            url: callsite.url,
+            line: callsite.line,
+            column: callsite.column,
+            full,
+            label: this.formatCompactCallsite(callsite)
+        };
+    }
+
+    normalizeCallsite(callsite) {
+        if (!callsite) {
+            return null;
+        }
+        const full = this.formatCallsite(callsite);
+        if (!full) {
+            return null;
+        }
+        return {
+            ...(typeof callsite === 'object' ? callsite : {}),
+            full,
+            label: callsite.label || this.formatCompactCallsite(callsite)
+        };
+    }
+
+    formatCompactCallsite(callsite) {
+        const source = typeof callsite === 'string'
+            ? callsite.replace(/:\d+:\d+$/, '')
+            : callsite.url || callsite.full || '';
+        const normalizedSource = String(source).split(/[?#]/)[0].replace(/\\/g, '/');
+        const filename = normalizedSource.slice(normalizedSource.lastIndexOf('/') + 1);
+        return filename.replace(/\.(?:mjs|js|tsx?|jsx)$/i, '') || this.formatCallsite(callsite);
+    }
+
+    shouldGroupDetails(callsite) {
+        return this.config.compactCallsite !== false
+            && !!callsite?.full
+            && typeof console.groupCollapsed === 'function'
+            && typeof console.groupEnd === 'function';
+    }
+
+    printExpandedDetails(consoleFn, callsite) {
+        if (!this.shouldGroupDetails(callsite)) {
+            return;
+        }
+        if (callsite?.full) {
+            consoleFn(`Source: ${callsite.full}`);
+        }
+        console.groupEnd();
+    }
+
+    parseJsonPayloadFromString(value) {
+        const parsed = this.parseJsonLikeString(value);
+        if (parsed !== null) {
+            return {
+                prefix: '',
+                value: parsed
+            };
+        }
+        const start = this.findJsonPayloadStart(value);
+        if (start <= 0) {
+            return null;
+        }
+        const payload = this.parseJsonLikeString(value.slice(start));
+        if (payload === null) {
+            return null;
+        }
+        return {
+            prefix: value.slice(0, start).trimEnd(),
+            value: payload
+        };
+    }
+
+    findJsonPayloadStart(value) {
+        const objectStart = value.indexOf('{');
+        const arrayStart = value.indexOf('[');
+        if (objectStart < 0) {
+            return arrayStart;
+        }
+        if (arrayStart < 0) {
+            return objectStart;
+        }
+        return Math.min(objectStart, arrayStart);
+    }
+
+    parseJsonLikeString(value) {
+        const trimmed = value.trim();
+        if (!trimmed || !/^[{[]/.test(trimmed)) {
+            return null;
+        }
+        try {
+            return JSON.parse(trimmed);
+        }
+        catch (e) {
+            return null;
+        }
+    }
+
+    formatSuffix(detail, callsite, options = {}) {
+        const normalizedCallsite = this.normalizeCallsite(callsite);
+        const compactCallsite = options.compactCallsite ?? this.config.compactCallsite !== false;
+        const suffixDetail = normalizedCallsite
+            ? (compactCallsite ? normalizedCallsite.label : normalizedCallsite.full)
+            : detail;
         return suffixDetail ? ` (${suffixDetail})` : '';
     }
 
@@ -439,7 +634,7 @@ class Logger {
         else {
             content = this.logs.map((log) => {
                 const { root, detail } = this.splitModuleName(log.module);
-                const suffix = this.formatSuffix(detail, log.callsite);
+                const suffix = this.formatSuffix(detail, log.callsite, { compactCallsite: false });
                 return `${log.levelName.padEnd(LEVEL_WIDTH, ' ')} ${log.timestamp} ${root} ${this.stringifyArgs(log.args)}${suffix}`;
             }).join('\n');
             mimeType = 'text/plain';

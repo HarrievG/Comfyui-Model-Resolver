@@ -1,7 +1,7 @@
 /**
 author: Azornes
 title: AzLogs
-version: 1.5.3
+version: 1.5.5
 description: Logging Configuration
 */
 // Log level for development.
@@ -12,7 +12,7 @@ export const LOG_LEVEL = 'DEBUG';
 export const LOG_MODULE_NAME = "MLinker";
 
 // Default project/logger name used when LOG_MODULE_NAME is not set.
-export const DEFAULT_LOGGER_NAME = 'az-logs';
+export const DEFAULT_LOGGER_NAME = 'MLinker';
 
 // Enable styled console logs.
 export const USE_COLORS = true;
