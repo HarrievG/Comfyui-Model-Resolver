@@ -654,7 +654,7 @@ class LinkerManagerDialog extends ComfyDialog {
             let actions = '';
             if (downloadUrl) {
                 actions += `
-                    <button class="search-download-btn ml-btn ml-btn-secondary ml-btn-sm ml-search-result-action-btn"
+                    <button type="button" class="search-download-btn ml-search-result-action-btn"
                         title="Download"
                         aria-label="Download ${this.escapeHtml(downloadFilename)}"
                         data-url="${this.escapeHtml(downloadUrl)}"
@@ -664,12 +664,11 @@ class LinkerManagerDialog extends ComfyDialog {
             }
             if (openUrl) {
                 actions += `
-                    <a href="${this.escapeHtml(openUrl)}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="ml-btn ml-btn-secondary ml-btn-sm ml-search-result-action-btn"
+                    <button type="button"
+                        class="search-open-page-btn ml-search-result-action-btn"
                         title="Open model page"
-                        aria-label="Open model page">${getSvgIcon('externalLink')}</a>
+                        aria-label="Open model page"
+                        data-url="${this.escapeHtml(openUrl)}">${getSvgIcon('externalLink')}</button>
                 `;
             }
             if (!actions) {
@@ -2454,7 +2453,8 @@ class LinkerManagerDialog extends ComfyDialog {
             renderOptions(categoryListEl, options, (value, label) => {
                 this.setDropdownValue(categoryEl, value, label);
                 subfolderEl.value = '';
-                populateSubfolderOptions('');
+                listEl.innerHTML = '';
+                listEl.style.display = 'none';
                 this.applySuggestedCivitaiSubfolder(missing, categoryEl, subfolderEl);
             });
         };
@@ -5232,6 +5232,19 @@ class LinkerManagerDialog extends ComfyDialog {
                 const filename = btn.dataset.filename;
                 const category = btn.dataset.category;
                 this.downloadFromSearch(missing, url, filename, category, btn);
+            });
+        });
+
+        const openPageBtns = container.querySelectorAll('.search-open-page-btn');
+        openPageBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const url = btn.dataset.url;
+                if (!url) return;
+
+                const opened = window.open(url, '_blank', 'noopener,noreferrer');
+                if (opened) {
+                    opened.opener = null;
+                }
             });
         });
     }
