@@ -28,6 +28,7 @@ class LinkerManagerDialog extends ComfyDialog {
         this.searchProgressTimers = new Map();
         this.cachedAnalysisData = null;
         this.cachedWorkflowSignature = null;
+        this.selectedMissingModelKey = null;
         this.boundHandleOutsideClick = this.handleOutsideClick.bind(this);
         this.activeTabStorageKey = 'model_linker_active_tab';
         this.activeTab = this.restoreActiveTab();  // Default tab
@@ -471,6 +472,7 @@ class LinkerManagerDialog extends ComfyDialog {
             huggingface: 'huggingface',
             civitai: 'civitai',
             'lora-archive': 'archive',
+            lora_manager_archive: 'archive',
             'lora-manager-archive': 'archive',
             local: 'database',
             'workflow-url': 'link',
@@ -3924,7 +3926,297 @@ class LinkerManagerDialog extends ComfyDialog {
             }
         }
     }
-    
+
+    getMissingModelKey(missing = {}) {
+        const nodeId = missing.node_id ?? '';
+        const widgetIndex = missing.widget_index ?? '';
+        const subgraphId = missing.subgraph_id || '';
+        const scope = missing.is_top_level !== false ? 'T' : 'F';
+        return `${nodeId}:${widgetIndex}:${subgraphId}:${scope}`;
+    }
+
+    getMissingFilename(missing = {}) {
+        return missing.original_path?.split('/').pop()?.split('\\').pop() || missing.name || 'Missing model';
+    }
+
+    getBestLocalMatch(missing = {}, minConfidence = 0) {
+        const matches = Array.isArray(missing.matches) ? missing.matches : [];
+        return matches
+            .filter(match => Number(match.confidence) >= minConfidence)
+            .sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0))[0] || null;
+    }
+
+    getMissingModelSummaryStats(missingModels = []) {
+        return missingModels.reduce((stats, missing) => {
+            const best = this.getBestLocalMatch(missing, 70);
+            if (best?.confidence === 100) {
+                stats.exact += 1;
+            } else if (best) {
+                stats.partial += 1;
+            } else {
+                stats.none += 1;
+            }
+            return stats;
+        }, { exact: 0, partial: 0, none: 0 });
+    }
+
+    getMissingSourceStatus(missing = {}, source = '') {
+        const state = this.searchResultCache.get(this.getMissingSearchKey(missing));
+        const progress = state?.sourceProgress?.[source];
+        if (progress?.status) return progress.status;
+
+        const results = state?.results || {};
+        const resultKeys = {
+            local: 'model_list',
+            huggingface: 'huggingface',
+            civitai: 'civitai',
+            lora_manager_archive: 'lora_manager_archive'
+        };
+        if (resultKeys[source] && results[resultKeys[source]]) {
+            return 'found';
+        }
+
+        const downloadSource = missing.download_source || {};
+        const mappedDownloadSource = {
+            model_list: 'local',
+            popular: 'local',
+            workflow: 'civitai'
+        }[downloadSource.source] || downloadSource.source;
+        if (mappedDownloadSource === source && downloadSource.url) {
+            return 'found';
+        }
+
+        return 'idle';
+    }
+
+    renderMissingSourcesSummary(missing = {}) {
+        const sourceItems = [
+            { source: 'local' },
+            { source: 'huggingface' },
+            { source: 'civitai' }
+        ];
+        if (this.isSourceAvailable('lora_manager_archive')) {
+            sourceItems.push({ source: 'lora_manager_archive' });
+        }
+
+        return sourceItems.map(item => {
+            const status = this.getMissingSourceStatus(missing, item.source);
+            const statusClass = String(status || 'idle').replace(/[^a-z0-9_-]/gi, '');
+            const label = this.getSearchSourceLabel(item.source);
+            const statusLabels = {
+                pending: 'Queued',
+                running: 'Searching',
+                found: 'Found',
+                none: 'No match',
+                error: 'Error',
+                idle: 'Not searched'
+            };
+            const title = `${label}: ${statusLabels[status] || status}`;
+            const iconName = this.getSearchSourceIconName(item.source);
+            const iconHtml = getSvgIcon(iconName, 'currentColor', 'ml-missing-source-icon');
+            return `<span class="ml-missing-source-dot ml-missing-source-${statusClass}" title="${this.escapeHtml(title)}" aria-label="${this.escapeHtml(title)}">${iconHtml}</span>`;
+        }).join('');
+    }
+
+    hasRenderableSearchState(state = {}) {
+        return Boolean(
+            (state.lastAttemptSources || []).length
+            || Object.keys(state.sourceProgress || {}).length
+            || this.hasSearchResults(state.results || {})
+            || state.lastAttemptError
+        );
+    }
+
+    renderMissingModelsBrowser(missingModels, selectedKey, totalMissing, activeCount, hasAny100Match) {
+        const stats = this.getMissingModelSummaryStats(missingModels);
+        const detailIndex = missingModels.findIndex(missing => this.getMissingModelKey(missing) === selectedKey);
+        const detailMissing = detailIndex >= 0 ? missingModels[detailIndex] : null;
+        const activeHint = activeCount > 0
+            ? `${activeCount} downloading`
+            : (hasAny100Match ? 'Auto-link ready for exact matches' : 'Review matches or search online');
+
+        let html = `
+            <div class="ml-missing-browser">
+                <section class="ml-missing-list-pane" aria-label="Missing model list">
+                    <div class="ml-missing-list-toolbar">
+                        <div>
+                            <div class="ml-missing-list-title">${totalMissing} missing model${totalMissing === 1 ? '' : 's'}</div>
+                            <div class="ml-missing-list-meta">${this.escapeHtml(activeHint)}</div>
+                        </div>
+                        <div class="ml-missing-list-stats">
+                            <span class="ml-missing-stat ml-missing-stat-exact">${stats.exact} exact</span>
+                            <span class="ml-missing-stat ml-missing-stat-partial">${stats.partial} partial</span>
+                            <span class="ml-missing-stat ml-missing-stat-none">${stats.none} no match</span>
+                        </div>
+                    </div>
+                    <div class="ml-missing-list-head">
+                        <span>ID</span>
+                        <span>Missing Model</span>
+                        <span>Type</span>
+                        <span>Best Local Match</span>
+                        <span>Sources</span>
+                    </div>
+                    <div class="ml-missing-list">
+        `;
+
+        missingModels.forEach((missing, index) => {
+            const key = this.getMissingModelKey(missing);
+            const isSelected = key === selectedKey;
+            const filename = this.getMissingFilename(missing);
+            const formattedFilename = this.formatFilename(filename, 46);
+            const bestMatch = this.getBestLocalMatch(missing, 70);
+            const confidence = bestMatch ? Number(bestMatch.confidence || 0) : 0;
+            const matchName = bestMatch?.model?.relative_path || bestMatch?.filename || bestMatch?.path || '';
+            const matchDisplay = matchName || 'Local match';
+            const matchClass = confidence === 100 ? 'exact' : (bestMatch ? 'partial' : 'none');
+            const typeLabel = missing.category ? this.getCategoryDisplayName(missing.category) : 'unknown';
+            const nodeLabel = missing.subgraph_name || missing.node_type || 'Node';
+
+            html += `
+                <button type="button"
+                    class="ml-missing-list-row ${isSelected ? 'is-selected' : ''}"
+                    data-missing-key="${this.escapeHtml(key)}">
+                    <span class="ml-missing-row-index">${index + 1}</span>
+                    <span class="ml-missing-row-model">
+                        <span class="ml-missing-row-name" title="${this.escapeHtml(filename)}">${this.escapeHtml(formattedFilename.display)}</span>
+                        <span class="ml-missing-row-node">${this.escapeHtml(nodeLabel)} #${this.escapeHtml(String(missing.node_id || ''))}</span>
+                    </span>
+                    <span class="ml-missing-row-type">${this.escapeHtml(typeLabel)}</span>
+                    <span class="ml-missing-row-match ml-missing-row-match-${matchClass}">
+                        ${bestMatch ? `<strong>${confidence.toFixed(confidence % 1 ? 1 : 0)}%</strong><span title="${this.escapeHtml(matchDisplay)}">${this.escapeHtml(matchDisplay)}</span>` : '<strong>--</strong><span>No local match</span>'}
+                    </span>
+                    <span class="ml-missing-row-sources">${this.renderMissingSourcesSummary(missing)}</span>
+                </button>
+            `;
+        });
+
+        html += `
+                    </div>
+                </section>
+                <section class="ml-missing-detail-pane" aria-label="Missing model details">
+                    ${detailMissing ? this.renderMissingModel(detailMissing, detailIndex) : this.renderStatusMessage('Select a missing model to inspect details.', 'info')}
+                </section>
+            </div>
+        `;
+        return html;
+    }
+
+    wireMissingModelsBrowser(container, data, sortedMissingModels) {
+        container.querySelectorAll('.ml-missing-list-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const key = row.dataset.missingKey;
+                if (!key || key === this.selectedMissingModelKey) return;
+                this.selectedMissingModelKey = key;
+                this.displayMissingModels(container, data);
+            });
+        });
+
+        const selectedMissing = sortedMissingModels.find(missing => this.getMissingModelKey(missing) === this.selectedMissingModelKey);
+        if (!selectedMissing) return;
+
+        const selectedIndex = sortedMissingModels.indexOf(selectedMissing);
+        this.wireMissingModelDetail(container, selectedMissing, selectedIndex);
+    }
+
+    wireMissingModelDetail(container, missing, missingIndex) {
+        this.wireLocalMatchButtons(container, missing, missingIndex);
+        this.wireDownloadSearchPanel(container, missing);
+
+        const locateId = `locate-${missing.node_id}-${missing.widget_index}`;
+        const locateBtn = container.querySelector(`#${locateId}`);
+        if (locateBtn && missing.is_top_level !== false) {
+            locateBtn.addEventListener('click', () => {
+                this.locateNodeInGraph(missing.node_id);
+            });
+        }
+
+        const comboId = `combo-${missing.node_id}-${missing.widget_index}`;
+        const comboInput = container.querySelector(`#combo-input-${comboId}`);
+        const comboList = container.querySelector(`#combo-list-${comboId}`);
+        const comboRefresh = container.querySelector(`#combo-refresh-${comboId}`);
+
+        if (comboList) {
+            this.enableWheelScrollChaining(comboList);
+        }
+
+        const allModels = Array.isArray(this.allModels) ? this.allModels : [];
+        const buildLabel = (m) => `${m.category ? m.category + ': ' : ''}${m.relative_path || m.filename || ''}`;
+        const getFolder = (m) => m.path || m.base_directory || '';
+
+        const populateComboOptions = (filterText, highlightIdx = -1) => {
+            if (!comboList) return;
+            const f = (filterText || '').toLowerCase();
+            const filtered = f
+                ? allModels.filter(m => buildLabel(m).toLowerCase().includes(f))
+                : allModels.slice();
+
+            let html = '';
+            for (let i = 0; i < filtered.length; i++) {
+                const m = filtered[i];
+                const label = buildLabel(m);
+                const folder = getFolder(m);
+                const isHighlighted = i === highlightIdx;
+                const folderDisplay = folder ? folder.replace(/\\/g, '/').replace(/:/, '') : '';
+                html += `<div data-idx="${allModels.indexOf(m)}" class="ml-combo-option ${isHighlighted ? 'is-highlighted' : ''}">`;
+                html += `<div class="ml-combo-option-row">`;
+                html += `<code>${this.escapeHtml(label)}</code>`;
+                html += `</div>`;
+                if (folderDisplay) {
+                    html += `<div class="ml-combo-folder" title="${this.escapeHtml(folderDisplay)}">Folder ${this.escapeHtml(folderDisplay)}</div>`;
+                }
+                html += `</div>`;
+            }
+            comboList.innerHTML = html;
+
+            comboList.querySelectorAll('div[data-idx]').forEach(el => {
+                el.addEventListener('click', () => {
+                    const idx = parseInt(el.dataset.idx, 10);
+                    if (!Number.isNaN(idx) && idx >= 0 && idx < allModels.length) {
+                        const chosenModel = allModels[idx];
+                        if (chosenModel) {
+                            this.queueResolution(missing, chosenModel);
+                        }
+                    }
+                });
+            });
+        };
+
+        if (comboList) {
+            populateComboOptions('');
+        }
+
+        if (comboInput) {
+            const debouncedFilter = this.debounce(() => {
+                populateComboOptions(comboInput.value);
+            }, 200);
+            comboInput.addEventListener('input', debouncedFilter);
+            comboInput.addEventListener('focus', () => {
+                if (comboList) comboList.style.display = 'block';
+                populateComboOptions(comboInput.value);
+            });
+            comboInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                    if (comboList) comboList.style.display = 'none';
+                }, 200);
+            });
+        }
+
+        if (comboRefresh) {
+            comboRefresh.addEventListener('click', async () => {
+                this.allModels = null;
+                await this.ensureAllModelsLoaded();
+                populateComboOptions(comboInput?.value || '');
+            });
+        }
+
+        const state = this.searchResultCache.get(this.getMissingSearchKey(missing));
+        const searchResultsDiv = container.querySelector(`#search-results-${missing.node_id}-${missing.widget_index}`);
+        if (state && searchResultsDiv && this.hasRenderableSearchState(state)) {
+            searchResultsDiv.style.display = 'block';
+            this.displaySearchResults(missing, state, searchResultsDiv);
+        }
+    }
+
     /**
      * Display missing models in the dialog
      */
@@ -3965,20 +4257,6 @@ class LinkerManagerDialog extends ComfyDialog {
             return;
         }
 
-        // Summary header with count
-        let html = `
-            <div class="ml-missing-summary">
-                <div class="ml-missing-summary-title">
-                    <span class="ml-missing-summary-count">${totalMissing} Missing Model${totalMissing > 1 ? 's' : ''}</span>
-                    <span class="ml-missing-summary-meta">Compact relinking and download view</span>
-                </div>
-                <div class="ml-missing-summary-meta">
-                    ${activeCount > 0 ? `${activeCount} downloading` : (hasAny100Match ? 'Auto-Link ready for exact matches' : 'Review matches or search online')}
-                </div>
-            </div>
-        `;
-        html += '<div class="ml-stack-md">';
-
         // Skip rendering if active tab is not "missing"
         if (this.activeTab !== 'missing') {
             container.innerHTML = '';
@@ -3986,7 +4264,7 @@ class LinkerManagerDialog extends ComfyDialog {
         }
 
         // Sort missing models: those with 100% confidence matches first, then others
-        const sortedMissingModels = missingModels.sort((a, b) => {
+        const sortedMissingModels = [...missingModels].sort((a, b) => {
             const aMatches = a.matches || [];
             const bMatches = b.matches || [];
             
@@ -4011,122 +4289,28 @@ class LinkerManagerDialog extends ComfyDialog {
 
         for (let mi = 0; mi < sortedMissingModels.length; mi++) {
             sortedMissingModels[mi].__displayIndex = mi;
-            html += this.renderMissingModel(sortedMissingModels[mi], mi);
         }
 
-        html += '</div>';
-        container.innerHTML = html;
+        const selectedStillExists = sortedMissingModels.some(missing => (
+            this.getMissingModelKey(missing) === this.selectedMissingModelKey
+        ));
+        if (!selectedStillExists) {
+            this.selectedMissingModelKey = sortedMissingModels.length
+                ? this.getMissingModelKey(sortedMissingModels[0])
+                : null;
+        }
 
-        // Attach event listeners for resolve buttons (use sorted order)
-        // Note: We need to match the exact same logic as renderMissingModel to find which buttons were rendered
-        sortedMissingModels.forEach((missing, missingIndex) => {
-            this.wireLocalMatchButtons(container, missing, missingIndex);
-            
-            this.wireDownloadSearchPanel(container, missing);
-            
-            // Wire locate chip (only for top-level nodes)
-            const locateId = `locate-${missing.node_id}-${missing.widget_index}`;
-            const locateBtn = container.querySelector(`#${locateId}`);
-            if (locateBtn && missing.is_top_level !== false) {
-                locateBtn.addEventListener('click', () => {
-                    this.locateNodeInGraph(missing.node_id);
-                });
-            }
-            
-            // Wire up all-models search + dropdown (combo-style)
-            const comboId = `combo-${missing.node_id}-${missing.widget_index}`;
-            const comboInput = container.querySelector(`#combo-input-${comboId}`);
-            const comboList = container.querySelector(`#combo-list-${comboId}`);
-            const comboRefresh = container.querySelector(`#combo-refresh-${comboId}`);
-
-            if (comboList) {
-                this.enableWheelScrollChaining(comboList);
-            }
-
-            const allModels = Array.isArray(this.allModels) ? this.allModels : [];
-            const buildLabel = (m) => `${m.category ? m.category + ': ' : ''}${m.relative_path || m.filename || ''}`;
-            const getFolder = (m) => m.path || m.base_directory || '';
-
-            // Populate dropdown with filtered models
-            const populateComboOptions = (filterText, highlightIdx = -1) => {
-                if (!comboList) return;
-                const f = (filterText || '').toLowerCase();
-                const filtered = f
-                    ? allModels.filter(m => buildLabel(m).toLowerCase().includes(f))
-                    : allModels.slice();  // Copy to avoid mutation
-                
-                let html = '';
-                for (let i = 0; i < filtered.length; i++) {
-                    const m = filtered[i];
-                    const label = buildLabel(m);
-                    const folder = getFolder(m);
-                    const isHighlighted = i === highlightIdx;
-                    const folderDisplay = folder ? folder.replace(/\\/g, '/').replace(/:/, '') : '';
-                    html += `<div data-idx="${allModels.indexOf(m)}" class="ml-combo-option ${isHighlighted ? 'is-highlighted' : ''}">`;
-                    html += `<div class="ml-combo-option-row">`;
-                    html += `<code>${label}</code>`;
-                    html += `</div>`;
-                    if (folderDisplay) {
-                        html += `<div class="ml-combo-folder" title="${folderDisplay}">📁 ${folderDisplay}</div>`;
-                    }
-                    html += `</div>`;
-                }
-                comboList.innerHTML = html;
-                
-                // Add click listeners to options
-                comboList.querySelectorAll('div[data-idx]').forEach(el => {
-                    el.addEventListener('click', () => {
-                        const idx = parseInt(el.dataset.idx, 10);
-                        if (!isNaN(idx) && idx >= 0 && idx < allModels.length) {
-                            const chosenModel = allModels[idx];
-                            if (chosenModel) {
-                                this.queueResolution(missing, chosenModel);
-                            }
-                        }
-                    });
-                });
-            };
-
-            // Initial populate
-            if (comboList) {
-                populateComboOptions('');
-            }
-
-            // Filter input with debounce
-            if (comboInput) {
-                const debouncedFilter = this.debounce(() => {
-                    populateComboOptions(comboInput.value);
-                }, 200);
-                comboInput.addEventListener('input', debouncedFilter);
-                
-                // Show dropdown on focus
-                comboInput.addEventListener('focus', () => {
-                    if (comboList) comboList.style.display = 'block';
-                    populateComboOptions(comboInput.value);
-                });
-                
-                // Close on blur (with delay to allow click)
-                comboInput.addEventListener('blur', () => {
-                    setTimeout(() => {
-                        if (comboList) comboList.style.display = 'none';
-                    }, 200);
-                });
-            }
-
-            // Refresh button - reload all models
-            if (comboRefresh) {
-                comboRefresh.addEventListener('click', async () => {
-                    this.allModels = null;  // Force reload
-                    await this.ensureAllModelsLoaded();
-                    populateComboOptions(comboInput?.value || '');
-                });
-            }
-        });
+        this.missingModels = sortedMissingModels;
+        container.innerHTML = this.renderMissingModelsBrowser(
+            sortedMissingModels,
+            this.selectedMissingModelKey,
+            totalMissing,
+            activeCount,
+            hasAny100Match
+        );
+        this.wireMissingModelsBrowser(container, data, sortedMissingModels);
     }
 
-    /**
-     * Render a single missing model entry
-     */
     renderMissingModel(missing, missingIndex = 0) {
         const allMatches = missing.matches || [];
         
