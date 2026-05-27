@@ -545,9 +545,9 @@ class LinkerManagerDialog extends ComfyDialog {
             'model-list': 'database',
             huggingface: 'huggingface',
             civitai: 'civitai',
-            'lora-archive': 'archive',
-            lora_manager_archive: 'archive',
-            'lora-manager-archive': 'archive',
+            'lora-archive': 'loraManager',
+            lora_manager_archive: 'loraManager',
+            'lora-manager-archive': 'loraManager',
             local: 'database',
             'workflow-url': 'link',
             workflow: 'link',
@@ -4695,10 +4695,6 @@ class LinkerManagerDialog extends ComfyDialog {
         if (perfectMatches.length > 0) {
             // Has perfect local match - download not needed, but allow online re-check.
             html += `<div class="ml-download-section">`;
-            html += `<div class="ml-status-inline">`;
-            html += this.getStatusBadge('Not needed', 'neutral');
-            html += `<span class="ml-download-info">Exact local match available</span>`;
-            html += `</div>`;
             html += this.renderSearchControls(missing, { buttonText: 'Search Online' });
             html += this.renderDownloadTargetControls(missing, missing.category || 'checkpoints');
             html += `</div>`;
