@@ -60,6 +60,12 @@
     padding: 6px 10px 0;
     border-bottom: 1px solid rgba(0, 0, 0, 0.38);
     background: #1f1f1f;
+    cursor: grab;
+    user-select: none;
+}
+
+.ml-dialog-topbar.ml-is-dragging {
+    cursor: grabbing;
 }
 
 .ml-dialog-brand,
@@ -99,6 +105,10 @@
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.025);
     box-sizing: border-box;
+}
+
+.ml-dialog-topbar.ml-is-dragging #model-linker-drag-handle {
+    cursor: grabbing;
 }
 
 #model-linker-modal .ml-window-btn {

@@ -3803,24 +3803,41 @@ class LinkerManagerDialog extends ComfyDialog {
         }
     }
     
-    // Attach drag handle event listeners
+    // Attach topbar drag listeners while preserving the handle-based viewport clamp.
     attachDragHandleIfNeeded() {
         if (this._dragHandleAttached) return;
         
         const handle = document.getElementById('model-linker-drag-handle');
-        if (!handle) return;
+        const topbar = this.element?.querySelector('.ml-dialog-topbar');
+        if (!handle || !topbar) return;
         
         const onMouseDown = (e) => {
             if (this.fullscreen) return; // no drag in fullscreen
-            handle.style.cursor = 'grabbing';
+            if (e.button !== 0 || this.isTopbarDragExcluded(e.target)) return;
+            topbar.classList.add('ml-is-dragging');
             this.startDrag(e);
         };
-        const onMouseUp = () => { handle.style.cursor = 'grab'; };
+        const onMouseUp = () => { topbar.classList.remove('ml-is-dragging'); };
         
-        handle.addEventListener('mousedown', onMouseDown);
-        document.addEventListener('mouseup', onMouseUp, { once: true });
+        topbar.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mouseup', onMouseUp);
         
         this._dragHandleAttached = true;
+    }
+
+    isTopbarDragExcluded(target) {
+        if (!(target instanceof Element)) return false;
+        return !!target.closest([
+            '.ml-tabs',
+            '.ml-dialog-controls',
+            'button',
+            'a',
+            'input',
+            'select',
+            'textarea',
+            '[role="button"]',
+            '[data-ml-no-drag]'
+        ].join(','));
     }
     
     close() {
