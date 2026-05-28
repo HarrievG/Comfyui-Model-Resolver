@@ -2094,9 +2094,11 @@
     background: var(--ml-tab-active-bg) !important;
     border-radius: 10px 10px 0 0;
     cursor: default;
+    pointer-events: none;
     box-shadow: 0 1px 0 var(--ml-tab-active-bg) !important;
     transform: none;
     z-index: 4;
+    transition: none;
 }
 .ml-tab.ml-tab-active:hover,
 .ml-tab.ml-tab-active:focus,
