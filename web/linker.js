@@ -2048,7 +2048,11 @@ class LinkerManagerDialog extends ComfyDialog {
             $el("div.ml-dialog-topbar", {}, [
                 $el("div.ml-dialog-brand", {}, [
                     dragHandle,
-                    $el("h2.ml-dialog-title", { textContent: "🔗 Model Linker" })
+                    $el("div.ml-tabs", {}, [
+                        this.missingTab,
+                        this.loadedTab,
+                        this.optionsTab
+                    ])
                 ]),
                 $el("div.ml-dialog-controls", {}, [
                     fullscreenButton,
@@ -2058,11 +2062,6 @@ class LinkerManagerDialog extends ComfyDialog {
                         onclick: () => this.close()
                     })
                 ])
-            ]),
-            $el("div.ml-tabs", {}, [
-                this.missingTab,
-                this.loadedTab,
-                this.optionsTab
             ])
         ]);
     }

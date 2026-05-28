@@ -55,8 +55,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    min-height: 34px;
-    padding: 6px 10px;
+    gap: var(--ml-spacing-10);
+    min-height: 40px;
+    padding: 5px 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.09);
     background: linear-gradient(180deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.012) 100%);
 }
@@ -67,6 +68,15 @@
     display: flex;
     align-items: center;
     gap: var(--ml-spacing-8);
+}
+
+.ml-dialog-brand {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.ml-dialog-controls {
+    flex: 0 0 auto;
 }
 
 #model-linker-drag-handle {
@@ -81,13 +91,6 @@
     border: 1px solid rgba(255, 255, 255, 0.11);
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.025);
-}
-
-.ml-dialog-title {
-    margin: 0;
-    color: var(--input-text);
-    font-size: 15px;
-    font-weight: 600;
 }
 
 .ml-window-btn {
