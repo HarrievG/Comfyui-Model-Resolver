@@ -273,7 +273,7 @@
     --ml-missing-line-strong: rgba(255,255,255,0.13);
     --ml-missing-radius: 6px;
     display: grid;
-    grid-template-columns: minmax(360px, 1.1fr) minmax(320px, 0.9fr);
+    grid-template-columns: minmax(360px, 1fr) 10px var(--ml-missing-detail-track, minmax(320px, 0.9fr));
     gap: 0;
     height: 100%;
     min-height: 0;
@@ -291,8 +291,38 @@
 .ml-missing-list-pane {
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
-    border-right: 1px solid var(--ml-missing-line);
+    border-right: 0;
     background: var(--ml-missing-bg);
+}
+.ml-missing-browser-splitter {
+    position: relative;
+    min-width: 10px;
+    width: 10px;
+    cursor: col-resize;
+    user-select: none;
+    touch-action: none;
+    background: var(--ml-missing-bg);
+    border-left: 1px solid var(--ml-missing-line);
+    border-right: 1px solid var(--ml-missing-line);
+    outline: none;
+}
+.ml-missing-browser-splitter::before {
+    content: "";
+    position: absolute;
+    top: 16px;
+    bottom: 16px;
+    left: 50%;
+    width: 2px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.13);
+    transform: translateX(-50%);
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.ml-missing-browser-splitter:hover::before,
+.ml-missing-browser-splitter:focus-visible::before,
+.ml-missing-browser.is-resizing .ml-missing-browser-splitter::before {
+    background: rgba(114,211,138,0.78);
+    box-shadow: 0 0 0 3px rgba(114,211,138,0.12);
 }
 .ml-missing-list-toolbar {
     display: flex;
@@ -650,6 +680,9 @@
     .ml-missing-browser {
         grid-template-columns: 1fr;
         overflow-y: auto;
+    }
+    .ml-missing-browser-splitter {
+        display: none;
     }
     .ml-missing-list-pane {
         max-height: 46vh;

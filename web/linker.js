@@ -39,6 +39,7 @@ class LinkerManagerDialog extends ComfyDialog {
         this.pendingDockToSidebar = false;
         this.sidebarTabId = "comfyui-model-linker";
         this.sidebarOpenModeStorageKey = "model_linker_sidebar_open_mode";
+        this.missingBrowserSplitStorageKey = "model_linker_missing_browser_detail_w";
         this.dockButton = null;
         this.undockButton = null;
         this._floatingRectBeforeDock = null;
@@ -4837,7 +4838,14 @@ class LinkerManagerDialog extends ComfyDialog {
             ? `${activeCount} downloading`
             : (hasAny100Match ? 'Auto-link ready for exact matches' : 'Review matches or search online');
         const listLayout = this.getMissingModelsListLayout(missingModels);
-        const listStyle = `--ml-missing-model-col:${listLayout.modelPx}px;--ml-missing-type-col:${listLayout.typePx}px;`;
+        let savedDetailWidth = null;
+        try {
+            savedDetailWidth = parseInt(localStorage.getItem(this.missingBrowserSplitStorageKey) || '', 10);
+        } catch (e) {}
+        const splitStyle = Number.isFinite(savedDetailWidth) && savedDetailWidth > 0
+            ? `--ml-missing-detail-track:${savedDetailWidth}px;`
+            : '';
+        const listStyle = `${splitStyle}--ml-missing-model-col:${listLayout.modelPx}px;--ml-missing-type-col:${listLayout.typePx}px;`;
 
         let html = `
             <div class="ml-missing-browser" style="${listStyle}">
@@ -4906,6 +4914,7 @@ class LinkerManagerDialog extends ComfyDialog {
         html += `
                     </div>
                 </section>
+                <div class="ml-missing-browser-splitter" role="separator" aria-orientation="vertical" aria-label="Resize missing model panes" tabindex="0" data-tooltip="Drag to resize panes"></div>
                 <section class="ml-missing-detail-pane" aria-label="Missing model details">
                     ${detailMissing ? this.renderMissingModel(detailMissing, detailIndex) : this.renderStatusMessage('Select a missing model to inspect details.', 'info')}
                 </section>
@@ -4915,6 +4924,8 @@ class LinkerManagerDialog extends ComfyDialog {
     }
 
     wireMissingModelsBrowser(container, data, sortedMissingModels) {
+        this.wireMissingBrowserSplitter(container);
+
         const selectRow = (row) => {
             const key = row.dataset.missingKey;
             if (!key || key === this.selectedMissingModelKey) return;
@@ -4951,6 +4962,130 @@ class LinkerManagerDialog extends ComfyDialog {
 
         const selectedIndex = sortedMissingModels.indexOf(selectedMissing);
         this.wireMissingModelDetail(container, selectedMissing, selectedIndex);
+    }
+
+    wireMissingBrowserSplitter(container) {
+        const browser = container.querySelector('.ml-missing-browser');
+        const splitter = browser?.querySelector('.ml-missing-browser-splitter');
+        if (!(browser instanceof HTMLElement) || !(splitter instanceof HTMLElement)) return;
+
+        this.restoreMissingBrowserSplitWidth(browser);
+
+        splitter.addEventListener('mousedown', (event) => {
+            if (event.button !== 0) return;
+            this.startMissingBrowserSplitDrag(event, browser);
+        });
+
+        splitter.addEventListener('dblclick', () => {
+            browser.style.removeProperty('--ml-missing-detail-track');
+            try {
+                localStorage.removeItem(this.missingBrowserSplitStorageKey);
+            } catch (e) {}
+        });
+
+        splitter.addEventListener('keydown', (event) => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            this.resizeMissingBrowserDetailBy(browser, event.key === 'ArrowLeft' ? 32 : -32);
+        });
+
+        this._missingBrowserResizeObserver?.disconnect?.();
+        if (typeof ResizeObserver === 'function') {
+            this._missingBrowserResizeObserver = new ResizeObserver(() => {
+                if (!this._missingBrowserSplitDragging) {
+                    this.restoreMissingBrowserSplitWidth(browser);
+                }
+            });
+            this._missingBrowserResizeObserver.observe(browser);
+        }
+    }
+
+    restoreMissingBrowserSplitWidth(browser) {
+        try {
+            const savedWidth = parseInt(localStorage.getItem(this.missingBrowserSplitStorageKey) || '', 10);
+            if (Number.isFinite(savedWidth) && savedWidth > 0) {
+                this.setMissingBrowserDetailWidth(browser, savedWidth, { persist: false });
+            }
+        } catch (e) {}
+    }
+
+    startMissingBrowserSplitDrag(event, browser) {
+        if (!(browser instanceof HTMLElement)) return;
+
+        const detailPane = browser.querySelector('.ml-missing-detail-pane');
+        if (!(detailPane instanceof HTMLElement)) return;
+
+        event.preventDefault();
+        this._missingBrowserSplitDragging = true;
+        this._missingBrowserSplitStart = {
+            x: event.clientX,
+            width: detailPane.getBoundingClientRect().width
+        };
+        this._missingBrowserSplitBrowser = browser;
+        this._missingBrowserPrevUserSelect = document.body.style.userSelect;
+        this._missingBrowserPrevCursor = document.body.style.cursor;
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+        browser.classList.add('is-resizing');
+
+        this._onMissingBrowserSplitMove = (moveEvent) => this.onMissingBrowserSplitDrag(moveEvent);
+        this._onMissingBrowserSplitUp = () => this.endMissingBrowserSplitDrag();
+        document.addEventListener('mousemove', this._onMissingBrowserSplitMove);
+        document.addEventListener('mouseup', this._onMissingBrowserSplitUp, { once: true });
+    }
+
+    onMissingBrowserSplitDrag(event) {
+        if (!this._missingBrowserSplitDragging || !this._missingBrowserSplitStart || !this._missingBrowserSplitBrowser) return;
+
+        const nextWidth = this._missingBrowserSplitStart.width - (event.clientX - this._missingBrowserSplitStart.x);
+        this.setMissingBrowserDetailWidth(this._missingBrowserSplitBrowser, nextWidth);
+    }
+
+    endMissingBrowserSplitDrag() {
+        if (!this._missingBrowserSplitDragging) return;
+
+        this._missingBrowserSplitDragging = false;
+        document.removeEventListener('mousemove', this._onMissingBrowserSplitMove);
+        this._missingBrowserSplitBrowser?.classList.remove('is-resizing');
+        this._missingBrowserSplitBrowser = null;
+        this._missingBrowserSplitStart = null;
+        try {
+            document.body.style.userSelect = this._missingBrowserPrevUserSelect || '';
+            document.body.style.cursor = this._missingBrowserPrevCursor || '';
+        } catch (e) {}
+    }
+
+    resizeMissingBrowserDetailBy(browser, delta) {
+        const detailPane = browser.querySelector('.ml-missing-detail-pane');
+        if (!(detailPane instanceof HTMLElement)) return;
+
+        this.setMissingBrowserDetailWidth(browser, detailPane.getBoundingClientRect().width + delta);
+    }
+
+    setMissingBrowserDetailWidth(browser, width, { persist = true } = {}) {
+        const bounds = this.getMissingBrowserSplitBounds(browser);
+        const nextWidth = Math.round(Math.max(bounds.min, Math.min(bounds.max, width)));
+        browser.style.setProperty('--ml-missing-detail-track', `${nextWidth}px`);
+
+        if (persist) {
+            try {
+                localStorage.setItem(this.missingBrowserSplitStorageKey, String(nextWidth));
+            } catch (e) {}
+        }
+    }
+
+    getMissingBrowserSplitBounds(browser) {
+        const browserRect = browser.getBoundingClientRect();
+        const splitter = browser.querySelector('.ml-missing-browser-splitter');
+        const splitterWidth = splitter instanceof HTMLElement
+            ? splitter.getBoundingClientRect().width
+            : 10;
+        const available = Math.max(1, browserRect.width - splitterWidth);
+        const minListWidth = Math.min(360, Math.max(240, Math.floor(available * 0.28)));
+        const max = Math.max(1, available - minListWidth);
+        const min = Math.min(max, Math.min(420, Math.max(300, Math.floor(available * 0.3))));
+
+        return { min, max };
     }
 
     wireMissingModelDetail(container, missing, missingIndex) {
