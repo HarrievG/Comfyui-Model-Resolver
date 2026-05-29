@@ -26,6 +26,8 @@ class LinkerManagerDialog extends ComfyDialog {
         this.activeDownloads = {};  // Track active downloads
         this.searchResultCache = new Map();
         this.searchProgressTimers = new Map();
+        this.urnResolvePromises = new Map();
+        this.urnLocalMatchPromises = new Map();
         this.cachedAnalysisData = null;
         this.cachedWorkflowSignature = null;
         this.selectedMissingModelKey = null;
@@ -1047,21 +1049,189 @@ class LinkerManagerDialog extends ComfyDialog {
         }
     }
 
-    async refreshUrnLocalMatches(missing) {
-        if (!missing?.civitai_info?.expected_filename || !this.contentElement) return;
+    getUrnIds(missing = {}) {
+        return {
+            modelId: missing.urn_model_id || missing.urn?.model_id,
+            versionId: missing.urn_version_id || missing.urn?.version_id
+        };
+    }
 
-        const bodyId = `local-matches-body-${missing.node_id}-${missing.widget_index}`;
-        const container = this.contentElement.querySelector(`#${bodyId}`);
-        if (!container) return;
+    getUrnResolveKey(missing = {}) {
+        const ids = this.getUrnIds(missing);
+        return `${ids.modelId || ''}:${ids.versionId || ''}:${this.getMissingModelKey(missing)}`;
+    }
 
-        container.innerHTML = `<div class="ml-no-matches">Searching local matches for "${missing.civitai_info.expected_filename}"...</div>`;
+    getCivitaiResultFromMissing(missing = {}) {
+        if (!missing.civitai_info?.expected_filename && !missing.download_source?.url) return null;
+        const ids = this.getUrnIds(missing);
+        return {
+            name: missing.civitai_info?.model_name || missing.download_source?.name,
+            version_name: missing.civitai_info?.version_name || missing.download_source?.version_name,
+            filename: missing.civitai_info?.expected_filename || missing.download_source?.filename,
+            download_url: missing.download_source?.url,
+            url: missing.download_source?.model_url,
+            type: missing.download_source?.type || missing.category,
+            size: missing.download_source?.size,
+            model_id: missing.download_source?.model_id || ids.modelId,
+            version_id: missing.download_source?.version_id || ids.versionId,
+            base_model: missing.civitai_info?.base_model || missing.download_source?.base_model,
+            tags: missing.civitai_info?.tags || missing.download_source?.tags || []
+        };
+    }
 
-        try {
+    applyCivitaiUrnResult(missing, civitai = {}) {
+        if (!missing || !civitai) return;
+        const ids = this.getUrnIds(missing);
+        missing.civitai_info = {
+            model_name: civitai.name,
+            version_name: civitai.version_name,
+            expected_filename: civitai.filename,
+            base_model: civitai.base_model,
+            tags: civitai.tags || []
+        };
+        missing.download_source = {
+            source: 'civitai',
+            url: civitai.download_url,
+            filename: civitai.filename,
+            name: civitai.name,
+            version_name: civitai.version_name,
+            type: civitai.type,
+            directory: missing.category || 'checkpoints',
+            match_type: 'exact',
+            size: civitai.size,
+            model_id: civitai.model_id || ids.modelId,
+            version_id: civitai.version_id || ids.versionId,
+            model_url: civitai.url || `https://civitai.com/models/${ids.modelId}?modelVersionId=${ids.versionId}`,
+            base_model: civitai.base_model,
+            tags: civitai.tags || []
+        };
+    }
+
+    async resolveUrnDataForMissing(missing) {
+        if (!missing?.is_urn) return null;
+
+        const existing = this.getCivitaiResultFromMissing(missing);
+        if (existing?.filename) {
+            return { civitai: existing };
+        }
+
+        const ids = this.getUrnIds(missing);
+        if (!ids.modelId || !ids.versionId) return null;
+
+        const key = this.getUrnResolveKey(missing);
+        if (this.urnResolvePromises.has(key)) {
+            return this.urnResolvePromises.get(key);
+        }
+
+        const promise = (async () => {
+            const tokens = this.getStoredTokens();
+            const payload = {
+                filename: `${ids.modelId}_${ids.versionId}`,
+                category: '',
+                is_urn: true,
+                sources: ['civitai'],
+                model_id: ids.modelId,
+                version_id: ids.versionId,
+                civitai_candidate_limit: tokens.civitai_candidate_limit
+            };
+
+            const response = await api.fetchApi('/model_linker/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`URN resolve failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.civitai) {
+                this.applyCivitaiUrnResult(missing, data.civitai);
+            }
+            return data;
+        })().finally(() => {
+            this.urnResolvePromises.delete(key);
+        });
+
+        this.urnResolvePromises.set(key, promise);
+        return promise;
+    }
+
+    refreshMissingListStats() {
+        if (!this.contentElement) return;
+        const statsEl = this.contentElement.querySelector('.ml-missing-list-stats');
+        if (!statsEl) return;
+
+        const stats = this.getMissingModelSummaryStats(this.missingModels || []);
+        statsEl.innerHTML = `
+            <span class="ml-missing-stat ml-missing-stat-exact">${stats.exact} exact</span>
+            <span class="ml-missing-stat ml-missing-stat-partial">${stats.partial} partial</span>
+            <span class="ml-missing-stat ml-missing-stat-none">${stats.none} no match</span>
+        `;
+    }
+
+    refreshMissingListRowLocalMatch(missing = {}) {
+        if (!this.contentElement) return;
+
+        const key = this.getMissingModelKey(missing);
+        const rows = this.contentElement.querySelectorAll('.ml-missing-list-row');
+        for (const row of rows) {
+            if (row.getAttribute('data-missing-key') !== key) continue;
+
+            const bestMatch = this.getBestLocalMatch(missing, 70);
+            const confidence = bestMatch ? Number(bestMatch.confidence || 0) : 0;
+            const matchName = bestMatch?.model?.relative_path || bestMatch?.filename || bestMatch?.path || '';
+            const matchDisplay = matchName || 'No local match';
+            const matchClass = confidence === 100 ? 'exact' : (bestMatch ? 'partial' : 'none');
+
+            const bestEl = row.querySelector('.ml-missing-row-best');
+            if (bestEl) {
+                bestEl.setAttribute('data-tooltip', matchDisplay);
+                bestEl.innerHTML = bestMatch
+                    ? this.escapeHtml(matchDisplay)
+                    : '<span class="ml-missing-row-none">-- No local match</span>';
+            }
+
+            const matchEl = row.querySelector('.ml-missing-row-match');
+            if (matchEl) {
+                matchEl.classList.remove(
+                    'ml-missing-row-match-exact',
+                    'ml-missing-row-match-partial',
+                    'ml-missing-row-match-none'
+                );
+                matchEl.classList.add(`ml-missing-row-match-${matchClass}`);
+                const valueEl = matchEl.querySelector('strong');
+                if (valueEl) {
+                    valueEl.textContent = bestMatch
+                        ? `${confidence.toFixed(confidence % 1 ? 1 : 0)}%`
+                        : '--';
+                }
+            }
+        }
+
+        this.refreshMissingListStats();
+    }
+
+    async fetchUrnLocalMatches(missing) {
+        if (!missing?.civitai_info?.expected_filename) return [];
+
+        const filename = missing.civitai_info.expected_filename;
+        if (missing.__urnLocalMatchesFilename === filename && Array.isArray(missing.matches)) {
+            return missing.matches;
+        }
+
+        const key = this.getUrnResolveKey(missing);
+        if (this.urnLocalMatchPromises.has(key)) {
+            return this.urnLocalMatchPromises.get(key);
+        }
+
+        const promise = (async () => {
             const response = await api.fetchApi('/model_linker/local-matches', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    filename: missing.civitai_info.expected_filename,
+                    filename,
                     category: missing.category || ''
                 })
             });
@@ -1072,12 +1242,56 @@ class LinkerManagerDialog extends ComfyDialog {
 
             const data = await response.json();
             missing.matches = Array.isArray(data.matches) ? data.matches : [];
-            container.innerHTML = this.renderLocalMatchesContent(missing, missing.__displayIndex || 0);
-            this.wireLocalMatchButtons(this.contentElement, missing, missing.__displayIndex || 0);
+            missing.__urnLocalMatchesFilename = filename;
+            return missing.matches;
+        })().finally(() => {
+            this.urnLocalMatchPromises.delete(key);
+        });
+
+        this.urnLocalMatchPromises.set(key, promise);
+        return promise;
+    }
+
+    async refreshUrnLocalMatches(missing) {
+        if (!missing?.civitai_info?.expected_filename || !this.contentElement) return;
+
+        const bodyId = `local-matches-body-${missing.node_id}-${missing.widget_index}`;
+        const container = this.contentElement.querySelector(`#${bodyId}`);
+        if (container) {
+            container.innerHTML = `<div class="ml-no-matches">Searching local matches for "${missing.civitai_info.expected_filename}"...</div>`;
+        }
+
+        try {
+            await this.fetchUrnLocalMatches(missing);
+            if (container) {
+                container.innerHTML = this.renderLocalMatchesContent(missing, missing.__displayIndex || 0);
+                this.wireLocalMatchButtons(this.contentElement, missing, missing.__displayIndex || 0);
+            }
+            this.refreshMissingListRowLocalMatch(missing);
         } catch (error) {
             console.error('Model Linker: URN local match refresh error:', error);
-            container.innerHTML = `<div class="ml-no-matches">Failed to refresh local matches.</div>`;
+            if (container) {
+                container.innerHTML = `<div class="ml-no-matches">Failed to refresh local matches.</div>`;
+            }
         }
+    }
+
+    scheduleInitialUrnLocalMatchRefresh(missingModels = []) {
+        missingModels.forEach((missing) => {
+            if (!missing?.is_urn || missing.__urnLocalRefreshQueued) return;
+            if (this.getBestLocalMatch(missing, 70)) return;
+
+            missing.__urnLocalRefreshQueued = true;
+            setTimeout(async () => {
+                try {
+                    await this.resolveUrnDataForMissing(missing);
+                    await this.refreshUrnLocalMatches(missing);
+                } catch (error) {
+                    missing.__urnLocalRefreshQueued = false;
+                    console.error('Model Linker: initial URN local match refresh error:', error);
+                }
+            }, 0);
+        });
     }
 
     /**
@@ -5424,6 +5638,7 @@ class LinkerManagerDialog extends ComfyDialog {
             hasAny100Match
         );
         this.wireMissingModelsBrowser(container, data, sortedMissingModels);
+        this.scheduleInitialUrnLocalMatchRefresh(sortedMissingModels);
     }
 
     renderMissingModel(missing, missingIndex = 0) {
@@ -6449,28 +6664,41 @@ class LinkerManagerDialog extends ComfyDialog {
         }
         
         try {
-            const tokens = this.getStoredTokens();
-            const payload = {
-                filename: modelId + '_' + versionId,
-                category: '',
-                is_urn: true,
-                sources: ['civitai'],
-                model_id: modelId,
-                version_id: versionId,
-                civitai_candidate_limit: tokens.civitai_candidate_limit
-            };
-            console.log('resolveUrnAsync payload:', JSON.stringify(payload));
-            
-            const response = await api.fetchApi('/model_linker/search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            
-            console.log('resolveUrnAsync response status:', response.status);
-            
-            if (response.ok) {
-                const data = await response.json();
+            const downloadContainerId = loadingElementId.replace('urn-loading-', 'urn-download-');
+            const missing = this.missingModels.find(m =>
+                `urn-download-${m.node_id}-${m.widget_index}` === downloadContainerId
+            );
+
+            let data = null;
+            if (missing) {
+                data = await this.resolveUrnDataForMissing(missing);
+            } else {
+                const tokens = this.getStoredTokens();
+                const payload = {
+                    filename: `${modelId}_${versionId}`,
+                    category: '',
+                    is_urn: true,
+                    sources: ['civitai'],
+                    model_id: modelId,
+                    version_id: versionId,
+                    civitai_candidate_limit: tokens.civitai_candidate_limit
+                };
+                console.log('resolveUrnAsync payload:', JSON.stringify(payload));
+
+                const response = await api.fetchApi('/model_linker/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                console.log('resolveUrnAsync response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`URN resolve failed: ${response.status}`);
+                }
+                data = await response.json();
+            }
+
+            if (data) {
                 const loadingEl = document.getElementById(loadingElementId);
                 if (loadingEl && data.civitai) {
                     loadingEl.classList.remove('ml-is-muted', 'ml-is-error');
@@ -6485,36 +6713,10 @@ class LinkerManagerDialog extends ComfyDialog {
                     loadingEl.classList.add('ml-is-muted');
                 }
 
-                const downloadContainerId = loadingElementId.replace('urn-loading-', 'urn-download-');
                 const downloadEl = document.getElementById(downloadContainerId);
                 if (downloadEl && data.civitai?.download_url) {
-                    const missing = this.missingModels.find(m =>
-                        `urn-download-${m.node_id}-${m.widget_index}` === downloadContainerId
-                    );
                     if (missing) {
-                        missing.civitai_info = {
-                            model_name: data.civitai.name,
-                            version_name: data.civitai.version_name,
-                            expected_filename: data.civitai.filename,
-                            base_model: data.civitai.base_model,
-                            tags: data.civitai.tags || []
-                        };
-                        missing.download_source = {
-                            source: 'civitai',
-                            url: data.civitai.download_url,
-                            filename: data.civitai.filename,
-                            name: data.civitai.name,
-                            version_name: data.civitai.version_name,
-                            type: data.civitai.type,
-                            directory: missing.category || 'checkpoints',
-                            match_type: 'exact',
-                            size: data.civitai.size,
-                            model_id: data.civitai.model_id || modelId,
-                            version_id: data.civitai.version_id || versionId,
-                            model_url: data.civitai.url || `https://civitai.com/models/${modelId}?modelVersionId=${versionId}`,
-                            base_model: data.civitai.base_model,
-                            tags: data.civitai.tags || []
-                        };
+                        this.applyCivitaiUrnResult(missing, data.civitai);
                         const downloadParent = downloadEl.parentElement;
                         downloadEl.outerHTML = this.renderKnownDownloadPanel(missing, missing.download_source);
                         this.wireDownloadSearchPanel(downloadParent || this.contentElement, missing);
