@@ -106,6 +106,12 @@ class ModelLinkerExtension:
                     resolve_urn,
                     clear_search_cache as clear_civitai_search_cache,
                 )
+                from .core.sources.civarchive import (
+                    is_civarchive_available,
+                    search_civarchive_for_file,
+                    resolve_civarchive_model_version,
+                    clear_search_cache as clear_civarchive_search_cache,
+                )
                 from .core.sources.lora_manager_archive import (
                     is_lora_manager_archive_available,
                     search_lora_manager_archive_for_file,
@@ -821,6 +827,18 @@ class ModelLinkerExtension:
                         civitai_candidate_limit = max(
                             1, min(civitai_candidate_limit, 20)
                         )
+                        civarchive_candidate_limit_raw = data.get(
+                            "civarchive_candidate_limit", 10
+                        )
+                        try:
+                            civarchive_candidate_limit = int(
+                                civarchive_candidate_limit_raw
+                            )
+                        except (TypeError, ValueError):
+                            civarchive_candidate_limit = 10
+                        civarchive_candidate_limit = max(
+                            1, min(civarchive_candidate_limit, 30)
+                        )
                         # Handle both boolean and string forms
                         is_urn_raw = data.get("is_urn", False)
                         civitai_session_token = data.get("civitai_session_token", "")
@@ -900,18 +918,20 @@ class ModelLinkerExtension:
                                 "local",
                                 "huggingface",
                                 "civitai",
+                                "civarchive",
                                 "lora_manager_archive",
                             }
 
                         search_local = "local" in normalized_sources
                         search_huggingface_source = "huggingface" in normalized_sources
                         search_civitai_source = "civitai" in normalized_sources
+                        search_civarchive_source = "civarchive" in normalized_sources
                         search_lora_manager_archive_source = (
                             "lora_manager_archive" in normalized_sources
                         )
 
                         log_info(
-                            f"Search request: filename={filename}, category={category}, is_urn={is_urn}, model_id={data.get('model_id')}, version_id={data.get('version_id')}, sources={sorted(normalized_sources)}, civitai_candidate_limit={civitai_candidate_limit}"
+                            f"Search request: filename={filename}, category={category}, is_urn={is_urn}, model_id={data.get('model_id')}, version_id={data.get('version_id')}, sources={sorted(normalized_sources)}, civitai_candidate_limit={civitai_candidate_limit}, civarchive_candidate_limit={civarchive_candidate_limit}"
                         )
 
                         results = {
@@ -919,6 +939,7 @@ class ModelLinkerExtension:
                             "model_list": None,
                             "huggingface": None,
                             "civitai": None,
+                            "civarchive": None,
                             "lora_manager_archive": None,
                             "found": False,
                             "searched_sources": sorted(normalized_sources),
@@ -1093,6 +1114,55 @@ class ModelLinkerExtension:
 
                             return source_results, source_found
 
+                        def search_civarchive_source_task():
+                            source_results = {"civarchive": None}
+                            source_found = False
+
+                            log_info(
+                                f"Search source [civarchive] start: filename={filename}, category={category}, is_urn={is_urn}"
+                            )
+                            if is_urn:
+                                model_id = data.get("model_id")
+                                version_id = data.get("version_id")
+                                if model_id and version_id:
+                                    civarchive_result = resolve_civarchive_model_version(
+                                        model_id,
+                                        version_id,
+                                        query=filename,
+                                    )
+                                    log_search_result(
+                                        "civarchive/urn",
+                                        civarchive_result,
+                                        {
+                                            "model_id": model_id,
+                                            "version_id": version_id,
+                                        },
+                                    )
+                                    if civarchive_result:
+                                        source_results["civarchive"] = civarchive_result
+                                        source_found = True
+                                else:
+                                    log_search_result(
+                                        "civarchive/urn",
+                                        None,
+                                        {
+                                            "model_id": model_id,
+                                            "version_id": version_id,
+                                        },
+                                    )
+                            else:
+                                civarchive_result = search_civarchive_for_file(
+                                    filename,
+                                    model_type=category,
+                                    limit=civarchive_candidate_limit,
+                                )
+                                log_search_result("civarchive", civarchive_result)
+                                if civarchive_result:
+                                    source_results["civarchive"] = civarchive_result
+                                    source_found = True
+
+                            return source_results, source_found
+
                         def search_lora_manager_archive_source_task():
                             log_info(
                                 f"Search source [lora_manager_archive] start: filename={filename}, category={category}"
@@ -1126,6 +1196,12 @@ class ModelLinkerExtension:
                         if search_civitai_source:
                             search_tasks.append(
                                 asyncio.to_thread(search_civitai_source_task)
+                            )
+                        if search_civarchive_source and (
+                            filename or (is_urn and model_id and version_id)
+                        ):
+                            search_tasks.append(
+                                asyncio.to_thread(search_civarchive_source_task)
                             )
                         if search_lora_manager_archive_source and filename:
                             search_tasks.append(
@@ -1163,6 +1239,7 @@ class ModelLinkerExtension:
                     try:
                         clear_huggingface_search_cache()
                         clear_civitai_search_cache()
+                        clear_civarchive_search_cache()
                         clear_lora_manager_archive_search_cache()
                         log_info("Cleared backend search caches")
                         return web.json_response({"success": True})
@@ -1321,6 +1398,7 @@ class ModelLinkerExtension:
                         return web.json_response(
                             {
                                 "sources": {
+                                    "civarchive": is_civarchive_available(),
                                     "lora_manager_archive": is_lora_manager_archive_available()
                                 }
                             }

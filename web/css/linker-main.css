@@ -553,8 +553,8 @@
     display: block;
     justify-self: center;
     min-width: 0;
-    width: 92px;
-    height: 44px;
+    width: 104px;
+    height: 50px;
 }
 .ml-missing-source-dot {
     --ml-source-rgb: 168,174,181;
@@ -608,25 +608,36 @@
         );
 }
 .ml-missing-row-sources .ml-missing-source-dot:nth-child(1) {
-    left: 26px;
-    top: -8px;
+    left: 22px;
+    top: -7px;
 }
 .ml-missing-row-sources .ml-missing-source-dot:nth-child(2) {
-    left: 56px;
-    top: -8px;
+    left: 52px;
+    top: -7px;
 }
 .ml-missing-row-sources .ml-missing-source-dot:nth-child(3) {
-    left: 11px;
+    left: 7px;
     top: 18px;
     z-index: 2;
 }
 .ml-missing-row-sources .ml-missing-source-dot:nth-child(4) {
-    left: 41px;
+    left: 37px;
     top: 18px;
     z-index: 2;
 }
+.ml-missing-row-sources .ml-missing-source-dot:nth-child(5) {
+    left: 67px;
+    top: 18px;
+    z-index: 2;
+}
+.ml-missing-row-sources .ml-missing-source-dot:nth-child(3):nth-last-child(2) {
+    left: 22px;
+}
+.ml-missing-row-sources .ml-missing-source-dot:nth-child(4):last-child {
+    left: 52px;
+}
 .ml-missing-row-sources .ml-missing-source-dot:nth-child(3):last-child {
-    left: 41px;
+    left: 37px;
 }
 .ml-missing-source-icon {
     position: relative;

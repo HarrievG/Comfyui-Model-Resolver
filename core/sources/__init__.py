@@ -14,6 +14,14 @@ from .huggingface import (
     get_huggingface_download_url,
 )
 from .civitai import search_civitai, search_civitai_for_file, get_civitai_download_url
+from .civarchive import (
+    clear_search_cache as clear_civarchive_search_cache,
+    is_civarchive_available,
+    resolve_civarchive_by_hash,
+    resolve_civarchive_model_version,
+    search_civarchive,
+    search_civarchive_for_file,
+)
 from .lora_manager_archive import (
     clear_search_cache as clear_lora_manager_archive_search_cache,
     get_lora_manager_archive_db_path,
@@ -33,6 +41,12 @@ __all__ = [
     "search_civitai",
     "search_civitai_for_file",
     "get_civitai_download_url",
+    "clear_civarchive_search_cache",
+    "is_civarchive_available",
+    "resolve_civarchive_by_hash",
+    "resolve_civarchive_model_version",
+    "search_civarchive",
+    "search_civarchive_for_file",
     "clear_lora_manager_archive_search_cache",
     "get_lora_manager_archive_db_path",
     "is_lora_manager_archive_available",

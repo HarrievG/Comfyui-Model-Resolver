@@ -138,6 +138,7 @@ class LinkerManagerDialog extends ComfyDialog {
                     model_list: null,
                     huggingface: null,
                     civitai: null,
+                    civarchive: null,
                     lora_manager_archive: null
                 },
                 lastAttemptSources: [],
@@ -160,6 +161,7 @@ class LinkerManagerDialog extends ComfyDialog {
             model_list: newResults.model_list || existingResults.model_list || null,
             huggingface: newResults.huggingface || existingResults.huggingface || null,
             civitai: newResults.civitai || existingResults.civitai || null,
+            civarchive: newResults.civarchive || existingResults.civarchive || null,
             lora_manager_archive: newResults.lora_manager_archive || existingResults.lora_manager_archive || null
         };
     }
@@ -278,7 +280,7 @@ class LinkerManagerDialog extends ComfyDialog {
      * Return true when at least one downloadable source was found
      */
     hasSearchResults(data = {}) {
-        return !!(data.popular || data.model_list || data.huggingface || data.civitai || data.lora_manager_archive);
+        return !!(data.popular || data.model_list || data.huggingface || data.civitai || data.civarchive || data.lora_manager_archive);
     }
 
     /**
@@ -290,6 +292,7 @@ class LinkerManagerDialog extends ComfyDialog {
             local: 'Local Database',
             huggingface: 'HuggingFace',
             civitai: 'CivitAI',
+            civarchive: 'CivArchive',
             lora_manager_archive: 'LoRA Manager Archive'
         };
         return labels[source] || source;
@@ -301,6 +304,9 @@ class LinkerManagerDialog extends ComfyDialog {
         }
 
         const sources = ['local', 'huggingface', 'civitai'];
+        if (this.isSourceAvailable('civarchive')) {
+            sources.push('civarchive');
+        }
         if (this.isSourceAvailable('lora_manager_archive')) {
             sources.push('lora_manager_archive');
         }
@@ -337,10 +343,12 @@ class LinkerManagerDialog extends ComfyDialog {
 
     getSearchSourceEstimateMs(source, isUrn = false) {
         if (isUrn && source === 'civitai') return 5000;
+        if (isUrn && source === 'civarchive') return 6000;
 
         const estimates = {
             local: 1400,
             lora_manager_archive: 3200,
+            civarchive: 10000,
             huggingface: 18000,
             civitai: 22000
         };
@@ -556,6 +564,7 @@ class LinkerManagerDialog extends ComfyDialog {
             'model-list': 'database',
             huggingface: 'huggingface',
             civitai: 'civitai',
+            civarchive: 'civarchive',
             'lora-archive': 'loraManager',
             lora_manager_archive: 'loraManager',
             'lora-manager-archive': 'loraManager',
@@ -651,6 +660,7 @@ class LinkerManagerDialog extends ComfyDialog {
             model_list: 'Local Database',
             huggingface: 'HuggingFace',
             civitai: 'CivitAI',
+            civarchive: 'CivArchive',
             lora_manager_archive: 'LoRA Archive',
             workflow: 'Workflow',
             online: 'Online'
@@ -2690,7 +2700,7 @@ class LinkerManagerDialog extends ComfyDialog {
     }
 
     isSourceAvailable(source) {
-        if (!source || ['all', 'local', 'huggingface', 'civitai'].includes(source)) {
+        if (!source || ['all', 'local', 'huggingface', 'civitai', 'civarchive'].includes(source)) {
             return true;
         }
         return Boolean(this.capabilities?.sources?.[source]);
@@ -2815,6 +2825,9 @@ class LinkerManagerDialog extends ComfyDialog {
 
     getSearchSourceOptions() {
         const sources = ['all', 'local', 'huggingface', 'civitai'];
+        if (this.isSourceAvailable('civarchive')) {
+            sources.push('civarchive');
+        }
         if (this.isSourceAvailable('lora_manager_archive')) {
             sources.push('lora_manager_archive');
         }
@@ -4726,6 +4739,8 @@ class LinkerManagerDialog extends ComfyDialog {
             candidates.push(results.huggingface);
         } else if (source === 'civitai') {
             candidates.push(results.civitai);
+        } else if (source === 'civarchive') {
+            candidates.push(results.civarchive);
         } else if (source === 'lora_manager_archive') {
             candidates.push(results.lora_manager_archive);
         }
@@ -4786,7 +4801,8 @@ class LinkerManagerDialog extends ComfyDialog {
         const sourceItems = [
             { source: 'local' },
             { source: 'huggingface' },
-            { source: 'civitai' }
+            { source: 'civitai' },
+            { source: 'civarchive' }
         ];
         if (this.isSourceAvailable('lora_manager_archive')) {
             sourceItems.push({ source: 'lora_manager_archive' });
@@ -6246,6 +6262,16 @@ class LinkerManagerDialog extends ComfyDialog {
                             type: data.civitai.type
                         };
                     }
+                    if (data.civarchive) {
+                        missing.civitai_search_result = {
+                            base_model: data.civarchive.base_model,
+                            tags: data.civarchive.tags || [],
+                            trained_words: data.civarchive.trained_words || [],
+                            filename: data.civarchive.filename,
+                            name: data.civarchive.name,
+                            type: data.civarchive.type
+                        };
+                    }
 
                     this.displaySearchResults(missing, state, resultsDiv);
                     this.applySearchResultSuggestion(missing);
@@ -6517,9 +6543,10 @@ class LinkerManagerDialog extends ComfyDialog {
         const modelListResult = results.model_list;
         const hfResult = results.huggingface ? (Array.isArray(results.huggingface) ? results.huggingface[0] : results.huggingface) : null;
         const civitaiResult = results.civitai ? (Array.isArray(results.civitai) ? results.civitai[0] : results.civitai) : null;
+        const civarchiveResult = results.civarchive ? (Array.isArray(results.civarchive) ? results.civarchive[0] : results.civarchive) : null;
         const loraManagerArchiveResult = results.lora_manager_archive ? (Array.isArray(results.lora_manager_archive) ? results.lora_manager_archive[0] : results.lora_manager_archive) : null;
         const knownDownloadRow = this.getDownloadSourceTableRow(missing, missing.download_source);
-        const hasResults = knownDownloadRow || popular || modelListResult || hfResult || civitaiResult || loraManagerArchiveResult;
+        const hasResults = knownDownloadRow || popular || modelListResult || hfResult || civitaiResult || civarchiveResult || loraManagerArchiveResult;
         const progressHtml = this.renderSearchProgress(state);
         const hasActiveProgress = this.hasActiveSearchProgress(state);
 
@@ -6606,6 +6633,25 @@ class LinkerManagerDialog extends ComfyDialog {
                 downloadFilename: hfResult.filename,
                 category: missing.category,
                 openUrl: hfModelUrl
+            });
+        }
+
+        if (civarchiveResult && civarchiveResult.download_url) {
+            const archiveFilename = civarchiveResult.filename || missing.original_path?.split('/').pop()?.split('\\').pop() || '';
+            const archiveName = civarchiveResult.name || archiveFilename || 'Model';
+            addRow({
+                sourceKey: 'civarchive',
+                sourceLabel: 'CivArchive',
+                model: archiveName,
+                version: civarchiveResult.version_name || '',
+                filename: archiveFilename,
+                secondary: archiveName && archiveName !== archiveFilename ? archiveFilename : (civarchiveResult.platform || civarchiveResult.base_model || ''),
+                match: this.getSearchResultMatchDisplay(civarchiveResult),
+                size: this.formatSearchResultSize(civarchiveResult),
+                downloadUrl: civarchiveResult.download_url,
+                downloadFilename: archiveFilename,
+                category: missing.category,
+                openUrl: civarchiveResult.url
             });
         }
 
