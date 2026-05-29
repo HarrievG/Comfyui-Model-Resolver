@@ -3148,17 +3148,23 @@ class LinkerManagerDialog extends ComfyDialog {
                 <div class="ml-options-shell">
                     <aside class="ml-options-sidebar">
                         <div class="ml-options-sidebar-group">
-                            <h3 class="ml-options-sidebar-title">Settings</h3>
+                            <h3 class="ml-options-sidebar-title">Application Settings</h3>
                         </div>
                         <div class="ml-options-sidebar-group">
                             <div class="ml-options-sidebar-label">Providers</div>
                             <div class="ml-options-nav">
                                 <button type="button" class="ml-options-nav-btn is-active" data-target="ml-options-section-civitai">
-                                    <span>CivitAI</span>
+                                    <span class="ml-options-nav-main">
+                                        <span class="ml-options-nav-icon" aria-hidden="true">${getSvgIcon('database')}</span>
+                                        <span>CivitAI</span>
+                                    </span>
                                     <span class="ml-options-nav-meta">01</span>
                                 </button>
                                 <button type="button" class="ml-options-nav-btn" data-target="ml-options-section-hf">
-                                    <span>HuggingFace</span>
+                                    <span class="ml-options-nav-main">
+                                        <span class="ml-options-nav-icon" aria-hidden="true">${getSvgIcon('globe')}</span>
+                                        <span>HuggingFace</span>
+                                    </span>
                                     <span class="ml-options-nav-meta">02</span>
                                 </button>
                             </div>
