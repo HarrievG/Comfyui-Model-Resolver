@@ -4085,8 +4085,11 @@ class LinkerManagerDialog extends ComfyDialog {
         try {
             this.queueToggleIcon = $el("button", {
                 id: "queue-toggle-icon",
-                onclick: () => this.toggleQueueCollapsed()
-            }, [document.createTextNode('⮜')]);
+                type: "button",
+                "aria-label": "Toggle queued selections",
+                onclick: (event) => this.onQueueEdgeClick(event),
+                onmousedown: (event) => this.startQueueEdgeDrag(event)
+            });
             body.appendChild(this.queueToggleIcon);
             this.updateQueueToggleIcon();
         } catch (e) { }
@@ -4311,18 +4314,50 @@ class LinkerManagerDialog extends ComfyDialog {
     updateQueueToggleIcon() {
         if (!this.queueToggleIcon) return;
         this.queueToggleIcon.style.display = this.activeTab === 'missing' ? '' : 'none';
+        this.queueToggleIcon.textContent = '';
+        this.queueToggleIcon.removeAttribute('data-tooltip');
+        this.queueToggleIcon.removeAttribute('title');
         if (this.queueCollapsed) {
-            this.queueToggleIcon.textContent = '⮞';
-            this.setTooltip(this.queueToggleIcon, 'Show queued selections');
+            this.queueToggleIcon.classList.add('is-collapsed');
+            this.queueToggleIcon.setAttribute('aria-label', 'Show queued selections');
         } else {
-            this.queueToggleIcon.textContent = '⮜';
-            this.setTooltip(this.queueToggleIcon, 'Hide queued selections');
+            this.queueToggleIcon.classList.remove('is-collapsed');
+            this.queueToggleIcon.setAttribute('aria-label', 'Hide queued selections');
         }
     }
 
+    onQueueEdgeClick(event) {
+        if (this._suppressQueueEdgeClick) {
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            this._suppressQueueEdgeClick = false;
+            return;
+        }
+        this.toggleQueueCollapsed();
+    }
+
+    startQueueEdgeDrag(event) {
+        if (event.button !== 0 || !this.queueCollapsed || !this.queueElement) return;
+
+        const startX = event.clientX;
+        const previousCursor = document.body.style.cursor;
+        event.preventDefault();
+        document.body.style.cursor = 'col-resize';
+        this._suppressQueueEdgeClick = true;
+        this.splitterElement.style.display = '';
+        document.getElementById('model-linker-body')?.classList.add('ml-queue-preview-collapsed');
+        this.queueElement.style.display = 'none';
+        this.queueElement.style.width = '56px';
+        this.startSplitDrag(
+            { clientX: startX, preventDefault: () => {} },
+            { startWidth: 56, edgeOpen: true, previousCursor, startCollapsedPreview: true }
+        );
+    }
+
     // Begin split drag for resizable panels
-    startSplitDrag(e) {
+    startSplitDrag(e, { startWidth = null, edgeOpen = false, previousCursor = null, startCollapsedPreview = false } = {}) {
         try {
+            e?.preventDefault?.();
             if (!this.queueElement) return;
             const rect = this.queueElement.getBoundingClientRect();
             const body = document.getElementById('model-linker-body');
@@ -4331,10 +4366,14 @@ class LinkerManagerDialog extends ComfyDialog {
             body?.classList.add('ml-is-resizing-queue');
             this._splitStart = {
                 x: e.clientX,
-                startWidth: rect.width,
+                startWidth: Number.isFinite(startWidth) ? startWidth : rect.width,
                 containerWidth: bodyRect.width
             };
             this._lastSplitDragApply = 0;
+            this._splitPreviewCollapsed = !!startCollapsedPreview;
+            this._splitEdgeOpen = !!edgeOpen;
+            this._splitEdgeOpenedPastThreshold = false;
+            this._splitPreviousCursor = previousCursor;
             this._prevUserSelect = document.body.style.userSelect;
             document.body.style.userSelect = 'none';
             this._onSplitMove = (ev) => this.onSplitDrag(ev);
@@ -4348,18 +4387,36 @@ class LinkerManagerDialog extends ComfyDialog {
         if (!this._splitDragging || !this._splitStart || !this.queueElement) return;
         const dx = e.clientX - this._splitStart.x;
         let newW = this._splitStart.startWidth - dx;
-        const minW = 240;
+        const minW = 56;
         const maxW = Math.max(minW, Math.floor(this._splitStart.containerWidth - 360));
         if (newW < minW) newW = minW;
         if (newW > maxW) newW = maxW;
         this._pendingSplitWidth = Math.round(newW);
+        if (this._splitEdgeOpen && this._pendingSplitWidth > 140) {
+            this._splitEdgeOpenedPastThreshold = true;
+            if (this.queueCollapsed) {
+                this.queueCollapsed = false;
+                try { localStorage.setItem('model_linker_queue_collapsed', '0'); } catch (error) { }
+                this.updateQueueToggleIcon();
+                this.updateQueuePanel();
+            }
+        }
+        const previewCollapsed = this._splitEdgeOpen
+            ? (!this._splitEdgeOpenedPastThreshold || this._pendingSplitWidth <= 140)
+            : this._pendingSplitWidth <= 140;
+        if (previewCollapsed !== this._splitPreviewCollapsed) {
+            this._splitPreviewCollapsed = previewCollapsed;
+            const body = document.getElementById('model-linker-body');
+            body?.classList.toggle('ml-queue-preview-collapsed', previewCollapsed);
+            this.queueElement.style.display = previewCollapsed ? 'none' : '';
+        }
         const now = performance.now();
         if (this._lastSplitDragApply && now - this._lastSplitDragApply < 33) return;
         this._lastSplitDragApply = now;
         if (this._splitDragFrame) return;
         this._splitDragFrame = requestAnimationFrame(() => {
             this._splitDragFrame = null;
-            if (!this._splitDragging || !this.queueElement || !this._pendingSplitWidth) return;
+            if (!this._splitDragging || !this.queueElement || !this._pendingSplitWidth || this._splitPreviewCollapsed) return;
             this.queueElement.style.width = `${this._pendingSplitWidth}px`;
         });
     }
@@ -4371,18 +4428,72 @@ class LinkerManagerDialog extends ComfyDialog {
             cancelAnimationFrame(this._splitDragFrame);
             this._splitDragFrame = null;
         }
-        if (this.queueElement && this._pendingSplitWidth) {
+        if (this.queueElement && this._pendingSplitWidth && !this._splitPreviewCollapsed) {
             this.queueElement.style.width = `${this._pendingSplitWidth}px`;
         }
-        document.getElementById('model-linker-body')?.classList.remove('ml-is-resizing-queue');
+        const body = document.getElementById('model-linker-body');
+        body?.classList.remove('ml-is-resizing-queue');
+        body?.classList.remove('ml-queue-preview-collapsed');
         document.removeEventListener('mousemove', this._onSplitMove);
+        if (this._splitEdgeOpen && !this._pendingSplitWidth) {
+            try {
+                const restoreWidth = Math.max(240, Math.round(this._splitStart?.startWidth || 320));
+                this.queueElement.style.width = `${restoreWidth}px`;
+                this.queueElement.style.display = '';
+                if (this.splitterElement) this.splitterElement.style.display = '';
+                localStorage.setItem('model_linker_split_w', String(restoreWidth));
+            } catch (e) { }
+            this.queueCollapsed = false;
+            try { localStorage.setItem('model_linker_queue_collapsed', '0'); } catch (e) { }
+            this.updateQueueVisibility();
+            this.updateQueuePanel();
+            this._splitEdgeOpen = false;
+            this._pendingSplitWidth = null;
+            this._lastSplitDragApply = 0;
+            this._splitPreviewCollapsed = false;
+            try { document.body.style.userSelect = this._prevUserSelect || ''; } catch (e) { }
+            try { document.body.style.cursor = this._splitPreviousCursor || ''; } catch (e) { }
+            this._splitPreviousCursor = null;
+            this._splitEdgeOpenedPastThreshold = false;
+            setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
+            return;
+        }
+        const shouldCollapse = !!this._splitPreviewCollapsed;
+        if (shouldCollapse) {
+            try {
+                const restoreWidth = Math.max(240, Math.round(this._splitStart?.startWidth || 320));
+                this.queueElement.style.width = `${restoreWidth}px`;
+                this.queueElement.style.display = '';
+                localStorage.setItem('model_linker_split_w', String(restoreWidth));
+            } catch (e) { }
+            this._pendingSplitWidth = null;
+            this._lastSplitDragApply = 0;
+            this._splitPreviewCollapsed = false;
+            this._splitEdgeOpen = false;
+            this._splitEdgeOpenedPastThreshold = false;
+            try { document.body.style.userSelect = this._prevUserSelect || ''; } catch (e) { }
+            try { document.body.style.cursor = this._splitPreviousCursor || ''; } catch (e) { }
+            this._splitPreviousCursor = null;
+            this.setQueueCollapsed(true);
+            setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
+            return;
+        }
+        if (this.queueElement) this.queueElement.style.display = '';
         try {
             const rect = this.queueElement.getBoundingClientRect();
             localStorage.setItem('model_linker_split_w', String(Math.round(rect.width)));
         } catch (e) { }
         this._pendingSplitWidth = null;
         this._lastSplitDragApply = 0;
+        this._splitPreviewCollapsed = false;
+        this._splitEdgeOpen = false;
+        this._splitEdgeOpenedPastThreshold = false;
         try { document.body.style.userSelect = this._prevUserSelect || ''; } catch (e) { }
+        if (this._splitPreviousCursor !== null) {
+            try { document.body.style.cursor = this._splitPreviousCursor || ''; } catch (e) { }
+            this._splitPreviousCursor = null;
+        }
+        setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
     }
 
     /**

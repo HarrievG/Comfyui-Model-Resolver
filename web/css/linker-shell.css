@@ -237,7 +237,8 @@
 
 #model-linker-splitter:hover::before,
 #model-linker-splitter:focus-visible::before,
-#model-linker-body.ml-is-resizing-queue #model-linker-splitter::before {
+#model-linker-body.ml-is-resizing-queue #model-linker-splitter::before,
+#model-linker-body.ml-queue-preview-collapsed #model-linker-splitter::before {
     background: rgba(114, 211, 138, 0.78);
     box-shadow: 0 0 0 3px rgba(114, 211, 138, 0.12);
 }
@@ -245,15 +246,45 @@
 #queue-toggle-icon {
     position: absolute;
     top: 50%;
-    right: var(--ml-spacing-6);
+    right: 0;
     z-index: 1000;
-    padding: var(--ml-spacing-2) var(--ml-spacing-6);
+    width: 12px;
+    min-width: 12px;
+    height: 76px;
+    padding: 0;
     transform: translateY(-50%);
-    opacity: 0.9;
-    cursor: pointer;
-    background: var(--comfy-input-bg, #2f2f2f);
-    border: 1px solid var(--border-color);
-    border-radius: var(--ml-radius-md);
+    opacity: 0.72;
+    cursor: col-resize;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+#queue-toggle-icon::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 50%;
+    width: 2px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.34);
+    transform: translateX(-50%);
+    transition: background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+#queue-toggle-icon:hover,
+#queue-toggle-icon:focus-visible {
+    opacity: 1;
+    outline: none;
+}
+
+#queue-toggle-icon:hover::before,
+#queue-toggle-icon:focus-visible::before,
+#queue-toggle-icon.is-collapsed::before {
+    background: rgba(114, 211, 138, 0.82);
+    box-shadow: 0 0 0 3px rgba(114, 211, 138, 0.12);
 }
 
 .ml-queue-panel,
