@@ -23,6 +23,8 @@ class LinkerManagerDialog extends ComfyDialog {
         this.downloadSubfolders = new Map();
         this.pendingResolutions = [];
         this.pendingIndex = new Map(); // key -> index in pendingResolutions
+        this.workflowPendingSelections = new Map(); // workflow key -> queued selections
+        this.workflowSearchResultCaches = new Map(); // workflow key -> search results by missing model
         this.activeDownloads = {};  // Track active downloads
         this.searchResultCache = new Map();
         this.searchProgressTimers = new Map();
@@ -51,6 +53,11 @@ class LinkerManagerDialog extends ComfyDialog {
         this._analysisProgressToken = null;
         this._locateAnimationFrame = null;
         this._viewportClampFrame = null;
+        this.activeWorkflowRouteKey = this.getActiveWorkflowRouteKey();
+        this.activeWorkflowSignature = null;
+        this._workflowRefreshTimer = null;
+        this._workflowRefreshExpectedRoute = null;
+        this._workflowRefreshPreviousSignature = null;
         this._boundHandleViewportResize = () => this.scheduleModalViewportClamp(true);
         
         // Create backdrop overlay for click-outside-to-close
@@ -124,7 +131,12 @@ class LinkerManagerDialog extends ComfyDialog {
      * Build stable cache key for a missing model entry
      */
     getMissingSearchKey(missing) {
-        return `${missing.node_id}:${missing.widget_index}`;
+        const nodeId = missing?.node_id ?? '';
+        const widgetIndex = missing?.widget_index ?? '';
+        const subgraphId = missing?.subgraph_id ?? '';
+        const category = missing?.category ?? '';
+        const modelPath = missing?.original_path || missing?.name || missing?.filename || missing?.urn_string || '';
+        return [nodeId, widgetIndex, subgraphId, category, modelPath].map(value => String(value)).join(':');
     }
 
     /**
@@ -572,6 +584,7 @@ class LinkerManagerDialog extends ComfyDialog {
     setSearchSource(missing, source, container) {
         const state = this.getSearchState(missing);
         state.selectedSource = source || 'all';
+        this.persistSearchStateForActiveWorkflow();
         this.syncSearchSourceUi(missing, container);
     }
 
@@ -2305,6 +2318,247 @@ class LinkerManagerDialog extends ComfyDialog {
             return null;
         }
     }
+
+    getActiveWorkflowRouteKey() {
+        try {
+            return window.location?.hash || '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    rememberActiveWorkflow(workflow = null) {
+        const currentWorkflow = workflow || this.getCurrentWorkflow();
+        this.activeWorkflowRouteKey = this.getActiveWorkflowRouteKey();
+        this.activeWorkflowSignature = this.getWorkflowSignature(currentWorkflow);
+    }
+
+    getWorkflowScopedQueueKey(route = this.activeWorkflowRouteKey, signature = this.activeWorkflowSignature) {
+        return route || signature || null;
+    }
+
+    clonePendingResolutions(list = this.pendingResolutions) {
+        try {
+            return JSON.parse(JSON.stringify(Array.isArray(list) ? list : []));
+        } catch (error) {
+            console.warn('Model Linker: failed to clone queued selections', error);
+            return Array.isArray(list) ? list.map(item => ({ ...item })) : [];
+        }
+    }
+
+    savePendingQueueForActiveWorkflow() {
+        const key = this.getWorkflowScopedQueueKey();
+        if (!key) return;
+
+        const list = Array.isArray(this.pendingResolutions) ? this.pendingResolutions : [];
+        if (list.length) {
+            this.workflowPendingSelections.set(key, this.clonePendingResolutions(list));
+        } else {
+            this.workflowPendingSelections.delete(key);
+        }
+    }
+
+    restorePendingQueueForActiveWorkflow() {
+        const key = this.getWorkflowScopedQueueKey();
+        const saved = key ? this.workflowPendingSelections.get(key) : null;
+        this.pendingResolutions = saved ? this.clonePendingResolutions(saved) : [];
+        this.rebuildPendingIndex();
+        this.updateApplyPendingButton?.();
+        this.updateQueuePanel?.();
+        this.updateQueueVisibility?.();
+    }
+
+    cloneSearchState(state = {}) {
+        let clone = {};
+        try {
+            clone = JSON.parse(JSON.stringify(state || {}));
+        } catch (error) {
+            console.warn('Model Linker: failed to clone search state', error);
+            clone = { ...state };
+        }
+
+        clone.selectedSource = clone.selectedSource || 'all';
+        clone.results = this.mergeSearchResults({}, clone.results || {});
+        clone.lastAttemptSources = Array.isArray(clone.lastAttemptSources)
+            ? clone.lastAttemptSources
+            : [];
+        clone.lastAttemptFound = clone.lastAttemptFound ?? null;
+        clone.lastAttemptError = clone.lastAttemptError || null;
+        clone.sourceProgress = clone.sourceProgress || {};
+        clone.activeSearchRunId = null;
+
+        for (const progress of Object.values(clone.sourceProgress)) {
+            if (!progress || (progress.status !== 'pending' && progress.status !== 'running')) continue;
+            progress.status = 'error';
+            progress.percent = 100;
+            progress.message = 'Search interrupted';
+        }
+
+        return clone;
+    }
+
+    cloneSearchResultCache(cache = this.searchResultCache) {
+        const cloned = new Map();
+        for (const [key, state] of cache.entries()) {
+            if (!this.isPersistableSearchState(state)) {
+                continue;
+            }
+            cloned.set(key, this.cloneSearchState(state));
+        }
+        return cloned;
+    }
+
+    isPersistableSearchState(state = {}) {
+        if ((state?.selectedSource || 'all') !== 'all') return true;
+        if (state?.lastAttemptError) return true;
+        if (this.hasSearchResults(state?.results || {})) return true;
+
+        const progressEntries = Object.values(state?.sourceProgress || {});
+        return progressEntries.some(progress => (
+            progress?.status && progress.status !== 'pending' && progress.status !== 'running'
+        ));
+    }
+
+    saveSearchCacheForActiveWorkflow() {
+        const key = this.getWorkflowScopedQueueKey();
+        if (!key) return;
+
+        const cloned = this.cloneSearchResultCache();
+        if (cloned.size) {
+            this.workflowSearchResultCaches.set(key, cloned);
+        } else {
+            this.workflowSearchResultCaches.delete(key);
+        }
+    }
+
+    restoreSearchCacheForActiveWorkflow() {
+        const key = this.getWorkflowScopedQueueKey();
+        const saved = key ? this.workflowSearchResultCaches.get(key) : null;
+        this.searchResultCache = saved ? this.cloneSearchResultCache(saved) : new Map();
+    }
+
+    persistSearchStateForActiveWorkflow() {
+        this.saveSearchCacheForActiveWorkflow();
+    }
+
+    clearAllSearchProgressTimers() {
+        for (const timer of this.searchProgressTimers.values()) {
+            clearInterval(timer);
+        }
+        this.searchProgressTimers.clear();
+    }
+
+    syncWorkflowScopedQueue(workflow = null) {
+        const currentWorkflow = workflow || this.getCurrentWorkflow();
+        const nextRoute = this.getActiveWorkflowRouteKey();
+        const nextSignature = this.getWorkflowSignature(currentWorkflow);
+        const previousKey = this.getWorkflowScopedQueueKey();
+        const nextKey = this.getWorkflowScopedQueueKey(nextRoute, nextSignature);
+
+        if (!nextKey || nextKey === previousKey) {
+            this.activeWorkflowRouteKey = nextRoute;
+            this.activeWorkflowSignature = nextSignature;
+            return;
+        }
+
+        this.savePendingQueueForActiveWorkflow();
+        this.saveSearchCacheForActiveWorkflow();
+        this.clearWorkflowScopedState();
+        this.activeWorkflowRouteKey = nextRoute;
+        this.activeWorkflowSignature = nextSignature;
+        this.restorePendingQueueForActiveWorkflow();
+        this.restoreSearchCacheForActiveWorkflow();
+    }
+
+    clearWorkflowScopedState() {
+        this.cachedWorkflowSignature = null;
+        this.cachedAnalysisData = null;
+        for (const state of this.searchResultCache.values()) {
+            state.activeSearchRunId = null;
+        }
+        this.clearAllSearchProgressTimers();
+        this.searchResultCache.clear();
+        this.urnResolvePromises.clear();
+        this.urnLocalMatchPromises.clear();
+        this.pendingResolutions = [];
+        this.rebuildPendingIndex();
+        this.updateApplyPendingButton?.();
+        this.updateQueuePanel?.();
+        this.updateQueueVisibility();
+    }
+
+    scheduleActiveWorkflowRefresh(reason = 'workflow-change') {
+        if (!this.isVisible()) return;
+
+        this._workflowRefreshExpectedRoute = this.getActiveWorkflowRouteKey();
+        this._workflowRefreshPreviousSignature = this.activeWorkflowSignature;
+
+        if (this._workflowRefreshTimer) {
+            clearTimeout(this._workflowRefreshTimer);
+        }
+
+        this._workflowRefreshTimer = setTimeout(() => {
+            this._workflowRefreshTimer = null;
+            this.refreshForActiveWorkflowChange({
+                reason,
+                expectedRoute: this._workflowRefreshExpectedRoute,
+                previousSignature: this._workflowRefreshPreviousSignature,
+                attempt: 0
+            });
+        }, 180);
+    }
+
+    async refreshForActiveWorkflowChange({ reason = 'workflow-change', expectedRoute = '', previousSignature = null, attempt = 0 } = {}) {
+        if (!this.isVisible()) return;
+
+        const currentRoute = this.getActiveWorkflowRouteKey();
+        if (expectedRoute && currentRoute !== expectedRoute) {
+            this.scheduleActiveWorkflowRefresh(reason);
+            return;
+        }
+
+        const workflow = this.getCurrentWorkflow();
+        const signature = this.getWorkflowSignature(workflow);
+        const routeChanged = currentRoute !== this.activeWorkflowRouteKey;
+        const signatureChanged = signature && signature !== this.activeWorkflowSignature;
+        const graphStillLooksOld = routeChanged && previousSignature && signature === previousSignature;
+
+        if ((!signature || graphStillLooksOld) && attempt < 8) {
+            setTimeout(() => {
+                this.refreshForActiveWorkflowChange({
+                    reason,
+                    expectedRoute,
+                    previousSignature,
+                    attempt: attempt + 1
+                });
+            }, 180 + (attempt * 120));
+            return;
+        }
+
+        if (!routeChanged && !signatureChanged) return;
+
+        console.log('Model Linker: active workflow changed, refreshing current tab', {
+            reason,
+            route: currentRoute,
+            tab: this.activeTab
+        });
+
+        this.savePendingQueueForActiveWorkflow();
+        this.saveSearchCacheForActiveWorkflow();
+        this.clearWorkflowScopedState();
+        this.activeWorkflowRouteKey = currentRoute;
+        this.activeWorkflowSignature = signature;
+        this.restorePendingQueueForActiveWorkflow();
+        this.restoreSearchCacheForActiveWorkflow();
+
+        if (this.activeTab === 'missing') {
+            if (this.contentElement) this.contentElement.style.overflowY = 'auto';
+            await this.loadWorkflowData(workflow);
+        } else if (this.activeTab === 'loaded') {
+            if (this.contentElement) this.contentElement.style.overflowY = 'auto';
+            await this.loadLoadedModels(workflow);
+        }
+    }
     
     /**
      * Handle clicks outside the dialog
@@ -3418,7 +3672,15 @@ class LinkerManagerDialog extends ComfyDialog {
     }
 
     async clearSearchCaches() {
+        for (const state of this.searchResultCache.values()) {
+            state.activeSearchRunId = null;
+        }
+        this.clearAllSearchProgressTimers();
         this.searchResultCache.clear();
+        const key = this.getWorkflowScopedQueueKey();
+        if (key) {
+            this.workflowSearchResultCaches.delete(key);
+        }
         try {
             const response = await api.fetchApi('/model_linker/clear-search-cache', {
                 method: 'POST'
@@ -3843,17 +4105,18 @@ class LinkerManagerDialog extends ComfyDialog {
         }
     }
 
-    async loadLoadedModels() {
+    async loadLoadedModels(workflow = null) {
         if (!this.contentElement) return;
 
         this.contentElement.innerHTML = '<p>Loading loaded models...</p>';
 
         try {
-            const workflow = this.getCurrentWorkflow();
+            workflow = workflow || this.getCurrentWorkflow();
             if (!workflow) {
                 this.contentElement.innerHTML = '<p>No workflow loaded. Please load a workflow first.</p>';
                 return;
             }
+            this.syncWorkflowScopedQueue(workflow);
 
             const response = await api.fetchApi('/model_linker/loaded', {
                 method: 'POST',
@@ -4202,6 +4465,7 @@ class LinkerManagerDialog extends ComfyDialog {
         // Remove
         this.pendingResolutions.splice(i, 1);
         this.rebuildPendingIndex();
+        this.savePendingQueueForActiveWorkflow();
         // Update per-item selected bar
         const m = { node_id: r.node_id, widget_index: r.widget_index, subgraph_id: r.subgraph_id, is_top_level: r.is_top_level };
         this.updateSelectedBarForMissing?.(m);
@@ -4213,6 +4477,7 @@ class LinkerManagerDialog extends ComfyDialog {
     clearAllQueued() {
         this.pendingResolutions = [];
         this.pendingIndex = new Map();
+        this.savePendingQueueForActiveWorkflow();
         this.updateApplyPendingButton?.();
         this.updateQueuePanel();
         try {
@@ -4283,6 +4548,7 @@ class LinkerManagerDialog extends ComfyDialog {
             // Remove from array
             this.pendingResolutions.splice(idx, 1);
             this.rebuildPendingIndex();
+            this.savePendingQueueForActiveWorkflow();
             this.updateSelectedBarForMissing(m);
             this.updateApplyPendingButton?.();
             this.updateQueuePanel();
@@ -4548,6 +4814,7 @@ class LinkerManagerDialog extends ComfyDialog {
             this.pendingIndex.set(key, this.pendingResolutions.length);
             this.pendingResolutions.push(resolution);
         }
+        this.savePendingQueueForActiveWorkflow();
 
         // Update selected bar UI
         this.updateSelectedBarForMissing?.(missing);
@@ -4587,6 +4854,7 @@ class LinkerManagerDialog extends ComfyDialog {
                 // Clear queue and refresh analysis
                 this.pendingResolutions = [];
                 this.pendingIndex = new Map();
+                this.savePendingQueueForActiveWorkflow();
                 this.updateApplyPendingButton();
                 this.updateQueuePanel();
                 await this.loadWorkflowData(data.workflow);
@@ -4744,6 +5012,7 @@ class LinkerManagerDialog extends ComfyDialog {
         this.activeTab = this.restoreActiveTab();
         this.updateTabButtonStates();
         this.updateQueueVisibility();
+        this.syncWorkflowScopedQueue(workflow || this.getCurrentWorkflow());
 
         if (this.activeTab === 'missing') {
             await this.loadWorkflowData(workflow);
@@ -4823,6 +5092,7 @@ class LinkerManagerDialog extends ComfyDialog {
                 this.contentElement.innerHTML = '<p>No workflow loaded. Please load a workflow first.</p>';
                 return;
             }
+            this.syncWorkflowScopedQueue(workflow);
 
             const workflowSignature = this.getWorkflowSignature(workflow);
             if (
@@ -4861,7 +5131,6 @@ class LinkerManagerDialog extends ComfyDialog {
             const data = await response.json();
             this.cachedWorkflowSignature = workflowSignature;
             this.cachedAnalysisData = data;
-            this.searchResultCache.clear();
             this.displayMissingModels(this.contentElement, data);
             
             // Reconnect any active downloads to their new progress divs
@@ -6615,6 +6884,7 @@ class LinkerManagerDialog extends ComfyDialog {
         if (selectedSource !== 'all' && !this.isSearchSourceUsable(selectedSource)) {
             selectedSource = 'all';
             state.selectedSource = 'all';
+            this.persistSearchStateForActiveWorkflow();
         }
         const selectedSourceLabel = this.getSearchSourceLabel(selectedSource);
         const sourceIds = this.getSearchSourcesForSelection(selectedSource, missing);
@@ -6674,6 +6944,7 @@ class LinkerManagerDialog extends ComfyDialog {
                     estimateMs: this.getSearchSourceEstimateMs(source, isUrn)
                 }, missing);
             }
+            this.persistSearchStateForActiveWorkflow();
 
             if (searchBtn) {
                 searchBtn.disabled = true;
@@ -6786,6 +7057,7 @@ class LinkerManagerDialog extends ComfyDialog {
                     }
 
                     this.displaySearchResults(missing, state, resultsDiv);
+                    this.persistSearchStateForActiveWorkflow();
                     this.applySearchResultSuggestion(missing);
                     return { source, data };
                 } catch (error) {
@@ -6805,6 +7077,7 @@ class LinkerManagerDialog extends ComfyDialog {
                         message: error.message || 'Error'
                     }, missing);
                     this.displaySearchResults(missing, state, resultsDiv);
+                    this.persistSearchStateForActiveWorkflow();
                     return { source, error };
                 }
             });
@@ -6820,12 +7093,14 @@ class LinkerManagerDialog extends ComfyDialog {
                     ? 'Search finished with errors. Check source statuses above.'
                     : null;
                 this.displaySearchResults(missing, state, resultsDiv);
+                this.persistSearchStateForActiveWorkflow();
             }
 
         } catch (error) {
             console.error('Model Linker: Search error:', error);
             this.clearSearchProgressTimers(searchRunId);
             state.lastAttemptError = error.message;
+            this.persistSearchStateForActiveWorkflow();
             if (resultsDiv) {
                 resultsDiv.innerHTML = this.renderStatusMessage(`Search failed: ${error.message}`, 'error');
             }
@@ -6838,6 +7113,7 @@ class LinkerManagerDialog extends ComfyDialog {
                 searchBtn.disabled = false;
                 searchBtn.innerHTML = `${this.getSearchIconHtml()} Search Again`;
             }
+            this.persistSearchStateForActiveWorkflow();
         }
     }
 
@@ -7399,6 +7675,7 @@ class ModelLinker {
 
         // Listen for workflow load events to auto-check for missing models
         this.setupAutoOpenOnMissingModels();
+        this.setupActiveWorkflowChangeListeners();
 
         const sidebarRegistered = this.registerSidebarButton();
         if (!sidebarRegistered) {
@@ -7547,6 +7824,63 @@ class ModelLinker {
         this.setupMissingModelsPopupObserver();
 
         console.log('Model Linker: Missing models popup button injection enabled');
+    }
+
+    setupActiveWorkflowChangeListeners() {
+        if (window.__modelLinkerWorkflowChangeHandlers) {
+            for (const { target, event, handler } of window.__modelLinkerWorkflowChangeHandlers) {
+                target?.removeEventListener?.(event, handler);
+            }
+        }
+
+        if (!window.__modelLinkerHistoryPatched) {
+            const originalPushState = history.pushState;
+            const originalReplaceState = history.replaceState;
+            history.pushState = function(...args) {
+                const result = originalPushState.apply(this, args);
+                window.dispatchEvent(new Event('model-linker-locationchange'));
+                return result;
+            };
+            history.replaceState = function(...args) {
+                const result = originalReplaceState.apply(this, args);
+                window.dispatchEvent(new Event('model-linker-locationchange'));
+                return result;
+            };
+            window.__modelLinkerHistoryPatched = true;
+        }
+
+        window.__modelLinkerWorkflowChangeOwner = this;
+
+        const routeHandler = () => {
+            window.__modelLinkerWorkflowChangeOwner?.handleActiveWorkflowRouteChange('route-change');
+        };
+        const focusHandler = () => {
+            window.__modelLinkerWorkflowChangeOwner?.handleActiveWorkflowRouteChange('window-focus');
+        };
+        const visibilityHandler = () => {
+            if (document.visibilityState === 'visible') {
+                window.__modelLinkerWorkflowChangeOwner?.handleActiveWorkflowRouteChange('visibility-change');
+            }
+        };
+
+        window.addEventListener('hashchange', routeHandler);
+        window.addEventListener('popstate', routeHandler);
+        window.addEventListener('model-linker-locationchange', routeHandler);
+        window.addEventListener('focus', focusHandler);
+        document.addEventListener('visibilitychange', visibilityHandler);
+
+        window.__modelLinkerWorkflowChangeHandlers = [
+            { target: window, event: 'hashchange', handler: routeHandler },
+            { target: window, event: 'popstate', handler: routeHandler },
+            { target: window, event: 'model-linker-locationchange', handler: routeHandler },
+            { target: window, event: 'focus', handler: focusHandler },
+            { target: document, event: 'visibilitychange', handler: visibilityHandler }
+        ];
+    }
+
+    handleActiveWorkflowRouteChange(reason = 'workflow-change') {
+        if (!this.dialog?.isVisible()) return;
+        this.dialog.scheduleActiveWorkflowRefresh(reason);
     }
 
     /**
