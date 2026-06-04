@@ -94,6 +94,8 @@ class ModelLinkerExtension:
                 from .core.sources.model_list import (
                     search_model_list,
                     search_model_list_multiple,
+                    get_model_list_update_status,
+                    update_model_list_from_remote,
                 )
                 from .core.sources.huggingface import (
                     search_huggingface_for_file,
@@ -1264,6 +1266,35 @@ class ModelLinkerExtension:
                         return web.json_response({"success": True})
                     except Exception as e:
                         log_exception(f"Clear search cache error: {e}")
+                        return web.json_response({"error": str(e)}, status=500)
+
+                @routes.get("/model_linker/model-list/status")
+                async def model_list_status_route(request):
+                    """Return local model-list status and optionally compare with GitHub."""
+                    try:
+                        check_remote = (
+                            str(request.query.get("check_remote", "")).lower()
+                            in {"1", "true", "yes"}
+                        )
+                        return web.json_response(
+                            get_model_list_update_status(check_remote=check_remote)
+                        )
+                    except Exception as e:
+                        log_exception(f"Model list status error: {e}")
+                        return web.json_response({"error": str(e)}, status=500)
+
+                @routes.post("/model_linker/model-list/update")
+                async def model_list_update_route(request):
+                    """Download latest ComfyUI-Manager model-list.json."""
+                    try:
+                        result = await asyncio.to_thread(update_model_list_from_remote)
+                        clear_huggingface_search_cache()
+                        clear_civitai_search_cache()
+                        clear_civarchive_search_cache()
+                        clear_lora_manager_archive_search_cache()
+                        return web.json_response(result)
+                    except Exception as e:
+                        log_exception(f"Model list update error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
                 @routes.post("/model_linker/download")

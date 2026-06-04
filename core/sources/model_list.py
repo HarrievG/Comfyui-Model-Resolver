@@ -6,8 +6,13 @@ Search the ComfyUI Manager model-list.json database with fuzzy matching.
 
 import os
 import json
+import hashlib
+import shutil
+import tempfile
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from difflib import SequenceMatcher
+from urllib.request import Request, urlopen
 
 from ..log_system.log_funcs import (
     log_debug,
@@ -22,9 +27,100 @@ METADATA_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "metadata"
 )
 MODEL_LIST_FILE = os.path.join(METADATA_DIR, "model-list.json")
+MODEL_LIST_META_FILE = os.path.join(METADATA_DIR, "model-list.meta.json")
+MODEL_LIST_SOURCE_URL = (
+    "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/model-list.json"
+)
+MODEL_LIST_GITHUB_API_URL = (
+    "https://api.github.com/repos/Comfy-Org/ComfyUI-Manager/contents/model-list.json?ref=main"
+)
+HTTP_TIMEOUT = 30
 
 # Cache for loaded data
 _model_list_cache: Optional[List[Dict]] = None
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _fetch_json_url(url: str) -> Dict[str, Any]:
+    request = Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "comfyui-model-linker",
+        },
+    )
+    with urlopen(request, timeout=HTTP_TIMEOUT) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _read_json_file(path: str, default: Any) -> Any:
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        log_warn(f"Error reading {os.path.basename(path)}: {e}")
+    return default
+
+
+def _write_json_file_atomic(path: str, data: Any):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=f".{os.path.basename(path)}.",
+        suffix=".tmp",
+        dir=os.path.dirname(path),
+        text=True,
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def _read_model_list_file() -> Dict[str, Any]:
+    return _read_json_file(MODEL_LIST_FILE, {"models": []})
+
+
+def _read_model_list_meta() -> Dict[str, Any]:
+    return _read_json_file(MODEL_LIST_META_FILE, {})
+
+
+def _get_local_model_list_sha() -> str:
+    try:
+        with open(MODEL_LIST_FILE, "rb") as f:
+            content = f.read()
+        header = f"blob {len(content)}\0".encode("utf-8")
+        return hashlib.sha1(header + content).hexdigest()
+    except Exception as e:
+        log_warn(f"Error calculating model-list.json SHA: {e}")
+        return ""
+
+
+def _get_remote_model_list_info() -> Dict[str, Any]:
+    data = _fetch_json_url(MODEL_LIST_GITHUB_API_URL)
+    return {
+        "sha": data.get("sha") or "",
+        "size": data.get("size") or 0,
+        "download_url": data.get("download_url") or MODEL_LIST_SOURCE_URL,
+        "html_url": data.get("html_url") or "https://github.com/Comfy-Org/ComfyUI-Manager/blob/main/model-list.json",
+    }
+
+
+def reload_model_list():
+    """Clear in-memory cache so the next search reads model-list.json again."""
+    global _model_list_cache
+    _model_list_cache = None
+    _load_model_list()
 
 
 def _load_model_list() -> List[Dict]:
@@ -48,6 +144,77 @@ def _load_model_list() -> List[Dict]:
 
     _model_list_cache = []
     return _model_list_cache
+
+
+def get_model_list_update_status(check_remote: bool = False) -> Dict[str, Any]:
+    """Return local model-list metadata and optionally compare it with GitHub."""
+    data = _read_model_list_file()
+    models = data.get("models", []) if isinstance(data, dict) else []
+    meta = _read_model_list_meta()
+    local_sha = meta.get("sha") or _get_local_model_list_sha()
+    local_updated_at = meta.get("updated_at") or ""
+
+    status = {
+        "source_url": MODEL_LIST_SOURCE_URL,
+        "github_url": "https://github.com/Comfy-Org/ComfyUI-Manager/blob/main/model-list.json",
+        "local_count": len(models) if isinstance(models, list) else 0,
+        "local_sha": local_sha,
+        "local_updated_at": local_updated_at,
+        "remote_sha": "",
+        "remote_size": 0,
+        "remote_checked_at": "",
+        "update_available": False,
+        "can_compare": bool(local_sha),
+    }
+
+    if check_remote:
+        remote = _get_remote_model_list_info()
+        remote_sha = remote.get("sha") or ""
+        status.update(
+            {
+                "remote_sha": remote_sha,
+                "remote_size": remote.get("size") or 0,
+                "remote_checked_at": _utc_now_iso(),
+                "update_available": bool(remote_sha and local_sha and remote_sha != local_sha),
+                "can_compare": bool(local_sha and remote_sha),
+            }
+        )
+
+    return status
+
+
+def update_model_list_from_remote() -> Dict[str, Any]:
+    """Download the latest ComfyUI-Manager model-list.json and refresh cache."""
+    remote = _get_remote_model_list_info()
+    download_url = remote.get("download_url") or MODEL_LIST_SOURCE_URL
+    data = _fetch_json_url(download_url)
+    models = data.get("models", []) if isinstance(data, dict) else []
+    if not isinstance(models, list) or not models:
+        raise ValueError("Downloaded model-list.json does not contain a non-empty models list")
+
+    if os.path.exists(MODEL_LIST_FILE):
+        shutil.copy2(MODEL_LIST_FILE, f"{MODEL_LIST_FILE}.bak")
+
+    _write_json_file_atomic(MODEL_LIST_FILE, data)
+    meta = {
+        "source": "Comfy-Org/ComfyUI-Manager",
+        "source_url": MODEL_LIST_SOURCE_URL,
+        "github_url": remote.get("html_url")
+        or "https://github.com/Comfy-Org/ComfyUI-Manager/blob/main/model-list.json",
+        "sha": remote.get("sha") or "",
+        "size": remote.get("size") or 0,
+        "model_count": len(models),
+        "updated_at": _utc_now_iso(),
+    }
+    _write_json_file_atomic(MODEL_LIST_META_FILE, meta)
+    reload_model_list()
+
+    return {
+        **get_model_list_update_status(check_remote=False),
+        "updated": True,
+        "remote_sha": meta["sha"],
+        "remote_size": meta["size"],
+    }
 
 
 def _normalize_filename(filename: str) -> str:

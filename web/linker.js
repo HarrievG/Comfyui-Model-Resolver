@@ -3738,6 +3738,13 @@ class LinkerManagerDialog extends ComfyDialog {
                                     </span>
                                     <span class="ml-options-nav-meta">01</span>
                                 </button>
+                                <button type="button" class="ml-options-nav-btn" data-target="ml-options-section-local-db">
+                                    <span class="ml-options-nav-main">
+                                        <span class="ml-options-nav-icon" aria-hidden="true">${getSvgIcon('database')}</span>
+                                        <span>Local Database</span>
+                                    </span>
+                                    <span class="ml-options-nav-meta">02</span>
+                                </button>
                             </div>
                         </div>
                         <div class="ml-options-sidebar-group">
@@ -3748,14 +3755,14 @@ class LinkerManagerDialog extends ComfyDialog {
                                         <span class="ml-options-nav-icon ml-options-provider-icon ml-options-provider-icon-civitai" aria-hidden="true">${getSvgIcon('civitai')}</span>
                                         <span>CivitAI</span>
                                     </span>
-                                    <span class="ml-options-nav-meta">02</span>
+                                    <span class="ml-options-nav-meta">03</span>
                                 </button>
                                 <button type="button" class="ml-options-nav-btn" data-target="ml-options-section-hf">
                                     <span class="ml-options-nav-main">
                                         <span class="ml-options-nav-icon ml-options-provider-icon ml-options-provider-icon-huggingface" aria-hidden="true">${getSvgIcon('huggingface')}</span>
                                         <span>HuggingFace</span>
                                     </span>
-                                    <span class="ml-options-nav-meta">03</span>
+                                    <span class="ml-options-nav-meta">04</span>
                                 </button>
                             </div>
                         </div>
@@ -3773,6 +3780,37 @@ class LinkerManagerDialog extends ComfyDialog {
                                 <div class="ml-options-panel">
                                     <div class="ml-options-toggle-list">
                                         ${sourceDefaultsRows}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                        <section id="ml-options-section-local-db" class="ml-options-card ml-options-section is-hidden">
+                            <div class="ml-options-section-head">
+                                <h4 class="ml-options-section-title">Local Database</h4>
+                            </div>
+                            <div class="ml-options-grid">
+                                <div class="ml-options-panel">
+                                    <div class="ml-options-stack">
+                                        <div class="ml-options-db-summary">
+                                            <div class="ml-options-db-row">
+                                                <span>Models</span>
+                                                <strong id="ml-options-model-list-count">Loading...</strong>
+                                            </div>
+                                            <div class="ml-options-db-row">
+                                                <span>Last update</span>
+                                                <strong id="ml-options-model-list-updated">Loading...</strong>
+                                            </div>
+                                            <div class="ml-options-db-row">
+                                                <span>Status</span>
+                                                <strong id="ml-options-model-list-state">Checking local file...</strong>
+                                            </div>
+                                        </div>
+                                        <div id="ml-options-model-list-message" class="ml-options-db-message">Local Database uses ComfyUI-Manager model-list.json.</div>
+                                        <div class="ml-options-db-actions">
+                                            <button id="ml-options-model-list-check" type="button" class="ml-btn ml-btn-secondary">${getSvgIcon('refreshCw')} Check latest</button>
+                                            <button id="ml-options-model-list-update" type="button" class="ml-btn ml-btn-primary">${getSvgIcon('download')} Update Local Database</button>
+                                            <a class="ml-options-inline-link" href="https://github.com/Comfy-Org/ComfyUI-Manager/blob/main/model-list.json" target="_blank" rel="noopener noreferrer">Source</a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -3916,6 +3954,12 @@ class LinkerManagerDialog extends ComfyDialog {
         const sourceEnabledInputs = Array.from(this.contentElement.querySelectorAll('.ml-options-source-enabled'));
         const status = this.contentElement.querySelector('#ml-options-status');
         const saveBtn = this.contentElement.querySelector('#ml-options-save');
+        const modelListCountEl = this.contentElement.querySelector('#ml-options-model-list-count');
+        const modelListUpdatedEl = this.contentElement.querySelector('#ml-options-model-list-updated');
+        const modelListStateEl = this.contentElement.querySelector('#ml-options-model-list-state');
+        const modelListMessageEl = this.contentElement.querySelector('#ml-options-model-list-message');
+        const modelListCheckBtn = this.contentElement.querySelector('#ml-options-model-list-check');
+        const modelListUpdateBtn = this.contentElement.querySelector('#ml-options-model-list-update');
         const navButtons = Array.from(this.contentElement.querySelectorAll('.ml-options-nav-btn'));
         const optionSections = Array.from(this.contentElement.querySelectorAll('.ml-options-section'));
         const trackedInputs = [
@@ -3937,6 +3981,105 @@ class LinkerManagerDialog extends ComfyDialog {
             status.textContent = text;
             status.classList.remove('is-dirty', 'is-saved');
             if (mode) status.classList.add(mode);
+        };
+
+        const formatOptionDate = (value) => {
+            if (!value) return 'Bundled';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+            return date.toLocaleString();
+        };
+
+        const shortSha = (value) => value ? String(value).slice(0, 8) : '';
+
+        const setModelListBusy = (busy) => {
+            if (modelListCheckBtn) modelListCheckBtn.disabled = busy;
+            if (modelListUpdateBtn) modelListUpdateBtn.disabled = busy;
+        };
+
+        const renderModelListStatus = (data = {}, checkedRemote = false) => {
+            if (modelListCountEl) {
+                modelListCountEl.textContent = Number.isFinite(Number(data.local_count))
+                    ? Number(data.local_count).toLocaleString()
+                    : '-';
+            }
+            if (modelListUpdatedEl) {
+                modelListUpdatedEl.textContent = formatOptionDate(data.local_updated_at);
+            }
+            if (modelListStateEl) {
+                if (checkedRemote && data.can_compare && data.update_available) {
+                    modelListStateEl.textContent = 'Update available';
+                } else if (checkedRemote && data.can_compare) {
+                    modelListStateEl.textContent = 'Up to date';
+                } else if (checkedRemote && !data.can_compare) {
+                    modelListStateEl.textContent = 'Remote checked';
+                } else {
+                    modelListStateEl.textContent = data.local_sha ? 'Tracked' : 'Bundled';
+                }
+            }
+            if (modelListMessageEl) {
+                const localSha = shortSha(data.local_sha);
+                const remoteSha = shortSha(data.remote_sha);
+                if (checkedRemote && data.update_available) {
+                    modelListMessageEl.textContent = `A newer ComfyUI-Manager model-list.json is available (${localSha || 'local'} -> ${remoteSha}).`;
+                } else if (checkedRemote && data.can_compare) {
+                    modelListMessageEl.textContent = `Local Database is current (${localSha}).`;
+                } else if (checkedRemote) {
+                    modelListMessageEl.textContent = `Remote file was checked. Local SHA is not recorded yet; run update once to track future changes.`;
+                } else {
+                    modelListMessageEl.textContent = `Local Database uses ComfyUI-Manager model-list.json.`;
+                }
+            }
+        };
+
+        const loadModelListStatus = async (checkRemote = false) => {
+            try {
+                setModelListBusy(true);
+                if (modelListStateEl) {
+                    modelListStateEl.textContent = checkRemote ? 'Checking GitHub...' : 'Loading...';
+                }
+                const response = await api.fetchApi(`/model_linker/model-list/status${checkRemote ? '?check_remote=1' : ''}`);
+                if (!response.ok) {
+                    throw new Error(`Status failed: ${response.status}`);
+                }
+                const data = await response.json();
+                renderModelListStatus(data, checkRemote);
+                return data;
+            } catch (error) {
+                console.error('Model Linker: model-list status error:', error);
+                if (modelListStateEl) modelListStateEl.textContent = 'Error';
+                if (modelListMessageEl) modelListMessageEl.textContent = error.message || 'Failed to read Local Database status.';
+                return null;
+            } finally {
+                setModelListBusy(false);
+            }
+        };
+
+        const updateModelList = async () => {
+            try {
+                setModelListBusy(true);
+                if (modelListStateEl) modelListStateEl.textContent = 'Updating...';
+                if (modelListMessageEl) modelListMessageEl.textContent = 'Downloading latest ComfyUI-Manager model-list.json...';
+                const response = await api.fetchApi('/model_linker/model-list/update', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || `Update failed: ${response.status}`);
+                }
+                await this.clearSearchCaches();
+                renderModelListStatus(data, false);
+                if (modelListStateEl) modelListStateEl.textContent = 'Updated';
+                if (modelListMessageEl) modelListMessageEl.textContent = `Local Database updated. ${Number(data.local_count || 0).toLocaleString()} models loaded.`;
+                this.showNotification('Local Database updated', 'success');
+            } catch (error) {
+                console.error('Model Linker: model-list update error:', error);
+                if (modelListStateEl) modelListStateEl.textContent = 'Error';
+                if (modelListMessageEl) modelListMessageEl.textContent = error.message || 'Failed to update Local Database.';
+                this.showNotification('Local Database update failed', 'error');
+            } finally {
+                setModelListBusy(false);
+            }
         };
 
         const setActiveNav = (targetId) => {
@@ -3996,8 +4139,25 @@ class LinkerManagerDialog extends ComfyDialog {
                 const targetId = btn.dataset.target;
                 if (!targetId) return;
                 setVisibleSection(targetId);
+                if (targetId === 'ml-options-section-local-db') {
+                    loadModelListStatus(false);
+                }
             });
         });
+
+        if (modelListCheckBtn) {
+            modelListCheckBtn.addEventListener('click', () => {
+                loadModelListStatus(true);
+            });
+        }
+
+        if (modelListUpdateBtn) {
+            modelListUpdateBtn.addEventListener('click', () => {
+                updateModelList();
+            });
+        }
+
+        loadModelListStatus(false);
 
         if (saveBtn) {
             saveBtn.addEventListener('click', async () => {

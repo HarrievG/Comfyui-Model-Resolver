@@ -3372,6 +3372,51 @@
     font-weight: 700;
     color: var(--ml-text);
 }
+.ml-options-db-summary {
+    display: grid;
+    gap: 1px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.03);
+}
+.ml-options-db-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 34px;
+    padding: 7px 10px;
+    background: rgba(0,0,0,0.16);
+    color: var(--ml-text-secondary);
+    font-size: 12px;
+}
+.ml-options-db-row strong {
+    color: var(--ml-text);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: right;
+}
+.ml-options-db-message {
+    margin-top: 10px;
+    color: var(--ml-text-secondary);
+    font-size: 12px;
+    line-height: 1.35;
+}
+.ml-options-db-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+.ml-options-db-actions .ml-btn {
+    gap: 6px;
+}
+.ml-options-db-actions .ml-btn svg {
+    width: 14px;
+    height: 14px;
+}
 .ml-options-field {
     display: flex;
     flex-direction: column;
