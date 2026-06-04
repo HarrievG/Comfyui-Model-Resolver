@@ -3800,10 +3800,10 @@ class LinkerManagerDialog extends ComfyDialog {
         });
     }
 
-    switchTab(tab) {
+    switchTab(tab, { force = false } = {}) {
         const nextTab = this.getValidTab(tab);
         const nextTabButton = this.getTabButton(nextTab);
-        if (nextTab === this.activeTab && nextTabButton?.classList.contains('ml-tab-active')) {
+        if (!force && nextTab === this.activeTab && nextTabButton?.classList.contains('ml-tab-active')) {
             this.hideTooltip();
             this.updateQueueVisibility();
             return;
@@ -4748,9 +4748,9 @@ class LinkerManagerDialog extends ComfyDialog {
         if (this.activeTab === 'missing') {
             await this.loadWorkflowData(workflow);
         } else if (this.activeTab === 'loaded') {
-            this.switchTab('loaded');
+            this.switchTab('loaded', { force: true });
         } else {
-            this.switchTab('options');
+            this.switchTab('options', { force: true });
         }
     }
     
