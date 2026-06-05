@@ -99,6 +99,8 @@ class ModelLinkerExtension:
                 )
                 from .core.sources.huggingface import (
                     search_huggingface_for_file,
+                    get_author_fallback_index_status,
+                    refresh_author_fallback_index,
                     clear_search_cache as clear_huggingface_search_cache,
                 )
                 from .core.sources.civitai import (
@@ -1266,6 +1268,30 @@ class ModelLinkerExtension:
                         return web.json_response({"success": True})
                     except Exception as e:
                         log_exception(f"Clear search cache error: {e}")
+                        return web.json_response({"error": str(e)}, status=500)
+
+                @routes.get("/model_linker/huggingface/author-index/status")
+                async def huggingface_author_index_status_route(request):
+                    """Return local HuggingFace author fallback index status."""
+                    try:
+                        return web.json_response(get_author_fallback_index_status())
+                    except Exception as e:
+                        log_exception(f"HuggingFace author index status error: {e}")
+                        return web.json_response({"error": str(e)}, status=500)
+
+                @routes.post("/model_linker/huggingface/author-index/refresh")
+                async def huggingface_author_index_refresh_route(request):
+                    """Refresh HuggingFace author fallback index."""
+                    try:
+                        data = await request.json()
+                        hf_token = data.get("hf_token", "")
+                        result = await asyncio.to_thread(
+                            refresh_author_fallback_index, hf_token or None
+                        )
+                        clear_huggingface_search_cache()
+                        return web.json_response(result)
+                    except Exception as e:
+                        log_exception(f"HuggingFace author index refresh error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
                 @routes.get("/model_linker/model-list/status")

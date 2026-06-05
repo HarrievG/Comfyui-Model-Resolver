@@ -4032,28 +4032,6 @@ class LinkerManagerDialog extends ComfyDialog {
                             </div>
                             <div class="ml-options-grid">
                                 <div class="ml-options-panel">
-                                    <div class="ml-options-stack">
-                                        <div class="ml-options-field">
-                                            <div class="ml-options-input-row">
-                                                <label for="ml-options-civitai" class="ml-options-label">CivitAI API Key <a href="https://civitai.com/user/account" target="_blank" rel="noopener noreferrer" class="ml-options-inline-link">Get key</a> <span class="ml-tooltip-badge" data-tooltip="Optional. Used when downloading from CivitAI requires your account. Add this if CivitAI downloads fail or need access to models available to your account.">?</span></label>
-                                                <input id="ml-options-civitai" class="ml-options-input" type="password" placeholder="Paste CivitAI API key" value="${tokens.civitai_key}">
-                                                <button id="ml-options-civitai-toggle" type="button" class="ml-options-visibility-btn" aria-label="Toggle visibility for saved CivitAI API key" data-tooltip="Show saved value">
-                                                    ${getSvgIcon('eye')}
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="ml-options-field">
-                                            <div class="ml-options-input-row">
-                                                <label for="ml-options-civitai-session" class="ml-options-label">CivitAI Session Token <span class="ml-tooltip-badge" data-tooltip="Optional. Makes CivitAI search use your logged-in session, so results can match what you see in the browser. Useful for NSFW or account-visible results.">?</span></label>
-                                                <input id="ml-options-civitai-session" class="ml-options-input" type="password" placeholder="Paste __Secure-civitai-token" value="${tokens.civitai_session_token}">
-                                                <button id="ml-options-civitai-session-toggle" type="button" class="ml-options-visibility-btn" aria-label="Toggle visibility for saved CivitAI session token" data-tooltip="Show saved value">
-                                                    ${getSvgIcon('eye')}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="ml-options-panel">
                                     <div class="ml-options-toggle-list">
                                         <label class="ml-options-toggle-row">
                                             <div class="ml-options-toggle-copy">
@@ -4064,6 +4042,35 @@ class LinkerManagerDialog extends ComfyDialog {
                                                 <span class="ml-options-switch"></span>
                                             </span>
                                         </label>
+                                        <div class="ml-options-dependent-block">
+                                            <div class="ml-options-field">
+                                                <div class="ml-options-input-row">
+                                                    <label for="ml-options-civitai" class="ml-options-label">CivitAI API Key <a href="https://civitai.com/user/account" target="_blank" rel="noopener noreferrer" class="ml-options-inline-link">Get key</a> <span class="ml-tooltip-badge" data-tooltip="Optional. Used when downloading from CivitAI requires your account. Add this if CivitAI downloads fail or need access to models available to your account.">?</span></label>
+                                                    <input id="ml-options-civitai" class="ml-options-input" type="password" placeholder="Paste CivitAI API key" value="${tokens.civitai_key}">
+                                                    <button id="ml-options-civitai-toggle" type="button" class="ml-options-visibility-btn" aria-label="Toggle visibility for saved CivitAI API key" data-tooltip="Show saved value">
+                                                        ${getSvgIcon('eye')}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="ml-options-field">
+                                                <div class="ml-options-input-row">
+                                                    <label for="ml-options-civitai-session" class="ml-options-label">CivitAI Session Token <span class="ml-tooltip-badge" data-tooltip="Optional. Makes CivitAI search use your logged-in session, so results can match what you see in the browser. Useful for NSFW or account-visible results.">?</span></label>
+                                                    <input id="ml-options-civitai-session" class="ml-options-input" type="password" placeholder="Paste __Secure-civitai-token" value="${tokens.civitai_session_token}">
+                                                    <button id="ml-options-civitai-session-toggle" type="button" class="ml-options-visibility-btn" aria-label="Toggle visibility for saved CivitAI session token" data-tooltip="Show saved value">
+                                                        ${getSvgIcon('eye')}
+                                                    </button>
+                                                </div>
+                                                <details class="ml-options-help">
+                                                    <summary>How to find the session token</summary>
+                                                    <ol>
+                                                        <li>Sign in on civitai.com in your browser.</li>
+                                                        <li>Open DevTools, then Application or Storage.</li>
+                                                        <li>Open Cookies for civitai.com and copy <code>__Secure-civitai-token</code>.</li>
+                                                    </ol>
+                                                    <p>Treat it like a password. It is only needed when session-aware CivitAI search is required.</p>
+                                                </details>
+                                            </div>
+                                        </div>
                                         <label class="ml-options-toggle-row">
                                             <div class="ml-options-toggle-copy">
                                                 <span class="ml-options-toggle-title">Use CivitAI HTML fallback <span class="ml-tooltip-badge" data-tooltip="Backup CivitAI search. Leave this enabled to try the regular CivitAI page when the main search does not find enough results.">?</span></span>
@@ -4073,11 +4080,13 @@ class LinkerManagerDialog extends ComfyDialog {
                                                 <span class="ml-options-switch"></span>
                                             </span>
                                         </label>
-                                        <div class="ml-options-number-row">
-                                            <div class="ml-options-number-copy">
-                                                <span class="ml-options-label">CivitAI Models To Inspect <span class="ml-tooltip-badge" data-tooltip="How many CivitAI results to check for the exact file. Higher values may find more matches, but searches can take longer. Range: 1-20.">?</span></span>
+                                        <div class="ml-options-dependent-block">
+                                            <div class="ml-options-number-row">
+                                                <div class="ml-options-number-copy">
+                                                    <span class="ml-options-label">CivitAI Models To Inspect <span class="ml-tooltip-badge" data-tooltip="How many CivitAI results to check for the exact file. Higher values may find more matches, but searches can take longer. Range: 1-20.">?</span></span>
+                                                </div>
+                                                <input id="ml-options-civitai-limit" class="ml-options-input" type="number" min="1" max="20" step="1" value="${tokens.civitai_candidate_limit}">
                                             </div>
-                                            <input id="ml-options-civitai-limit" class="ml-options-input" type="number" min="1" max="20" step="1" value="${tokens.civitai_candidate_limit}">
                                         </div>
                                     </div>
                                 </div>
@@ -4089,28 +4098,6 @@ class LinkerManagerDialog extends ComfyDialog {
                             </div>
                             <div class="ml-options-grid">
                                 <div class="ml-options-panel">
-                                    <div class="ml-options-stack">
-                                        <div class="ml-options-field">
-                                            <div class="ml-options-input-row">
-                                                <label for="ml-options-hf" class="ml-options-label">HuggingFace Token <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer" class="ml-options-inline-link">Get key</a> <span class="ml-tooltip-badge" data-tooltip="Optional. Used to search and download files from Hugging Face repos your account can access, including gated repos. A read-only token is enough.">?</span></label>
-                                                <input id="ml-options-hf" class="ml-options-input" type="password" placeholder="Paste HuggingFace token" value="${tokens.hf_token}">
-                                                <button id="ml-options-hf-toggle" type="button" class="ml-options-visibility-btn" aria-label="Toggle visibility for saved HuggingFace token" data-tooltip="Show saved value">
-                                                    ${getSvgIcon('eye')}
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="ml-options-field">
-                                            <div class="ml-options-input-row">
-                                                <label for="ml-options-brave" class="ml-options-label">Brave Search API Key <a href="https://api-dashboard.search.brave.com/app/keys" target="_blank" rel="noopener noreferrer" class="ml-options-inline-link">Get key</a> <span class="ml-tooltip-badge" data-tooltip="Optional. Used only by the Brave fallback. It helps find Hugging Face files when Hugging Face search does not show the right repo.">?</span></label>
-                                                <input id="ml-options-brave" class="ml-options-input" type="password" placeholder="Paste Brave Search API key" value="${tokens.brave_search_api_key}">
-                                                <button id="ml-options-brave-toggle" type="button" class="ml-options-visibility-btn" aria-label="Toggle visibility for saved Brave Search API key" data-tooltip="Show saved value">
-                                                    ${getSvgIcon('eye')}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="ml-options-panel">
                                     <div class="ml-options-toggle-list">
                                         <label class="ml-options-toggle-row">
                                             <div class="ml-options-toggle-copy">
@@ -4121,6 +4108,17 @@ class LinkerManagerDialog extends ComfyDialog {
                                                 <span class="ml-options-switch"></span>
                                             </span>
                                         </label>
+                                        <div class="ml-options-dependent-block">
+                                            <div class="ml-options-field">
+                                                <div class="ml-options-input-row">
+                                                    <label for="ml-options-hf" class="ml-options-label">HuggingFace Token <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer" class="ml-options-inline-link">Get key</a> <span class="ml-tooltip-badge" data-tooltip="Optional. Used to search and download files from Hugging Face repos your account can access, including gated repos. A read-only token is enough.">?</span></label>
+                                                    <input id="ml-options-hf" class="ml-options-input" type="password" placeholder="Paste HuggingFace token" value="${tokens.hf_token}">
+                                                    <button id="ml-options-hf-toggle" type="button" class="ml-options-visibility-btn" aria-label="Toggle visibility for saved HuggingFace token" data-tooltip="Show saved value">
+                                                        ${getSvgIcon('eye')}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                         <label class="ml-options-toggle-row">
                                             <div class="ml-options-toggle-copy">
                                                 <span class="ml-options-toggle-title">Use Comfy-Org fallback <span class="ml-tooltip-badge" data-tooltip="Checks Comfy-Org repositories directly. Useful for ComfyUI model packs that normal Hugging Face search may miss.">?</span></span>
@@ -4130,6 +4128,26 @@ class LinkerManagerDialog extends ComfyDialog {
                                                 <span class="ml-options-switch"></span>
                                             </span>
                                         </label>
+                                        <div class="ml-options-dependent-block">
+                                            <div class="ml-options-db-summary">
+                                                <div class="ml-options-db-row">
+                                                    <span>Comfy-Org files</span>
+                                                    <strong id="ml-options-hf-index-count">Loading...</strong>
+                                                </div>
+                                                <div class="ml-options-db-row">
+                                                    <span>Last refresh</span>
+                                                    <strong id="ml-options-hf-index-updated">Loading...</strong>
+                                                </div>
+                                                <div class="ml-options-db-row">
+                                                    <span>Status</span>
+                                                    <strong id="ml-options-hf-index-state">Checking local index...</strong>
+                                                </div>
+                                            </div>
+                                            <div id="ml-options-hf-index-message" class="ml-options-db-message">Comfy-Org fallback uses a cached HuggingFace file index.</div>
+                                            <div class="ml-options-db-actions">
+                                                <button id="ml-options-hf-index-refresh" type="button" class="ml-btn ml-btn-secondary">${getSvgIcon('refreshCw')} Refresh Comfy-Org Index</button>
+                                            </div>
+                                        </div>
                                         <label class="ml-options-toggle-row">
                                             <div class="ml-options-toggle-copy">
                                                 <span class="ml-options-toggle-title">Use Brave fallback <span class="ml-tooltip-badge" data-tooltip="Last-resort web search for the exact filename on huggingface.co. Results are still checked before Model Linker offers them.">?</span></span>
@@ -4139,6 +4157,17 @@ class LinkerManagerDialog extends ComfyDialog {
                                                 <span class="ml-options-switch"></span>
                                             </span>
                                         </label>
+                                        <div class="ml-options-dependent-block">
+                                            <div class="ml-options-field">
+                                                <div class="ml-options-input-row">
+                                                    <label for="ml-options-brave" class="ml-options-label">Brave Search API Key <a href="https://api-dashboard.search.brave.com/app/keys" target="_blank" rel="noopener noreferrer" class="ml-options-inline-link">Get key</a> <span class="ml-tooltip-badge" data-tooltip="Optional. Used only by the Brave fallback. It helps find Hugging Face files when Hugging Face search does not show the right repo.">?</span></label>
+                                                    <input id="ml-options-brave" class="ml-options-input" type="password" placeholder="Paste Brave Search API key" value="${tokens.brave_search_api_key}">
+                                                    <button id="ml-options-brave-toggle" type="button" class="ml-options-visibility-btn" aria-label="Toggle visibility for saved Brave Search API key" data-tooltip="Show saved value">
+                                                        ${getSvgIcon('eye')}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -4171,6 +4200,11 @@ class LinkerManagerDialog extends ComfyDialog {
         const modelListMessageEl = this.contentElement.querySelector('#ml-options-model-list-message');
         const modelListCheckBtn = this.contentElement.querySelector('#ml-options-model-list-check');
         const modelListUpdateBtn = this.contentElement.querySelector('#ml-options-model-list-update');
+        const hfIndexCountEl = this.contentElement.querySelector('#ml-options-hf-index-count');
+        const hfIndexUpdatedEl = this.contentElement.querySelector('#ml-options-hf-index-updated');
+        const hfIndexStateEl = this.contentElement.querySelector('#ml-options-hf-index-state');
+        const hfIndexMessageEl = this.contentElement.querySelector('#ml-options-hf-index-message');
+        const hfIndexRefreshBtn = this.contentElement.querySelector('#ml-options-hf-index-refresh');
         const navButtons = Array.from(this.contentElement.querySelectorAll('.ml-options-nav-btn'));
         const optionSections = Array.from(this.contentElement.querySelectorAll('.ml-options-section'));
         const trackedInputs = [
@@ -4206,6 +4240,10 @@ class LinkerManagerDialog extends ComfyDialog {
         const setModelListBusy = (busy) => {
             if (modelListCheckBtn) modelListCheckBtn.disabled = busy;
             if (modelListUpdateBtn) modelListUpdateBtn.disabled = busy;
+        };
+
+        const setHfIndexBusy = (busy) => {
+            if (hfIndexRefreshBtn) hfIndexRefreshBtn.disabled = busy;
         };
 
         const renderModelListStatus = (data = {}, checkedRemote = false) => {
@@ -4293,6 +4331,86 @@ class LinkerManagerDialog extends ComfyDialog {
             }
         };
 
+        const renderHfIndexStatus = (data = {}) => {
+            if (hfIndexCountEl) {
+                hfIndexCountEl.textContent = Number.isFinite(Number(data.file_count))
+                    ? Number(data.file_count).toLocaleString()
+                    : '-';
+            }
+            if (hfIndexUpdatedEl) {
+                hfIndexUpdatedEl.textContent = data.updated_at
+                    ? formatOptionDate(Number(data.updated_at) * 1000)
+                    : 'Never';
+            }
+            if (hfIndexStateEl) {
+                if (!data.exists) {
+                    hfIndexStateEl.textContent = 'Not cached';
+                } else if (data.stale) {
+                    hfIndexStateEl.textContent = 'Refresh due';
+                } else {
+                    hfIndexStateEl.textContent = 'Cached';
+                }
+            }
+            if (hfIndexMessageEl) {
+                if (!data.exists) {
+                    hfIndexMessageEl.textContent = 'The first Comfy-Org fallback search will build the local HuggingFace file index.';
+                } else if (data.stale) {
+                    hfIndexMessageEl.textContent = `Index has ${Number(data.repo_count || 0).toLocaleString()} repos and should be refreshed.`;
+                } else {
+                    hfIndexMessageEl.textContent = `Index has ${Number(data.repo_count || 0).toLocaleString()} repos and is used before per-repo fallback checks.`;
+                }
+            }
+        };
+
+        const loadHfIndexStatus = async () => {
+            try {
+                setHfIndexBusy(true);
+                if (hfIndexStateEl) hfIndexStateEl.textContent = 'Loading...';
+                const response = await api.fetchApi('/model_linker/huggingface/author-index/status');
+                if (!response.ok) {
+                    throw new Error(`Status failed: ${response.status}`);
+                }
+                const data = await response.json();
+                renderHfIndexStatus(data);
+                return data;
+            } catch (error) {
+                console.error('Model Linker: HuggingFace index status error:', error);
+                if (hfIndexStateEl) hfIndexStateEl.textContent = 'Error';
+                if (hfIndexMessageEl) hfIndexMessageEl.textContent = error.message || 'Failed to read HuggingFace index status.';
+                return null;
+            } finally {
+                setHfIndexBusy(false);
+            }
+        };
+
+        const refreshHfIndex = async () => {
+            try {
+                setHfIndexBusy(true);
+                if (hfIndexStateEl) hfIndexStateEl.textContent = 'Refreshing...';
+                if (hfIndexMessageEl) hfIndexMessageEl.textContent = 'Downloading Comfy-Org file index from HuggingFace...';
+                const response = await api.fetchApi('/model_linker/huggingface/author-index/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hf_token: hfInput?.value || '' })
+                });
+                const data = await response.json();
+                if (!response.ok || data.success === false) {
+                    throw new Error(data.error || `Refresh failed: ${response.status}`);
+                }
+                await this.clearSearchCaches();
+                renderHfIndexStatus(data);
+                if (hfIndexStateEl) hfIndexStateEl.textContent = 'Refreshed';
+                this.showNotification('HuggingFace Comfy-Org index refreshed', 'success');
+            } catch (error) {
+                console.error('Model Linker: HuggingFace index refresh error:', error);
+                if (hfIndexStateEl) hfIndexStateEl.textContent = 'Error';
+                if (hfIndexMessageEl) hfIndexMessageEl.textContent = error.message || 'Failed to refresh HuggingFace index.';
+                this.showNotification('HuggingFace index refresh failed', 'error');
+            } finally {
+                setHfIndexBusy(false);
+            }
+        };
+
         const setActiveNav = (targetId) => {
             navButtons.forEach((btn) => {
                 btn.classList.toggle('is-active', btn.dataset.target === targetId);
@@ -4352,6 +4470,8 @@ class LinkerManagerDialog extends ComfyDialog {
                 setVisibleSection(targetId);
                 if (targetId === 'ml-options-section-local-db') {
                     loadModelListStatus(false);
+                } else if (targetId === 'ml-options-section-hf') {
+                    loadHfIndexStatus();
                 }
             });
         });
@@ -4368,7 +4488,14 @@ class LinkerManagerDialog extends ComfyDialog {
             });
         }
 
+        if (hfIndexRefreshBtn) {
+            hfIndexRefreshBtn.addEventListener('click', () => {
+                refreshHfIndex();
+            });
+        }
+
         loadModelListStatus(false);
+        loadHfIndexStatus();
 
         if (saveBtn) {
             saveBtn.addEventListener('click', async () => {

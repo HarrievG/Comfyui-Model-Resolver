@@ -4,8 +4,11 @@ HuggingFace Source Module
 Search and download models from HuggingFace Hub.
 """
 
+import json
 import os
 import re
+import threading
+import time
 import requests
 from typing import Dict, Any, Optional, List
 from urllib.parse import urlparse, quote
@@ -21,15 +24,205 @@ from ..log_system.log_funcs import (
 HF_API_URL = "https://huggingface.co/api"
 HF_AUTHOR_FALLBACKS = ["Comfy-Org"]
 BRAVE_SEARCH_API_URL = "https://api.search.brave.com/res/v1/web/search"
+HF_AUTHOR_INDEX_CACHE_TTL_SECONDS = 24 * 60 * 60
+HF_AUTHOR_INDEX_CACHE_VERSION = 1
+METADATA_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "metadata"
+)
+HF_AUTHOR_INDEX_CACHE_PATH = os.path.join(
+    METADATA_DIR, "huggingface-author-index.json"
+)
 
 # Cache for search results
 _search_cache: Dict[str, Any] = {}
+_author_index_cache: Dict[str, Dict[str, Any]] = {}
+_author_index_lock = threading.RLock()
 
 
 def clear_search_cache():
     """Clear cached HuggingFace search results."""
     global _search_cache
     _search_cache.clear()
+
+
+def _author_index_cache_key(author: str, headers: Dict[str, str]) -> str:
+    auth_key = "token" if headers.get("Authorization") else "public"
+    return f"{author}::{auth_key}"
+
+
+def _is_author_index_fresh(index: Optional[Dict[str, Any]]) -> bool:
+    if not index:
+        return False
+
+    updated_at = index.get("updated_at")
+    if not isinstance(updated_at, (int, float)):
+        return False
+
+    return (time.time() - updated_at) < HF_AUTHOR_INDEX_CACHE_TTL_SECONDS
+
+
+def _read_persistent_author_indexes() -> Dict[str, Any]:
+    if not os.path.exists(HF_AUTHOR_INDEX_CACHE_PATH):
+        return {"version": HF_AUTHOR_INDEX_CACHE_VERSION, "authors": {}}
+
+    try:
+        with open(HF_AUTHOR_INDEX_CACHE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if data.get("version") != HF_AUTHOR_INDEX_CACHE_VERSION:
+            return {"version": HF_AUTHOR_INDEX_CACHE_VERSION, "authors": {}}
+        if not isinstance(data.get("authors"), dict):
+            data["authors"] = {}
+        return data
+    except Exception as e:
+        log_debug(f"Error reading HuggingFace author index cache: {e}")
+        return {"version": HF_AUTHOR_INDEX_CACHE_VERSION, "authors": {}}
+
+
+def _write_persistent_author_index(author: str, index: Dict[str, Any]) -> None:
+    try:
+        os.makedirs(METADATA_DIR, exist_ok=True)
+        data = _read_persistent_author_indexes()
+        data["authors"][author] = index
+        tmp_path = f"{HF_AUTHOR_INDEX_CACHE_PATH}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp_path, HF_AUTHOR_INDEX_CACHE_PATH)
+    except Exception as e:
+        log_debug(f"Error writing HuggingFace author index cache: {e}")
+
+
+def _build_author_index_from_models(
+    author: str, repos: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    files = []
+    repo_ids = []
+
+    for repo in repos:
+        repo_id = repo.get("id", "")
+        if not repo_id:
+            continue
+
+        repo_ids.append(repo_id)
+        for sibling in repo.get("siblings") or []:
+            file_path = sibling.get("rfilename") or sibling.get("path") or ""
+            if not file_path:
+                continue
+
+            files.append(
+                {
+                    "repo_id": repo_id,
+                    "path": file_path,
+                    "filename": os.path.basename(file_path),
+                    "size": sibling.get("size"),
+                }
+            )
+
+    return {
+        "author": author,
+        "updated_at": time.time(),
+        "repo_count": len(repo_ids),
+        "file_count": len(files),
+        "repos": repo_ids,
+        "files": files,
+    }
+
+
+def _fetch_author_index(author: str, headers: Dict[str, str], limit: int = 200):
+    try:
+        response = requests.get(
+            f"{HF_API_URL}/models",
+            params={"author": author, "limit": limit, "full": "true"},
+            headers=headers,
+            timeout=15,
+        )
+        if response.status_code != 200:
+            log_debug(
+                f"HuggingFace author index returned {response.status_code} for author={author}"
+            )
+            return None
+
+        repos = response.json()
+        if not isinstance(repos, list):
+            return None
+
+        index = _build_author_index_from_models(author, repos)
+        log_info(
+            f"HuggingFace author index refreshed for author={author}: repos={index['repo_count']}, files={index['file_count']}"
+        )
+        return index
+    except Exception as e:
+        log_debug(f"Error refreshing HuggingFace author index for author={author}: {e}")
+        return None
+
+
+def _get_author_index(
+    author: str, headers: Dict[str, str], force_refresh: bool = False
+) -> Optional[Dict[str, Any]]:
+    cache_key = _author_index_cache_key(author, headers)
+    can_persist = not headers.get("Authorization")
+
+    with _author_index_lock:
+        memory_index = _author_index_cache.get(cache_key)
+        if not force_refresh and _is_author_index_fresh(memory_index):
+            return memory_index
+
+        persistent_index = None
+        if can_persist:
+            persistent_index = _read_persistent_author_indexes().get("authors", {}).get(
+                author
+            )
+            if not force_refresh and _is_author_index_fresh(persistent_index):
+                _author_index_cache[cache_key] = persistent_index
+                log_debug(f"HuggingFace author index cache hit for author={author}")
+                return persistent_index
+
+        fresh_index = _fetch_author_index(author, headers=headers)
+        if fresh_index:
+            _author_index_cache[cache_key] = fresh_index
+            if can_persist:
+                _write_persistent_author_index(author, fresh_index)
+            return fresh_index
+
+        if persistent_index:
+            log_warn(
+                f"Using stale HuggingFace author index for author={author}; refresh failed"
+            )
+            _author_index_cache[cache_key] = persistent_index
+            return persistent_index
+
+        return None
+
+
+def get_author_fallback_index_status(author: str = "Comfy-Org") -> Dict[str, Any]:
+    """Return persisted public author fallback index status for the options UI."""
+    with _author_index_lock:
+        index = _read_persistent_author_indexes().get("authors", {}).get(author)
+
+    updated_at = index.get("updated_at") if isinstance(index, dict) else None
+    age_seconds = (time.time() - updated_at) if isinstance(updated_at, (int, float)) else None
+    return {
+        "author": author,
+        "exists": bool(index),
+        "updated_at": updated_at,
+        "age_seconds": age_seconds,
+        "ttl_seconds": HF_AUTHOR_INDEX_CACHE_TTL_SECONDS,
+        "stale": bool(index) and not _is_author_index_fresh(index),
+        "repo_count": index.get("repo_count", 0) if isinstance(index, dict) else 0,
+        "file_count": index.get("file_count", 0) if isinstance(index, dict) else 0,
+    }
+
+
+def refresh_author_fallback_index(
+    token: Optional[str] = None, author: str = "Comfy-Org"
+) -> Dict[str, Any]:
+    """Force refresh the public HuggingFace author fallback index."""
+    headers = {}
+
+    index = _get_author_index(author, headers=headers, force_refresh=True)
+    status = get_author_fallback_index_status(author)
+    status["success"] = bool(index)
+    status["persisted"] = bool(index)
+    return status
 
 
 def parse_huggingface_url(url: str) -> Optional[Dict[str, str]]:
@@ -164,6 +357,53 @@ def _find_matching_file_in_repo(
                         repo_id, file_path, file_info, "partial"
                     )
                     break
+
+    return partial_match
+
+
+def _find_matching_file_in_author_index(
+    index: Dict[str, Any], filename: str, exact_only: bool = False
+) -> Optional[Dict[str, Any]]:
+    files = index.get("files") or []
+    filename_lower = filename.lower()
+    filename_base = os.path.splitext(filename_lower)[0]
+    partial_match = None
+
+    for file_info in files:
+        repo_id = file_info.get("repo_id", "")
+        file_path = file_info.get("path", "")
+        if not repo_id or not file_path:
+            continue
+
+        file_name = os.path.basename(file_path)
+        file_name_lower = file_name.lower()
+        if file_name_lower == filename_lower or file_path.lower().endswith(
+            filename_lower
+        ):
+            return _build_huggingface_result(repo_id, file_path, file_info, "exact")
+
+    if exact_only:
+        return None
+
+    for file_info in files:
+        repo_id = file_info.get("repo_id", "")
+        file_path = file_info.get("path", "")
+        if not repo_id or not file_path:
+            continue
+
+        file_name = os.path.basename(file_path)
+        file_name_lower = file_name.lower()
+        file_base = os.path.splitext(file_name_lower)[0]
+        file_path_lower = file_path.lower()
+
+        if filename_base in file_base or file_base in filename_base:
+            if file_path_lower.endswith(".safetensors") or file_path_lower.endswith(
+                ".ckpt"
+            ):
+                partial_match = _build_huggingface_result(
+                    repo_id, file_path, file_info, "partial"
+                )
+                break
 
     return partial_match
 
@@ -371,8 +611,27 @@ def search_huggingface_for_file(
                 return result
 
         author_fallback_repos = []
+        author_fallback_repo_count = 0
         if use_comfy_org_fallback:
             for author in HF_AUTHOR_FALLBACKS:
+                index = _get_author_index(author, headers={})
+                if index:
+                    result = _find_matching_file_in_author_index(
+                        index, filename, exact_only=exact_only
+                    )
+                    author_fallback_repo_count += int(index.get("repo_count") or 0)
+                    if result:
+                        _search_cache[cache_key] = result
+                        log_info(
+                            f"Found {result['match_type']} HuggingFace author index match for {filename}: {result['repo_id']}/{result['path']}"
+                        )
+                        return result
+
+                    log_debug(
+                        f"HuggingFace author index no match for author={author}, filename={filename}, repos={index.get('repo_count', 0)}, files={index.get('file_count', 0)}"
+                    )
+                    continue
+
                 repos = _get_repos_by_author(author, headers=headers)
                 log_info(
                     f"HuggingFace author fallback returned {len(repos)} repos for author={author}"
@@ -381,6 +640,7 @@ def search_huggingface_for_file(
                     if repo_id not in seen_repos:
                         seen_repos.add(repo_id)
                         author_fallback_repos.append(repo_id)
+                        author_fallback_repo_count += 1
 
         for repo_id in author_fallback_repos:
             log_debug(
@@ -430,7 +690,7 @@ def search_huggingface_for_file(
         # Not found
         _search_cache[cache_key] = None
         log_info(
-            f"HuggingFace search no result: filename={filename}, repos_checked={len(repos_to_check)}, author_fallback_repos={len(author_fallback_repos)}, brave_candidates={len(brave_candidates)}"
+            f"HuggingFace search no result: filename={filename}, repos_checked={len(repos_to_check)}, author_fallback_repos={author_fallback_repo_count}, brave_candidates={len(brave_candidates)}"
         )
         return None
 
