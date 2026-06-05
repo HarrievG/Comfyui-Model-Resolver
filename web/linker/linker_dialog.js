@@ -1,18 +1,18 @@
 import { $el, ComfyDialog } from "../../../../scripts/ui.js";
-import { searchPanelMethods } from "./search_panel.js";
-import { modelInfoMethods } from "./model_info_methods.js";
-import { renderFormatMethods } from "./render_format_methods.js";
-import { workflowStateMethods } from "./workflow_state_methods.js";
-import { selectionMethods } from "./selection_methods.js";
-import { dialogShellMethods } from "./dialog_shell_methods.js";
-import { downloadTargetMethods } from "./download_target_methods.js";
-import { optionsMethods } from "./options_methods.js";
-import { tabsLoadedMethods } from "./tabs_loaded_methods.js";
-import { queueMethods } from "./queue_methods.js";
-import { lifecycleGraphMethods } from "./lifecycle_graph_methods.js";
-import { missingBrowserMethods } from "./missing_browser_methods.js";
-import { resolveDownloadMethods } from "./resolve_download_methods.js";
-import { workflowUpdateMethods } from "./workflow_update_methods.js";
+import { dialogShellMethods } from "./shell/dialog_shell_methods.js";
+import { lifecycleGraphMethods } from "./shell/lifecycle_graph_methods.js";
+import { workflowStateMethods } from "./shell/workflow_state_methods.js";
+import { workflowUpdateMethods } from "./shell/workflow_update_methods.js";
+import { modelInfoMethods } from "./views/model_info_methods.js";
+import { missingBrowserMethods } from "./views/missing_browser_methods.js";
+import { optionsMethods } from "./views/options_methods.js";
+import { tabsLoadedMethods } from "./views/tabs_loaded_methods.js";
+import { downloadTargetMethods } from "./search/download_target_methods.js";
+import { searchPanelMethods } from "./search/search_panel.js";
+import { queueMethods } from "./actions/queue_methods.js";
+import { resolveDownloadMethods } from "./actions/resolve_download_methods.js";
+import { selectionMethods } from "./actions/selection_methods.js";
+import { renderFormatMethods } from "./utils/render_format_methods.js";
 export class LinkerManagerDialog extends ComfyDialog {
     constructor() {
         super();

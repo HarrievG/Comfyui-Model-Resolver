@@ -1,7 +1,7 @@
-import { app } from "../../../../scripts/app.js";
-import { api } from "../../../../scripts/api.js";
-import { $el } from "../../../../scripts/ui.js";
-import { getSvgIcon } from "../utils/icon_utils.js";
+import { app } from "../../../../../scripts/app.js";
+import { api } from "../../../../../scripts/api.js";
+import { $el } from "../../../../../scripts/ui.js";
+import { getSvgIcon } from "../../utils/icon_utils.js";
 export const lifecycleGraphMethods = {
     async show(workflow = null) {
         this.undockToFloating({ persist: false });
