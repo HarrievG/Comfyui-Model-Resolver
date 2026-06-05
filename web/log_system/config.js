@@ -1,4 +1,4 @@
-/**
+﻿/**
 author: Azornes
 title: AzLogs
 version: 1.5.5
@@ -9,10 +9,10 @@ description: Logging Configuration
 export const LOG_LEVEL = 'DEBUG';
 
 // Logger module name. Set to null to use the default project name.
-export const LOG_MODULE_NAME = "MLinker";
+export const LOG_MODULE_NAME = "MResolver";
 
 // Default project/logger name used when LOG_MODULE_NAME is not set.
-export const DEFAULT_LOGGER_NAME = 'MLinker';
+export const DEFAULT_LOGGER_NAME = 'MResolver';
 
 // Enable styled console logs.
 export const USE_COLORS = true;

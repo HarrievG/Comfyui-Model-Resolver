@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -74,7 +74,7 @@ export const modelInfoMethods = {
         }
 
         try {
-            const response = await api.fetchApi('/model_linker/open-containing-folder', {
+            const response = await api.fetchApi('/model_resolver/open-containing-folder', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ path })
@@ -84,7 +84,7 @@ export const modelInfoMethods = {
                 throw new Error(`Open folder failed: ${response.status}`);
             }
         } catch (error) {
-            console.error('Model Linker: Open folder error:', error);
+            console.error('Model Resolver: Open folder error:', error);
             this.showNotification('Failed to open containing folder', 'error');
         }
     },
@@ -100,7 +100,7 @@ export const modelInfoMethods = {
 
         try {
             // Search CivitAI for this model using hash (pass resolved_path for hash lookup)
-            const response = await api.fetchApi('/model_linker/civitai-search', {
+            const response = await api.fetchApi('/model_resolver/civitai-search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -125,7 +125,7 @@ export const modelInfoMethods = {
                 window.open(searchUrl, '_blank');
             }
         } catch (e) {
-            console.error('Model Linker: Error searching CivitAI:', e);
+            console.error('Model Resolver: Error searching CivitAI:', e);
             // Fall back to direct search
             const searchName = name.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
             const searchUrl = `https://civitai.com/search?q=${encodeURIComponent(searchName)}`;
@@ -160,9 +160,9 @@ export const modelInfoMethods = {
         this.bindInfoDialogResizePersistence(dialog);
 
         // Add close handlers
-        const closeBtn = dialog.querySelector('.ml-info-dialog-close');
-        const footerCloseBtn = dialog.querySelector('.ml-info-dialog-close-btn');
-        const backdrop = dialog.querySelector('.ml-info-dialog-backdrop');
+        const closeBtn = dialog.querySelector('.mr-info-dialog-close');
+        const footerCloseBtn = dialog.querySelector('.mr-info-dialog-close-btn');
+        const backdrop = dialog.querySelector('.mr-info-dialog-backdrop');
 
         if (closeBtn) {
             closeBtn.addEventListener('click', () => this.closeInfoDialog(dialog));
@@ -190,80 +190,80 @@ export const modelInfoMethods = {
         const loraDisplayName = loraName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
 
         const dialog = document.createElement('div');
-        dialog.className = 'ml-info-dialog-backdrop';
+        dialog.className = 'mr-info-dialog-backdrop';
         dialog._selectedTrainedWords = new Set();
         dialog.innerHTML = `
-            <div class="ml-info-dialog">
-                <div class="ml-info-dialog-header">
-                    <h3 class="ml-info-dialog-title">${loraDisplayName}</h3>
-                    <button class="ml-info-dialog-close">×</button>
+            <div class="mr-info-dialog">
+                <div class="mr-info-dialog-header">
+                    <h3 class="mr-info-dialog-title">${loraDisplayName}</h3>
+                    <button class="mr-info-dialog-close">×</button>
                 </div>
-                <div class="ml-info-dialog-content">
-                    <div class="ml-info-dialog-loading">Loading...</div>
-                    <div class="ml-info-dialog-body ml-hidden-initial">
-                        <div class="ml-info-area">
-                            <span class="ml-info-tag ml-info-type"></span>
-                            <span class="ml-info-tag ml-info-basemodel"></span>
+                <div class="mr-info-dialog-content">
+                    <div class="mr-info-dialog-loading">Loading...</div>
+                    <div class="mr-info-dialog-body mr-hidden-initial">
+                        <div class="mr-info-area">
+                            <span class="mr-info-tag mr-info-type"></span>
+                            <span class="mr-info-tag mr-info-basemodel"></span>
                         </div>
-                        <table class="ml-info-table">
+                        <table class="mr-info-table">
                             <tbody>
-                                <tr class="ml-info-file-row">
-                                    <td><span>File <span class="ml-tooltip-badge" data-tooltip="The model file name found locally or returned by CivitAI.">?</span></span></td>
-                                    <td><span class="ml-info-file"></span></td>
+                                <tr class="mr-info-file-row">
+                                    <td><span>File <span class="mr-tooltip-badge" data-tooltip="The model file name found locally or returned by CivitAI.">?</span></span></td>
+                                    <td><span class="mr-info-file"></span></td>
                                 </tr>
-                                <tr class="ml-info-hash-row">
-                                    <td><span>Hash (sha256) <span class="ml-tooltip-badge" data-tooltip="Unique fingerprint of the local file. Model Linker uses it to confirm the exact CivitAI version.">?</span></span></td>
-                                    <td><span class="ml-info-hash"></span></td>
+                                <tr class="mr-info-hash-row">
+                                    <td><span>Hash (sha256) <span class="mr-tooltip-badge" data-tooltip="Unique fingerprint of the local file. Model Resolver uses it to confirm the exact CivitAI version.">?</span></span></td>
+                                    <td><span class="mr-info-hash"></span></td>
                                 </tr>
-                                <tr class="ml-info-civitai-row">
-                                    <td><span>CivitAI <span class="ml-tooltip-badge" data-tooltip="Opens the matching CivitAI model or version page when one was found.">?</span></span></td>
-                                    <td><span class="ml-info-civitai-link"></span></td>
+                                <tr class="mr-info-civitai-row">
+                                    <td><span>CivitAI <span class="mr-tooltip-badge" data-tooltip="Opens the matching CivitAI model or version page when one was found.">?</span></span></td>
+                                    <td><span class="mr-info-civitai-link"></span></td>
                                 </tr>
-                                <tr class="ml-info-name-row">
-                                    <td><span>Name <span class="ml-tooltip-badge" data-tooltip="Model name from CivitAI or local metadata.">?</span></span></td>
-                                    <td><span class="ml-info-name"></span></td>
+                                <tr class="mr-info-name-row">
+                                    <td><span>Name <span class="mr-tooltip-badge" data-tooltip="Model name from CivitAI or local metadata.">?</span></span></td>
+                                    <td><span class="mr-info-name"></span></td>
                                 </tr>
-                                <tr class="ml-info-basemodel-row">
-                                    <td><span>Base Model <span class="ml-tooltip-badge" data-tooltip="Base model this resource was made for, for example SD1.5, SDXL or Flux.">?</span></span></td>
-                                    <td><span class="ml-info-base-model"></span></td>
+                                <tr class="mr-info-basemodel-row">
+                                    <td><span>Base Model <span class="mr-tooltip-badge" data-tooltip="Base model this resource was made for, for example SD1.5, SDXL or Flux.">?</span></span></td>
+                                    <td><span class="mr-info-base-model"></span></td>
                                 </tr>
-                                <tr class="ml-info-trainedwords-row ml-hidden-initial">
+                                <tr class="mr-info-trainedwords-row mr-hidden-initial">
                                     <td>
-                                        <div class="ml-info-trained-words-label">
-                                            Trained Words <span class="ml-tooltip-badge" data-tooltip="Trigger words recommended by the model author. Click the words you want, then copy them into your prompt.">?</span>
-                                            <small class="ml-info-trained-words-meta">
-                                                <span class="ml-info-trained-words-count">0 selected</span>
-                                                <button type="button" class="ml-info-copy-trained-words" disabled>Copy</button>
+                                        <div class="mr-info-trained-words-label">
+                                            Trained Words <span class="mr-tooltip-badge" data-tooltip="Trigger words recommended by the model author. Click the words you want, then copy them into your prompt.">?</span>
+                                            <small class="mr-info-trained-words-meta">
+                                                <span class="mr-info-trained-words-count">0 selected</span>
+                                                <button type="button" class="mr-info-copy-trained-words" disabled>Copy</button>
                                             </small>
                                         </div>
                                     </td>
                                     <td>
-                                        <div class="ml-info-trained-words-hint">Click words to select them.</div>
-                                        <div class="ml-info-trained-words"></div>
+                                        <div class="mr-info-trained-words-hint">Click words to select them.</div>
+                                        <div class="mr-info-trained-words"></div>
                                     </td>
                                 </tr>
-                                <tr class="ml-info-clipskip-row ml-hidden-initial">
-                                    <td><span>Clip Skip <span class="ml-tooltip-badge" data-tooltip="Recommended Clip Skip value from the model author, if one is provided.">?</span></span></td>
-                                    <td><span class="ml-info-clip-skip"></span></td>
+                                <tr class="mr-info-clipskip-row mr-hidden-initial">
+                                    <td><span>Clip Skip <span class="mr-tooltip-badge" data-tooltip="Recommended Clip Skip value from the model author, if one is provided.">?</span></span></td>
+                                    <td><span class="mr-info-clip-skip"></span></td>
                                 </tr>
-                                <tr class="ml-info-description-row ml-hidden-initial">
-                                    <td><span>Description <span class="ml-tooltip-badge" data-tooltip="Model description from CivitAI or local metadata. Long descriptions are shortened until you click Show more.">?</span></span></td>
+                                <tr class="mr-info-description-row mr-hidden-initial">
+                                    <td><span>Description <span class="mr-tooltip-badge" data-tooltip="Model description from CivitAI or local metadata. Long descriptions are shortened until you click Show more.">?</span></span></td>
                                     <td>
-                                        <div class="ml-info-description-wrap">
-                                            <div class="ml-info-description"></div>
-                                            <div class="ml-info-description-actions ml-hidden-initial">
-                                                <button type="button" class="ml-info-description-toggle">Show more</button>
+                                        <div class="mr-info-description-wrap">
+                                            <div class="mr-info-description"></div>
+                                            <div class="mr-info-description-actions mr-hidden-initial">
+                                                <button type="button" class="mr-info-description-toggle">Show more</button>
                                             </div>
                                         </div>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
-                        <div class="ml-info-images"></div>
+                        <div class="mr-info-images"></div>
                     </div>
                 </div>
-                <div class="ml-info-dialog-footer">
-                    <button class="ml-btn ml-btn-secondary ml-info-dialog-close-btn">Close</button>
+                <div class="mr-info-dialog-footer">
+                    <button class="mr-btn mr-btn-secondary mr-info-dialog-close-btn">Close</button>
                 </div>
             </div>
         `;
@@ -400,8 +400,8 @@ export const modelInfoMethods = {
     updateSelectedTrainedWordsSummary(dialog) {
         if (!dialog) return;
 
-        const countEl = dialog.querySelector('.ml-info-trained-words-count');
-        const copyBtn = dialog.querySelector('.ml-info-copy-trained-words');
+        const countEl = dialog.querySelector('.mr-info-trained-words-count');
+        const copyBtn = dialog.querySelector('.mr-info-copy-trained-words');
         const selected = dialog._selectedTrainedWords instanceof Set
             ? Array.from(dialog._selectedTrainedWords)
             : [];
@@ -420,7 +420,7 @@ export const modelInfoMethods = {
         dialog.dataset.mlInfoBound = 'true';
 
         dialog.addEventListener('click', async (event) => {
-            const wordBtn = event.target.closest('.ml-info-trained-word');
+            const wordBtn = event.target.closest('.mr-info-trained-word');
             if (wordBtn && dialog.contains(wordBtn)) {
                 const word = wordBtn.dataset.word || '';
                 if (word) {
@@ -443,7 +443,7 @@ export const modelInfoMethods = {
                 return;
             }
 
-            const copyBtn = event.target.closest('.ml-info-copy-trained-words');
+            const copyBtn = event.target.closest('.mr-info-copy-trained-words');
             if (copyBtn && dialog.contains(copyBtn)) {
                 const words = dialog._selectedTrainedWords instanceof Set
                     ? Array.from(dialog._selectedTrainedWords)
@@ -455,7 +455,7 @@ export const modelInfoMethods = {
                     await navigator.clipboard.writeText(words.join(', '));
                     copyBtn.textContent = 'Copied';
                 } catch (error) {
-                    console.error('Model Linker: Failed to copy trained words:', error);
+                    console.error('Model Resolver: Failed to copy trained words:', error);
                     copyBtn.textContent = 'Failed';
                 }
 
@@ -467,9 +467,9 @@ export const modelInfoMethods = {
                 return;
             }
 
-            const descToggleBtn = event.target.closest('.ml-info-description-toggle');
+            const descToggleBtn = event.target.closest('.mr-info-description-toggle');
             if (descToggleBtn && dialog.contains(descToggleBtn)) {
-                const descEl = dialog.querySelector('.ml-info-description');
+                const descEl = dialog.querySelector('.mr-info-description');
                 if (!descEl) return;
 
                 const isExpanded = descEl.classList.toggle('is-expanded');
@@ -479,7 +479,7 @@ export const modelInfoMethods = {
     },
 
     getInfoDialogElement(dialog) {
-        return dialog?.querySelector?.('.ml-info-dialog') || null;
+        return dialog?.querySelector?.('.mr-info-dialog') || null;
     },
 
     restoreInfoDialogSize(dialog) {
@@ -487,7 +487,7 @@ export const modelInfoMethods = {
         if (!panel) return;
 
         try {
-            const saved = JSON.parse(localStorage.getItem('model_linker_info_dialog_size') || 'null');
+            const saved = JSON.parse(localStorage.getItem('model_resolver_info_dialog_size') || 'null');
             if (!saved || typeof saved !== 'object') return;
 
             const width = Number(saved.w);
@@ -502,7 +502,7 @@ export const modelInfoMethods = {
             panel.style.width = `${clampedWidth}px`;
             panel.style.height = `${clampedHeight}px`;
         } catch (error) {
-            console.warn('Model Linker: Failed to restore info dialog size:', error);
+            console.warn('Model Resolver: Failed to restore info dialog size:', error);
         }
     },
 
@@ -516,9 +516,9 @@ export const modelInfoMethods = {
         if (!width || !height) return;
 
         try {
-            localStorage.setItem('model_linker_info_dialog_size', JSON.stringify({ w: width, h: height }));
+            localStorage.setItem('model_resolver_info_dialog_size', JSON.stringify({ w: width, h: height }));
         } catch (error) {
-            console.warn('Model Linker: Failed to save info dialog size:', error);
+            console.warn('Model Resolver: Failed to save info dialog size:', error);
         }
     },
 
@@ -544,7 +544,7 @@ export const modelInfoMethods = {
      */
     async fetchModelInfoForDialog(loraName, modelData, dialog) {
         try {
-            const response = await api.fetchApi('/model_linker/civitai-search', {
+            const response = await api.fetchApi('/model_resolver/civitai-search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -561,7 +561,7 @@ export const modelInfoMethods = {
                 this.updateInfoDialogError(dialog, 'Model not found on CivitAI');
             }
         } catch (e) {
-            console.error('Model Linker: Error fetching model info:', e);
+            console.error('Model Resolver: Error fetching model info:', e);
             this.updateInfoDialogError(dialog, 'Error fetching info');
         }
     },
@@ -570,8 +570,8 @@ export const modelInfoMethods = {
      * Update the info dialog with data
      */
     updateInfoDialogWithData(dialog, data) {
-        const loadingDiv = dialog.querySelector('.ml-info-dialog-loading');
-        const bodyDiv = dialog.querySelector('.ml-info-dialog-body');
+        const loadingDiv = dialog.querySelector('.mr-info-dialog-loading');
+        const bodyDiv = dialog.querySelector('.mr-info-dialog-body');
         this.bindInfoDialogInteractions(dialog);
 
         if (loadingDiv) loadingDiv.style.display = 'none';
@@ -583,7 +583,7 @@ export const modelInfoMethods = {
         }
 
         // Update title
-        const titleEl = dialog.querySelector('.ml-info-dialog-title');
+        const titleEl = dialog.querySelector('.mr-info-dialog-title');
         if (titleEl) {
             const modelName = data.model_name || data.modelName || 'Unknown Model';
             const versionName = data.version_name || data.versionName || '';
@@ -591,54 +591,54 @@ export const modelInfoMethods = {
         }
 
         // Update type tag
-        const typeTag = dialog.querySelector('.ml-info-type');
+        const typeTag = dialog.querySelector('.mr-info-type');
         if (typeTag) {
             const modelType = data.model_type || data.modelType || '';
             typeTag.textContent = modelType.toUpperCase();
-            typeTag.className = `ml-info-tag ml-info-type ${this.getModelTypeColorClass(modelType)}`;
+            typeTag.className = `mr-info-tag mr-info-type ${this.getModelTypeColorClass(modelType)}`;
         }
 
         // Update base model tag
-        const baseModelTag = dialog.querySelector('.ml-info-basemodel');
+        const baseModelTag = dialog.querySelector('.mr-info-basemodel');
         if (baseModelTag) {
             const baseModel = data.base_model || data.baseModel || '';
             baseModelTag.textContent = baseModel || '';
             if (baseModel) {
                 baseModelTag.style.display = '';
-                baseModelTag.className = `ml-info-tag ml-info-basemodel -basemodel-${baseModel.toLowerCase().replace(/\s+/g, '-')}`;
+                baseModelTag.className = `mr-info-tag mr-info-basemodel -basemodel-${baseModel.toLowerCase().replace(/\s+/g, '-')}`;
             } else {
                 baseModelTag.style.display = 'none';
             }
         }
 
         // Update file
-        const fileEl = dialog.querySelector('.ml-info-file');
+        const fileEl = dialog.querySelector('.mr-info-file');
         if (fileEl && data.filename) {
             fileEl.textContent = data.filename;
         }
 
         // Update hash
-        const hashEl = dialog.querySelector('.ml-info-hash');
+        const hashEl = dialog.querySelector('.mr-info-hash');
         if (hashEl) {
             hashEl.textContent = data.sha256 || data.hash || '';
         }
 
         // Update CivitAI link
-        const civitaiLinkEl = dialog.querySelector('.ml-info-civitai-link');
+        const civitaiLinkEl = dialog.querySelector('.mr-info-civitai-link');
         if (civitaiLinkEl) {
             if (data.url || data.version_url) {
                 const url = data.version_url || data.url;
                 civitaiLinkEl.innerHTML = `
-                    <a href="${url}" target="_blank" class="ml-info-link">
-                        ${getSvgIcon('civitai', 'currentColor', 'ml-info-civitai-logo')}
+                    <a href="${url}" target="_blank" class="mr-info-link">
+                        ${getSvgIcon('civitai', 'currentColor', 'mr-info-civitai-logo')}
                         View on Civitai
                     </a>
                 `;
             } else {
                 const searchName = data.model_name || data.modelName || 'Unknown';
                 civitaiLinkEl.innerHTML = `
-                    <span class="ml-info-not-found">Model not found</span>
-                    <a href="https://civitai.com/search?q=${encodeURIComponent(searchName)}" target="_blank" class="ml-info-link">
+                    <span class="mr-info-not-found">Model not found</span>
+                    <a href="https://civitai.com/search?q=${encodeURIComponent(searchName)}" target="_blank" class="mr-info-link">
                         ${this.getSearchIconHtml()} Search on CivitAI
                     </a>
                 `;
@@ -646,13 +646,13 @@ export const modelInfoMethods = {
         }
 
         // Update name
-        const nameEl = dialog.querySelector('.ml-info-name');
+        const nameEl = dialog.querySelector('.mr-info-name');
         if (nameEl) {
             nameEl.textContent = data.model_name || data.modelName || '';
         }
 
         // Update base model row
-        const baseModelRowEl = dialog.querySelector('.ml-info-base-model');
+        const baseModelRowEl = dialog.querySelector('.mr-info-base-model');
         if (baseModelRowEl) {
             const baseModel = data.base_model || data.baseModel || '';
             baseModelRowEl.textContent = baseModel;
@@ -665,15 +665,15 @@ export const modelInfoMethods = {
         }
 
         // Update trained words
-        const trainedWordsEl = dialog.querySelector('.ml-info-trained-words');
+        const trainedWordsEl = dialog.querySelector('.mr-info-trained-words');
         if (trainedWordsEl) {
             const words = this.normalizeTrainedWords(data.trained_words || data.trainedWords || []);
             if (words.length > 0) {
                 dialog._selectedTrainedWords = new Set();
-                trainedWordsEl.innerHTML = `<div class="ml-info-trained-words-list">${words.map(word => `
+                trainedWordsEl.innerHTML = `<div class="mr-info-trained-words-list">${words.map(word => `
                     <button
                         type="button"
-                        class="ml-info-trained-word"
+                        class="mr-info-trained-word"
                         data-word="${this.escapeHtml(word)}"
                         data-tooltip="${this.escapeHtml(word)}"
                         aria-pressed="false"
@@ -692,7 +692,7 @@ export const modelInfoMethods = {
         }
 
         // Update clip skip
-        const clipSkipEl = dialog.querySelector('.ml-info-clip-skip');
+        const clipSkipEl = dialog.querySelector('.mr-info-clip-skip');
         if (clipSkipEl) {
             const clipSkip = data.clip_skip || data.clipSkip;
             if (clipSkip && clipSkip !== 'None') {
@@ -706,18 +706,18 @@ export const modelInfoMethods = {
         }
 
         // Update description
-        const descEl = dialog.querySelector('.ml-info-description');
+        const descEl = dialog.querySelector('.mr-info-description');
         if (descEl) {
             const desc = data.description || data.model_description || data.modelDescription || '';
             if (desc) {
-                const actionsEl = dialog.querySelector('.ml-info-description-actions');
-                const toggleBtn = dialog.querySelector('.ml-info-description-toggle');
+                const actionsEl = dialog.querySelector('.mr-info-description-actions');
+                const toggleBtn = dialog.querySelector('.mr-info-description-toggle');
 
                 let sanitizedHtml = '';
                 try {
                     sanitizedHtml = this.sanitizeDescriptionHtml(desc);
                 } catch (error) {
-                    console.error('Model Linker: Failed to sanitize description HTML:', error);
+                    console.error('Model Resolver: Failed to sanitize description HTML:', error);
                 }
 
                 const fallbackText = this.escapeHtml(String(desc).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
@@ -754,7 +754,7 @@ export const modelInfoMethods = {
      * Update images in the info dialog
      */
     updateInfoDialogImages(dialog, images) {
-        const imagesContainer = dialog.querySelector('.ml-info-images');
+        const imagesContainer = dialog.querySelector('.mr-info-images');
         if (!imagesContainer) return;
         if (!images.length) {
             imagesContainer.innerHTML = '';
@@ -766,7 +766,7 @@ export const modelInfoMethods = {
         const renderImageCard = (img) => {
             const captionParts = [];
             if (img.civitaiUrl) {
-                captionParts.push(`<a href="${this.escapeHtml(img.civitaiUrl)}" target="_blank" rel="noopener noreferrer" class="ml-info-image-link">civitai</a>`);
+                captionParts.push(`<a href="${this.escapeHtml(img.civitaiUrl)}" target="_blank" rel="noopener noreferrer" class="mr-info-image-link">civitai</a>`);
             }
             if (img.seed) captionParts.push(`<span><label>seed</label> ${this.escapeHtml(img.seed)}</span>`);
             if (img.steps) captionParts.push(`<span><label>steps</label> ${this.escapeHtml(img.steps)}</span>`);
@@ -777,7 +777,7 @@ export const modelInfoMethods = {
             if (img.negative) captionParts.push(`<span><label>negative</label> ${this.escapeHtml(this.truncateText(img.negative, 180))}</span>`);
 
             return `
-                <div class="ml-info-image-item">
+                <div class="mr-info-image-item">
                     <figure>
                         <img src="${this.escapeHtml(img.url)}" alt="Example" loading="lazy" />
                         <figcaption>${captionParts.join('')}</figcaption>
@@ -786,7 +786,7 @@ export const modelInfoMethods = {
             `;
         };
 
-        let imagesHtml = '<div class="ml-info-images-header">Example Images</div><div class="ml-info-images-layout">';
+        let imagesHtml = '<div class="mr-info-images-header">Example Images</div><div class="mr-info-images-layout">';
         imagesHtml += visibleImages.map(renderImageCard).join('');
         imagesHtml += '</div>';
         imagesContainer.innerHTML = imagesHtml;
@@ -796,9 +796,9 @@ export const modelInfoMethods = {
      * Update the info dialog with error
      */
     updateInfoDialogError(dialog, message) {
-        const civitaiLink = dialog.querySelector('.ml-info-civitai-link');
+        const civitaiLink = dialog.querySelector('.mr-info-civitai-link');
         if (civitaiLink) {
-            civitaiLink.innerHTML = `<span class="ml-info-error">${message}</span>`;
+            civitaiLink.innerHTML = `<span class="mr-info-error">${message}</span>`;
         }
     },
 

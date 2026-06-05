@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -16,7 +16,7 @@ export const tabsLoadedMethods = {
             const button = this.getTabButton(tab);
             if (!button) return;
             const isActive = tab === this.activeTab;
-            button.classList.toggle('ml-tab-active', isActive);
+            button.classList.toggle('mr-tab-active', isActive);
             button.setAttribute('aria-selected', isActive ? 'true' : 'false');
             button.setAttribute('aria-disabled', isActive ? 'true' : 'false');
             if (isActive) {
@@ -30,7 +30,7 @@ export const tabsLoadedMethods = {
     switchTab(tab, { force = false } = {}) {
         const nextTab = this.getValidTab(tab);
         const nextTabButton = this.getTabButton(nextTab);
-        if (!force && nextTab === this.activeTab && nextTabButton?.classList.contains('ml-tab-active')) {
+        if (!force && nextTab === this.activeTab && nextTabButton?.classList.contains('mr-tab-active')) {
             this.hideTooltip();
             this.updateQueueVisibility();
             return;
@@ -77,7 +77,7 @@ export const tabsLoadedMethods = {
             }
             this.syncWorkflowScopedQueue(workflow);
 
-            const response = await api.fetchApi('/model_linker/loaded', {
+            const response = await api.fetchApi('/model_resolver/loaded', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow })
@@ -91,9 +91,9 @@ export const tabsLoadedMethods = {
             this.displayLoadedModels(this.contentElement, data);
 
         } catch (error) {
-            console.error('Model Linker: Error loading loaded models:', error);
+            console.error('Model Resolver: Error loading loaded models:', error);
             if (this.contentElement) {
-                this.contentElement.innerHTML = `<p class="ml-error-text">Error: ${error.message}</p>`;
+                this.contentElement.innerHTML = `<p class="mr-error-text">Error: ${error.message}</p>`;
             }
         }
     },
@@ -162,7 +162,7 @@ export const tabsLoadedMethods = {
         const inactiveString = buildCategoryStrings('inactive');
         const allString = buildCategoryStrings('all');
 
-        const copyIcon = getSvgIcon('copy', 'currentColor', 'ml-copy-btn-icon');
+        const copyIcon = getSvgIcon('copy', 'currentColor', 'mr-copy-btn-icon');
         const stripModelExtension = (value) => String(value || 'Unknown').replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
         const modelToken = (model, category) => {
             const fullName = model.name || model.original_path?.split(/[\/\\]/).pop() || 'Unknown';
@@ -171,24 +171,24 @@ export const tabsLoadedMethods = {
             return `<${this.getCategoryTokenName(category)}:${name}:${strength}>`;
         };
         const copyButtonHtml = (text, extraClass = '') => `
-            <button class="ml-btn-filter ml-btn-copy-compact ${extraClass}" onclick="window.MLCopy(${this.escapeJsString(text)}, this)">
+            <button class="mr-btn-filter mr-btn-copy-compact ${extraClass}" onclick="window.MLCopy(${this.escapeJsString(text)}, this)">
                 ${copyIcon}<span>Copy</span>
             </button>`;
         const countText = (count, label) => `${count} ${label}${count === 1 ? '' : 's'}`;
 
         let html = `
-            <div class="ml-loaded-models-header">
-                <div class="ml-loaded-title-block">
-                    <h3 class="ml-loaded-models-title">Loaded Models <span class="ml-loaded-total">${total}</span></h3>
-                    <p class="ml-loaded-models-subtitle">${countText(activeCount, 'active')} / ${countText(inactiveCount, 'inactive')}</p>
+            <div class="mr-loaded-models-header">
+                <div class="mr-loaded-title-block">
+                    <h3 class="mr-loaded-models-title">Loaded Models <span class="mr-loaded-total">${total}</span></h3>
+                    <p class="mr-loaded-models-subtitle">${countText(activeCount, 'active')} / ${countText(inactiveCount, 'inactive')}</p>
                 </div>
-                <div class="ml-loaded-filter-row">
-                    <button class="ml-btn-filter active" id="filter-all" onclick="window.MLFilterSwitch('all')">All (${activeCount + inactiveCount})</button>
-                    <button class="ml-btn-filter" id="filter-active" onclick="window.MLFilterSwitch('active')">Active (${activeCount})</button>
-                    <button class="ml-btn-filter" id="filter-inactive" onclick="window.MLFilterSwitch('inactive')">Inactive (${inactiveCount})</button>
+                <div class="mr-loaded-filter-row">
+                    <button class="mr-btn-filter active" id="filter-all" onclick="window.MLFilterSwitch('all')">All (${activeCount + inactiveCount})</button>
+                    <button class="mr-btn-filter" id="filter-active" onclick="window.MLFilterSwitch('active')">Active (${activeCount})</button>
+                    <button class="mr-btn-filter" id="filter-inactive" onclick="window.MLFilterSwitch('inactive')">Inactive (${inactiveCount})</button>
                 </div>
             </div>
-            <div class="ml-models-list ml-models-list-pad">
+            <div class="mr-models-list mr-models-list-pad">
         `;
 
         for (const [category, modelsObj] of Object.entries(byCategory)) {
@@ -197,35 +197,35 @@ export const tabsLoadedMethods = {
             const hasInactive = modelsObj.inactive.length > 0;
             const sectionTotal = modelsObj.active.length + modelsObj.inactive.length;
 
-            html += `<div class="ml-model-section" data-ml-filter="all" data-ml-active="${hasActive}" data-ml-inactive="${hasInactive}">`;
+            html += `<div class="mr-model-section" data-ml-filter="all" data-ml-active="${hasActive}" data-ml-inactive="${hasInactive}">`;
 
-            html += `<div class="ml-model-section-header">
-                <div class="ml-model-section-heading">
-                    <span class="ml-model-section-title">${this.escapeHtml(displayName.toUpperCase())}</span>
-                    <span class="ml-model-section-total">${countText(sectionTotal, 'model')}</span>
+            html += `<div class="mr-model-section-header">
+                <div class="mr-model-section-heading">
+                    <span class="mr-model-section-title">${this.escapeHtml(displayName.toUpperCase())}</span>
+                    <span class="mr-model-section-total">${countText(sectionTotal, 'model')}</span>
                 </div>
-                <div class="ml-model-section-counts">
-                    ${hasActive ? `<span class="ml-model-count-pill is-active">${countText(modelsObj.active.length, 'active')}</span>` : ''}
-                    ${hasInactive ? `<span class="ml-model-count-pill is-inactive">${countText(modelsObj.inactive.length, 'inactive')}</span>` : ''}
+                <div class="mr-model-section-counts">
+                    ${hasActive ? `<span class="mr-model-count-pill is-active">${countText(modelsObj.active.length, 'active')}</span>` : ''}
+                    ${hasInactive ? `<span class="mr-model-count-pill is-inactive">${countText(modelsObj.inactive.length, 'inactive')}</span>` : ''}
                 </div>
             </div>`;
 
             if (hasActive) {
                 const activeStr = modelsObj.active.map(m => modelToken(m, category)).join(' ');
 
-                html += `<div class="ml-model-group ml-model-group-active">
-                    <div class="ml-model-group-head">
-                        <span class="ml-model-group-label ml-model-group-label-active"><span class="ml-model-group-dot"></span>Active <span class="ml-model-group-count">${modelsObj.active.length}</span></span>
+                html += `<div class="mr-model-group mr-model-group-active">
+                    <div class="mr-model-group-head">
+                        <span class="mr-model-group-label mr-model-group-label-active"><span class="mr-model-group-dot"></span>Active <span class="mr-model-group-count">${modelsObj.active.length}</span></span>
                         ${copyButtonHtml(activeStr)}
                     </div>
-                    <div class="ml-model-chip-list">`;
+                    <div class="mr-model-chip-list">`;
 
                 for (const model of modelsObj.active) {
                     const fullName = model.name || model.original_path?.split(/[\/\\]/).pop() || 'Unknown';
                     const name = fullName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
                     const strength = model.strength !== null && model.strength !== undefined ? model.strength.toFixed(2) : null;
                     const modelData = encodeURIComponent(JSON.stringify(model));
-                    html += `<span class="ml-model-chip" data-model="${modelData}" oncontextmenu="window.MLOpenContextMenu(event, this)">${this.escapeHtml(name)}${strength !== null ? `<span class="ml-model-chip-strength">${this.escapeHtml(strength)}</span>` : ''}</span>`;
+                    html += `<span class="mr-model-chip" data-model="${modelData}" oncontextmenu="window.MLOpenContextMenu(event, this)">${this.escapeHtml(name)}${strength !== null ? `<span class="mr-model-chip-strength">${this.escapeHtml(strength)}</span>` : ''}</span>`;
                 }
                 html += `</div></div>`;
             }
@@ -233,19 +233,19 @@ export const tabsLoadedMethods = {
             if (hasInactive) {
                 const inactiveStr = modelsObj.inactive.map(m => modelToken(m, category)).join(' ');
 
-                html += `<div class="ml-model-group ml-model-group-inactive">
-                    <div class="ml-model-group-head">
-                        <span class="ml-model-group-label ml-model-group-label-inactive"><span class="ml-model-group-dot"></span>Inactive <span class="ml-model-group-count">${modelsObj.inactive.length}</span></span>
+                html += `<div class="mr-model-group mr-model-group-inactive">
+                    <div class="mr-model-group-head">
+                        <span class="mr-model-group-label mr-model-group-label-inactive"><span class="mr-model-group-dot"></span>Inactive <span class="mr-model-group-count">${modelsObj.inactive.length}</span></span>
                         ${copyButtonHtml(inactiveStr, 'is-muted')}
                     </div>
-                    <div class="ml-model-chip-list ml-model-chip-list-inactive">`;
+                    <div class="mr-model-chip-list mr-model-chip-list-inactive">`;
 
                 for (const model of modelsObj.inactive) {
                     const fullName = model.name || model.original_path?.split(/[\/\\]/).pop() || 'Unknown';
                     const name = fullName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
                     const strength = model.strength !== null && model.strength !== undefined ? model.strength.toFixed(2) : null;
                     const modelData = encodeURIComponent(JSON.stringify(model));
-                    html += `<span class="ml-model-chip" data-model="${modelData}" oncontextmenu="window.MLOpenContextMenu(event, this)">${this.escapeHtml(name)}${strength !== null ? `<span class="ml-model-chip-strength">${this.escapeHtml(strength)}</span>` : ''}</span>`;
+                    html += `<span class="mr-model-chip" data-model="${modelData}" oncontextmenu="window.MLOpenContextMenu(event, this)">${this.escapeHtml(name)}${strength !== null ? `<span class="mr-model-chip-strength">${this.escapeHtml(strength)}</span>` : ''}</span>`;
                 }
                 html += `</div></div>`;
             }
@@ -253,23 +253,23 @@ export const tabsLoadedMethods = {
             html += `</div>`;
         }
 
-        const copySectionId = 'ml-copy-' + Date.now();
+        const copySectionId = 'mr-copy-' + Date.now();
         html += `
             </div>
-            <div id="${copySectionId}" class="ml-copy-section" data-ml-active="${this.escapeHtml(activeString)}" data-ml-inactive="${this.escapeHtml(inactiveString)}" data-ml-all="${this.escapeHtml(allString)}" data-ml-active-count="${activeCount}" data-ml-inactive-count="${inactiveCount}" data-ml-all-count="${activeCount + inactiveCount}">
-                <div class="ml-copy-toolbar">
-                    <div class="ml-copy-heading">
-                        <div class="ml-copy-label" id="${copySectionId}-label">Copy all</div>
-                        <div class="ml-copy-meta" id="${copySectionId}-meta">${countText(activeCount + inactiveCount, 'token')}</div>
+            <div id="${copySectionId}" class="mr-copy-section" data-ml-active="${this.escapeHtml(activeString)}" data-ml-inactive="${this.escapeHtml(inactiveString)}" data-ml-all="${this.escapeHtml(allString)}" data-ml-active-count="${activeCount}" data-ml-inactive-count="${inactiveCount}" data-ml-all-count="${activeCount + inactiveCount}">
+                <div class="mr-copy-toolbar">
+                    <div class="mr-copy-heading">
+                        <div class="mr-copy-label" id="${copySectionId}-label">Copy all</div>
+                        <div class="mr-copy-meta" id="${copySectionId}-meta">${countText(activeCount + inactiveCount, 'token')}</div>
                     </div>
-                    <div class="ml-copy-actions">
-                        <button type="button" class="ml-btn-filter ml-copy-mode active" data-ml-copy-mode="all" onclick="window.MLSetCopyMode('${copySectionId}', 'all', this)">All</button>
-                        <button type="button" class="ml-btn-filter ml-copy-mode" data-ml-copy-mode="active" onclick="window.MLSetCopyMode('${copySectionId}', 'active', this)">Active</button>
-                        <button type="button" class="ml-btn-filter ml-copy-mode" data-ml-copy-mode="inactive" onclick="window.MLSetCopyMode('${copySectionId}', 'inactive', this)">Inactive</button>
-                        <button class="ml-btn-filter ml-copy-main-btn" onclick="window.MLCopyCode('${copySectionId}', this)">${copyIcon}<span>Copy</span></button>
+                    <div class="mr-copy-actions">
+                        <button type="button" class="mr-btn-filter mr-copy-mode active" data-ml-copy-mode="all" onclick="window.MLSetCopyMode('${copySectionId}', 'all', this)">All</button>
+                        <button type="button" class="mr-btn-filter mr-copy-mode" data-ml-copy-mode="active" onclick="window.MLSetCopyMode('${copySectionId}', 'active', this)">Active</button>
+                        <button type="button" class="mr-btn-filter mr-copy-mode" data-ml-copy-mode="inactive" onclick="window.MLSetCopyMode('${copySectionId}', 'inactive', this)">Inactive</button>
+                        <button class="mr-btn-filter mr-copy-main-btn" onclick="window.MLCopyCode('${copySectionId}', this)">${copyIcon}<span>Copy</span></button>
                     </div>
                 </div>
-                <code class="ml-copy-code" id="${copySectionId}-code">${this.escapeHtml(allString)}</code>
+                <code class="mr-copy-code" id="${copySectionId}-code">${this.escapeHtml(allString)}</code>
             </div>
         `;
 

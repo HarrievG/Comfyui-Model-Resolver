@@ -49,7 +49,7 @@ def _fetch_json_url(url: str) -> Dict[str, Any]:
         url,
         headers={
             "Accept": "application/json",
-            "User-Agent": "comfyui-model-linker",
+            "User-Agent": "comfyui-model-resolver",
         },
     )
     with urlopen(request, timeout=HTTP_TIMEOUT) as response:

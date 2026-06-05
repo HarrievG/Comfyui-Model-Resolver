@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -57,11 +57,11 @@ export const searchPanelMethods = {
     },
 
     getSearchIconHtml() {
-        return `<span class="ml-btn-icon" aria-hidden="true">${getSvgIcon('search')}</span>`;
+        return `<span class="mr-btn-icon" aria-hidden="true">${getSvgIcon('search')}</span>`;
     },
 
     getLocateIconHtml() {
-        return `<span class="ml-node-chip-icon" aria-hidden="true">${getSvgIcon('locate')}</span>`;
+        return `<span class="mr-node-chip-icon" aria-hidden="true">${getSvgIcon('locate')}</span>`;
     },
 
     showTooltip(target) {
@@ -107,7 +107,7 @@ export const searchPanelMethods = {
         if (target.hasAttribute('title')) {
             target.removeAttribute('title');
         }
-        if (target.classList?.contains('ml-tooltip-badge') && !target.hasAttribute('tabindex')) {
+        if (target.classList?.contains('mr-tooltip-badge') && !target.hasAttribute('tabindex')) {
             target.setAttribute('tabindex', '0');
         }
     },
@@ -153,7 +153,7 @@ export const searchPanelMethods = {
         try {
             return this.getValidTab(localStorage.getItem(this.activeTabStorageKey));
         } catch (error) {
-            console.warn('Model Linker: Failed to restore active tab:', error);
+            console.warn('Model Resolver: Failed to restore active tab:', error);
             return 'missing';
         }
     },
@@ -162,7 +162,7 @@ export const searchPanelMethods = {
         try {
             localStorage.setItem(this.activeTabStorageKey, this.getValidTab(tab));
         } catch (error) {
-            console.warn('Model Linker: Failed to persist active tab:', error);
+            console.warn('Model Resolver: Failed to persist active tab:', error);
         }
     },
 
@@ -192,27 +192,27 @@ export const searchPanelMethods = {
         return [
             {
                 source: 'local',
-                storageKey: 'modelLinker.searchSource.localEnabled',
+                storageKey: 'ModelResolver.searchSource.localEnabled',
                 tooltip: 'Searches bundled known-model data before online providers.'
             },
             {
                 source: 'huggingface',
-                storageKey: 'modelLinker.searchSource.huggingFaceEnabled',
+                storageKey: 'ModelResolver.searchSource.huggingFaceEnabled',
                 tooltip: 'Searches Hugging Face when Everything is selected.'
             },
             {
                 source: 'civitai',
-                storageKey: 'modelLinker.searchSource.civitaiEnabled',
+                storageKey: 'ModelResolver.searchSource.civitaiEnabled',
                 tooltip: 'Searches CivitAI when Everything is selected.'
             },
             {
                 source: 'civarchive',
-                storageKey: 'modelLinker.searchSource.civArchiveEnabled',
+                storageKey: 'ModelResolver.searchSource.civArchiveEnabled',
                 tooltip: 'Searches CivArchive when Everything is selected.'
             },
             {
                 source: 'lora_manager_archive',
-                storageKey: 'modelLinker.searchSource.loraManagerArchiveEnabled',
+                storageKey: 'ModelResolver.searchSource.loraManagerArchiveEnabled',
                 tooltip: 'Searches the local LoRA Manager archive when Everything is selected.'
             }
         ];
@@ -272,11 +272,11 @@ export const searchPanelMethods = {
         if (!this.contentElement || !missing) return;
 
         const key = this.getMissingModelKey(missing);
-        const rows = this.contentElement.querySelectorAll('.ml-missing-list-row');
+        const rows = this.contentElement.querySelectorAll('.mr-missing-list-row');
         for (const row of rows) {
             if (row.getAttribute('data-missing-key') !== key) continue;
 
-            const sourcesEl = row.querySelector('.ml-missing-row-sources');
+            const sourcesEl = row.querySelector('.mr-missing-row-sources');
             if (sourcesEl) {
                 sourcesEl.innerHTML = this.renderMissingSourcesSummary(missing);
             }
@@ -391,7 +391,7 @@ export const searchPanelMethods = {
         };
 
         if (isCompact) {
-            let html = '<div class="ml-search-progress-list ml-search-progress-list-compact">';
+            let html = '<div class="mr-search-progress-list mr-search-progress-list-compact">';
             for (const [source, progress] of progressEntries) {
                 const status = progress?.status || 'pending';
                 const statusClass = String(status).replace(/[^a-z0-9_-]/gi, '');
@@ -399,9 +399,9 @@ export const searchPanelMethods = {
                 const statusLabel = progress?.message || statusLabels[status] || status;
                 const title = `${label}: ${statusLabel}`;
                 html += `
-                    <div class="ml-search-progress-item ml-search-progress-${statusClass}" data-tooltip="${this.escapeHtml(title)}">
-                        <span class="ml-search-progress-source">${this.escapeHtml(label)}</span>
-                        <span class="ml-search-progress-status">${this.escapeHtml(statusLabel)}</span>
+                    <div class="mr-search-progress-item mr-search-progress-${statusClass}" data-tooltip="${this.escapeHtml(title)}">
+                        <span class="mr-search-progress-source">${this.escapeHtml(label)}</span>
+                        <span class="mr-search-progress-status">${this.escapeHtml(statusLabel)}</span>
                     </div>
                 `;
             }
@@ -409,7 +409,7 @@ export const searchPanelMethods = {
             return html;
         }
 
-        let html = '<div class="ml-search-progress-list">';
+        let html = '<div class="mr-search-progress-list">';
         for (const [source, progress] of progressEntries) {
             const status = progress?.status || 'pending';
             const statusClass = String(status).replace(/[^a-z0-9_-]/gi, '');
@@ -422,13 +422,13 @@ export const searchPanelMethods = {
                 ? `Searching... ${Math.round(safePercent)}%`
                 : (progress?.message || statusLabels[status] || status);
             html += `
-                <div class="ml-search-progress-item ml-search-progress-${statusClass}">
-                    <div class="ml-search-progress-head">
+                <div class="mr-search-progress-item mr-search-progress-${statusClass}">
+                    <div class="mr-search-progress-head">
                         <span>${this.escapeHtml(label)}</span>
                         <span>${this.escapeHtml(statusLabel)}</span>
                     </div>
-                    <div class="ml-search-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${safePercent}">
-                        <div class="ml-search-progress-fill" style="width: ${safePercent}%;"></div>
+                    <div class="mr-search-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${safePercent}">
+                        <div class="mr-search-progress-fill" style="width: ${safePercent}%;"></div>
                     </div>
                 </div>
             `;
@@ -500,7 +500,7 @@ export const searchPanelMethods = {
         const parts = this.getModelVersionParts(modelName, versionName);
         const nameHtml = parts.name ? this.escapeHtml(parts.name) : '';
         const versionHtml = parts.version
-            ? `<em class="ml-model-version">${this.escapeHtml(parts.version)}</em>`
+            ? `<em class="mr-model-version">${this.escapeHtml(parts.version)}</em>`
             : '';
         return [nameHtml, versionHtml].filter(Boolean).join(' ');
     },
@@ -525,9 +525,9 @@ export const searchPanelMethods = {
 
     renderSearchSourcePill(sourceKey, sourceLabel) {
         const iconName = this.getSearchSourceIconName(sourceKey);
-        const iconHtml = getSvgIcon(iconName, 'currentColor', 'ml-search-source-icon');
+        const iconHtml = getSvgIcon(iconName, 'currentColor', 'mr-search-source-icon');
         return `
-            <span class="ml-search-source-pill ml-search-source-${sourceKey}" data-tooltip="${this.escapeHtml(sourceLabel)}">
+            <span class="mr-search-source-pill mr-search-source-${sourceKey}" data-tooltip="${this.escapeHtml(sourceLabel)}">
                 ${iconHtml}
                 <span>${this.escapeHtml(sourceLabel)}</span>
             </span>
@@ -649,7 +649,7 @@ export const searchPanelMethods = {
     },
 
     renderKnownDownloadPanel(missing, downloadSource) {
-        let html = `<div class="ml-download-section">`;
+        let html = `<div class="mr-download-section">`;
         html += this.renderSearchControls(missing, { buttonText: 'Search Again' });
         html += this.renderDownloadTargetControls(
             missing,
@@ -658,7 +658,7 @@ export const searchPanelMethods = {
         html += `</div>`;
 
         const downloadSourceRow = this.getDownloadSourceTableRow(missing, downloadSource);
-        html += `<div id="search-results-${missing.node_id}-${missing.widget_index}" class="ml-search-results ml-is-visible">`;
+        html += `<div id="search-results-${missing.node_id}-${missing.widget_index}" class="mr-search-results mr-is-visible">`;
         html += this.renderSearchResultsTable(downloadSourceRow ? [downloadSourceRow] : []);
         html += `</div>`;
         return html;
@@ -668,22 +668,22 @@ export const searchPanelMethods = {
         if (!rows.length) return '';
         const layout = this.getSearchResultsTableLayout(rows);
         const tableStyle = [
-            `--ml-source-col:${layout.sourcePx}px`,
-            `--ml-match-col:${layout.matchPx}px`,
-            `--ml-size-col:${layout.sizePx}px`,
-            `--ml-actions-col:${layout.actionsPx}px`,
-            `--ml-table-min:${layout.tableMinPx}px`
+            `--mr-source-col:${layout.sourcePx}px`,
+            `--mr-match-col:${layout.matchPx}px`,
+            `--mr-size-col:${layout.sizePx}px`,
+            `--mr-actions-col:${layout.actionsPx}px`,
+            `--mr-table-min:${layout.tableMinPx}px`
         ].join(';');
 
         let html = `
-            <div class="ml-search-results-table-wrap">
-                <table class="ml-search-results-table" style="${tableStyle}">
+            <div class="mr-search-results-table-wrap">
+                <table class="mr-search-results-table" style="${tableStyle}">
                     <colgroup>
-                        <col class="ml-search-col-source">
-                        <col class="ml-search-col-model">
-                        <col class="ml-search-col-match">
-                        <col class="ml-search-col-size">
-                        <col class="ml-search-col-actions">
+                        <col class="mr-search-col-source">
+                        <col class="mr-search-col-model">
+                        <col class="mr-search-col-match">
+                        <col class="mr-search-col-size">
+                        <col class="mr-search-col-actions">
                     </colgroup>
                     <thead>
                         <tr>
@@ -719,7 +719,7 @@ export const searchPanelMethods = {
             let actions = '';
             if (downloadUrl) {
                 actions += `
-                    <button type="button" class="search-download-btn ml-search-result-action-btn"
+                    <button type="button" class="search-download-btn mr-search-result-action-btn"
                         data-tooltip="Download"
                         aria-label="Download ${this.escapeHtml(downloadFilename)}"
                         data-url="${this.escapeHtml(downloadUrl)}"
@@ -730,28 +730,28 @@ export const searchPanelMethods = {
             if (openUrl) {
                 actions += `
                     <button type="button"
-                        class="search-open-page-btn ml-search-result-action-btn"
+                        class="search-open-page-btn mr-search-result-action-btn"
                         data-tooltip="Open model page"
                         aria-label="Open model page"
                         data-url="${this.escapeHtml(openUrl)}">${getSvgIcon('externalLink')}</button>
                 `;
             }
             if (!actions) {
-                actions = '<span class="ml-search-result-empty">-</span>';
+                actions = '<span class="mr-search-result-empty">-</span>';
             }
 
             html += `
                 <tr>
                     <td>${sourcePill}</td>
                     <td>
-                        <div class="ml-search-result-model" data-tooltip="${modelTitle}">
+                        <div class="mr-search-result-model" data-tooltip="${modelTitle}">
                             <span>${modelHtml}</span>
                             ${secondary || filename ? `<small>${secondary || filename}</small>` : ''}
                         </div>
                     </td>
-                    <td><span class="ml-search-match ml-search-match-${matchClass}">${this.escapeHtml(match.label)}</span></td>
-                    <td class="ml-search-size">${size}</td>
-                    <td><div class="ml-search-result-actions">${actions}</div></td>
+                    <td><span class="mr-search-match mr-search-match-${matchClass}">${this.escapeHtml(match.label)}</span></td>
+                    <td class="mr-search-size">${size}</td>
+                    <td><div class="mr-search-result-actions">${actions}</div></td>
                 </tr>
             `;
         }
@@ -772,15 +772,15 @@ export const searchPanelMethods = {
         const state = this.getSearchState(missing);
         const selectedSource = state.selectedSource || 'all';
 
-        let html = `<div id="${searchSourcesId}" class="ml-search-source-bar">`;
-        html += `<button id="search-${missing.node_id}-${missing.widget_index}" class="ml-btn ml-btn-link">`;
+        let html = `<div id="${searchSourcesId}" class="mr-search-source-bar">`;
+        html += `<button id="search-${missing.node_id}-${missing.widget_index}" class="mr-btn mr-btn-link">`;
         html += `${this.getSearchIconHtml()} ${buttonText}`;
         html += `</button>`;
-        html += `<div class="ml-search-source-picker">`;
-        html += `<label class="ml-search-source-picker-label" for="${searchSourceSelectId}">Source</label>`;
-        html += `<div class="ml-download-target-wrap">`;
-        html += `<input id="${searchSourceSelectId}" class="ml-download-target-input ml-search-source-select" type="text" readonly autocomplete="off" data-value="${this.escapeHtml(selectedSource)}" value="${this.escapeHtml(this.getSearchSourceLabel(selectedSource))}">`;
-        html += `<div id="${searchSourceListId}" class="ml-download-target-list ml-search-source-list"></div>`;
+        html += `<div class="mr-search-source-picker">`;
+        html += `<label class="mr-search-source-picker-label" for="${searchSourceSelectId}">Source</label>`;
+        html += `<div class="mr-download-target-wrap">`;
+        html += `<input id="${searchSourceSelectId}" class="mr-download-target-input mr-search-source-select" type="text" readonly autocomplete="off" data-value="${this.escapeHtml(selectedSource)}" value="${this.escapeHtml(this.getSearchSourceLabel(selectedSource))}">`;
+        html += `<div id="${searchSourceListId}" class="mr-download-target-list mr-search-source-list"></div>`;
         html += `</div>`;
         html += `</div>`;
         html += `</div>`;
@@ -798,14 +798,14 @@ export const searchPanelMethods = {
         const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
         const actionAttr = actionDataAttr ? ` ${actionDataAttr}` : '';
         return `
-            <div class="ml-progress-container">
-                <div class="ml-progress-row">
-                    <div class="ml-progress-bar ml-progress-bar-grow">
-                        <div class="ml-progress-fill" style="width: ${safePercent}%;"></div>
+            <div class="mr-progress-container">
+                <div class="mr-progress-row">
+                    <div class="mr-progress-bar mr-progress-bar-grow">
+                        <div class="mr-progress-fill" style="width: ${safePercent}%;"></div>
                     </div>
                     <button class="${actionClass}"${actionAttr}>${actionText}</button>
                 </div>
-                <div class="ml-progress-text">
+                <div class="mr-progress-text">
                     <span>${leftText}</span>
                     <span>${rightText}</span>
                 </div>
@@ -853,11 +853,11 @@ export const searchPanelMethods = {
                 const contextModel = this.buildContextMenuModelData(match.model || {}, match.filename || '');
                 const modelData = encodeURIComponent(JSON.stringify(contextModel));
 
-                html += `<div class="ml-match-row ${isBestMatch ? 'ml-best-match' : ''}" data-model="${modelData}" oncontextmenu="window.MLOpenContextMenu(event, this)">`;
+                html += `<div class="mr-match-row ${isBestMatch ? 'mr-best-match' : ''}" data-model="${modelData}" oncontextmenu="window.MLOpenContextMenu(event, this)">`;
                 html += this.getConfidenceBadge(match.confidence);
-                html += `<span class="ml-match-filename" data-tooltip="${this.escapeHtml(matchPath)}">${this.escapeHtml(matchPath)}</span>`;
-                html += `<span class="ml-match-status ${match.confidence === 100 ? 'ml-match-status-exact' : 'ml-match-status-partial'}">${match.confidence === 100 ? 'Exact' : 'Partial'}</span>`;
-                html += `<button id="${buttonId}" class="ml-btn ml-btn-secondary ml-btn-sm ml-btn-icon-only ml-local-link-btn" data-tooltip="Link this local match" aria-label="Link this local match">`;
+                html += `<span class="mr-match-filename" data-tooltip="${this.escapeHtml(matchPath)}">${this.escapeHtml(matchPath)}</span>`;
+                html += `<span class="mr-match-status ${match.confidence === 100 ? 'mr-match-status-exact' : 'mr-match-status-partial'}">${match.confidence === 100 ? 'Exact' : 'Partial'}</span>`;
+                html += `<button id="${buttonId}" class="mr-btn mr-btn-secondary mr-btn-sm mr-btn-icon-only mr-local-link-btn" data-tooltip="Link this local match" aria-label="Link this local match">`;
                 html += getSvgIcon('link');
                 html += `</button>`;
                 html += `</div>`;
@@ -866,33 +866,33 @@ export const searchPanelMethods = {
             if (perfectMatches.length > 0 && otherMatches.length > 0) {
                 const matchId = `more-matches-${missing.node_id}-${missing.widget_index}`;
                 const altLabel = `Alternatives (${otherMatches.length})`;
-                html += `<button type="button" class="ml-local-alternatives-toggle" aria-expanded="true" onclick="window.MLToggleHidden('${matchId}', this, '${altLabel}', '${altLabel}')">`;
-                html += `<span class="ml-local-alternatives-label">${altLabel}</span>`;
-                html += `<span class="ml-local-alternatives-state">Hide</span>`;
-                html += `<span class="ml-local-alternatives-chevron" aria-hidden="true"></span>`;
+                html += `<button type="button" class="mr-local-alternatives-toggle" aria-expanded="true" onclick="window.MLToggleHidden('${matchId}', this, '${altLabel}', '${altLabel}')">`;
+                html += `<span class="mr-local-alternatives-label">${altLabel}</span>`;
+                html += `<span class="mr-local-alternatives-state">Hide</span>`;
+                html += `<span class="mr-local-alternatives-chevron" aria-hidden="true"></span>`;
                 html += `</button>`;
-                html += `<div id="${matchId}" class="ml-stack-sm">`;
+                html += `<div id="${matchId}" class="mr-stack-sm">`;
                 for (let mIdx = 0; mIdx < otherMatches.length; mIdx++) {
                     const match = otherMatches[mIdx];
                     const altBtnId = `resolve-alt-${missingIndex}-${missing.node_id}-${missing.widget_index}-${mIdx}`;
                     const contextModel = this.buildContextMenuModelData(match.model || {}, match.filename || '');
                     const modelData = encodeURIComponent(JSON.stringify(contextModel));
                     const matchPath = match.model?.relative_path || match.model?.path || match.path || match.filename || '';
-                    html += `<div class="ml-match-row" data-model="${modelData}" oncontextmenu="window.MLOpenContextMenu(event, this)">`;
+                    html += `<div class="mr-match-row" data-model="${modelData}" oncontextmenu="window.MLOpenContextMenu(event, this)">`;
                     html += this.getConfidenceBadge(match.confidence);
-                    html += `<span class="ml-match-filename" data-tooltip="${this.escapeHtml(matchPath)}">${this.escapeHtml(matchPath)}</span>`;
-                    html += `<span class="ml-match-status ml-match-status-partial">Partial</span>`;
-                    html += `<button id="${altBtnId}" class="ml-btn ml-btn-secondary ml-btn-sm ml-btn-icon-only ml-local-link-btn" data-tooltip="Link this local match" aria-label="Link this local match">${getSvgIcon('link')}</button>`;
+                    html += `<span class="mr-match-filename" data-tooltip="${this.escapeHtml(matchPath)}">${this.escapeHtml(matchPath)}</span>`;
+                    html += `<span class="mr-match-status mr-match-status-partial">Partial</span>`;
+                    html += `<button id="${altBtnId}" class="mr-btn mr-btn-secondary mr-btn-sm mr-btn-icon-only mr-local-link-btn" data-tooltip="Link this local match" aria-label="Link this local match">${getSvgIcon('link')}</button>`;
                     html += `</div>`;
                 }
                 html += `</div>`;
             }
         } else if (missing.is_urn && !missing.civitai_info) {
-            html += `<div class="ml-no-matches">Waiting for CivitAI filename to search local models...</div>`;
+            html += `<div class="mr-no-matches">Waiting for CivitAI filename to search local models...</div>`;
         } else if (allMatches.length > 0 && filteredMatches.length === 0) {
-            html += `<div class="ml-no-matches">No matches above 70% confidence</div>`;
+            html += `<div class="mr-no-matches">No matches above 70% confidence</div>`;
         } else {
-            html += `<div class="ml-no-matches">No local matches found</div>`;
+            html += `<div class="mr-no-matches">No local matches found</div>`;
         }
 
         return html;
@@ -1024,7 +1024,7 @@ export const searchPanelMethods = {
                 civitai_candidate_limit: tokens.civitai_candidate_limit
             };
 
-            const response = await api.fetchApi('/model_linker/search', {
+            const response = await api.fetchApi('/model_resolver/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -1049,14 +1049,14 @@ export const searchPanelMethods = {
 
     refreshMissingListStats() {
         if (!this.contentElement) return;
-        const statsEl = this.contentElement.querySelector('.ml-missing-list-stats');
+        const statsEl = this.contentElement.querySelector('.mr-missing-list-stats');
         if (!statsEl) return;
 
         const stats = this.getMissingModelSummaryStats(this.missingModels || []);
         statsEl.innerHTML = `
-            <span class="ml-missing-stat ml-missing-stat-exact">${stats.exact} exact</span>
-            <span class="ml-missing-stat ml-missing-stat-partial">${stats.partial} partial</span>
-            <span class="ml-missing-stat ml-missing-stat-none">${stats.none} no match</span>
+            <span class="mr-missing-stat mr-missing-stat-exact">${stats.exact} exact</span>
+            <span class="mr-missing-stat mr-missing-stat-partial">${stats.partial} partial</span>
+            <span class="mr-missing-stat mr-missing-stat-none">${stats.none} no match</span>
         `;
     },
 
@@ -1064,7 +1064,7 @@ export const searchPanelMethods = {
         if (!this.contentElement) return;
 
         const key = this.getMissingModelKey(missing);
-        const rows = this.contentElement.querySelectorAll('.ml-missing-list-row');
+        const rows = this.contentElement.querySelectorAll('.mr-missing-list-row');
         for (const row of rows) {
             if (row.getAttribute('data-missing-key') !== key) continue;
 
@@ -1074,22 +1074,22 @@ export const searchPanelMethods = {
             const matchDisplay = matchName || 'No local match';
             const matchClass = confidence === 100 ? 'exact' : (bestMatch ? 'partial' : 'none');
 
-            const bestEl = row.querySelector('.ml-missing-row-best');
+            const bestEl = row.querySelector('.mr-missing-row-best');
             if (bestEl) {
                 bestEl.setAttribute('data-tooltip', matchDisplay);
                 bestEl.innerHTML = bestMatch
                     ? this.escapeHtml(matchDisplay)
-                    : '<span class="ml-missing-row-none">-- No local match</span>';
+                    : '<span class="mr-missing-row-none">-- No local match</span>';
             }
 
-            const matchEl = row.querySelector('.ml-missing-row-match');
+            const matchEl = row.querySelector('.mr-missing-row-match');
             if (matchEl) {
                 matchEl.classList.remove(
-                    'ml-missing-row-match-exact',
-                    'ml-missing-row-match-partial',
-                    'ml-missing-row-match-none'
+                    'mr-missing-row-match-exact',
+                    'mr-missing-row-match-partial',
+                    'mr-missing-row-match-none'
                 );
-                matchEl.classList.add(`ml-missing-row-match-${matchClass}`);
+                matchEl.classList.add(`mr-missing-row-match-${matchClass}`);
                 const valueEl = matchEl.querySelector('strong');
                 if (valueEl) {
                     valueEl.textContent = bestMatch
@@ -1116,7 +1116,7 @@ export const searchPanelMethods = {
         }
 
         const promise = (async () => {
-            const response = await api.fetchApi('/model_linker/local-matches', {
+            const response = await api.fetchApi('/model_resolver/local-matches', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1147,7 +1147,7 @@ export const searchPanelMethods = {
         const bodyId = `local-matches-body-${missing.node_id}-${missing.widget_index}`;
         const container = this.contentElement.querySelector(`#${bodyId}`);
         if (container) {
-            container.innerHTML = `<div class="ml-no-matches">Searching local matches for "${missing.civitai_info.expected_filename}"...</div>`;
+            container.innerHTML = `<div class="mr-no-matches">Searching local matches for "${missing.civitai_info.expected_filename}"...</div>`;
         }
 
         try {
@@ -1158,9 +1158,9 @@ export const searchPanelMethods = {
             }
             this.refreshMissingListRowLocalMatch(missing);
         } catch (error) {
-            console.error('Model Linker: URN local match refresh error:', error);
+            console.error('Model Resolver: URN local match refresh error:', error);
             if (container) {
-                container.innerHTML = `<div class="ml-no-matches">Failed to refresh local matches.</div>`;
+                container.innerHTML = `<div class="mr-no-matches">Failed to refresh local matches.</div>`;
             }
         }
     },
@@ -1179,7 +1179,7 @@ export const searchPanelMethods = {
                     await this.refreshUrnLocalMatches(missing);
                 } catch (error) {
                     missing.__urnLocalRefreshFailed = true;
-                    console.error('Model Linker: initial URN local match refresh error:', error);
+                    console.error('Model Resolver: initial URN local match refresh error:', error);
                 }
             })();
             refreshTasks.push(task);

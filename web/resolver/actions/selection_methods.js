@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -15,7 +15,7 @@ export const selectionMethods = {
 
     handleFooterMenuOutsideClick(e) {
         if (!this.activeFooterMenu) return;
-        if (e.target?.closest?.('.ml-footer-menu-wrap')) return;
+        if (e.target?.closest?.('.mr-footer-menu-wrap')) return;
         this.closeFooterMenus();
     },
 
@@ -166,11 +166,11 @@ export const selectionMethods = {
 
     refreshBatchSelectionUi() {
         const selectedKeys = this.batchSelectedMissingKeys || new Set();
-        this.contentElement?.querySelectorAll?.('.ml-missing-list-row')?.forEach(row => {
+        this.contentElement?.querySelectorAll?.('.mr-missing-list-row')?.forEach(row => {
             const key = row.getAttribute('data-missing-key');
             const selected = selectedKeys.has(key);
             row.classList.toggle('is-batch-selected', selected);
-            const checkbox = row.querySelector('.ml-missing-row-check');
+            const checkbox = row.querySelector('.mr-missing-row-check');
             if (checkbox) {
                 checkbox.checked = selected;
             }
@@ -179,7 +179,7 @@ export const selectionMethods = {
     },
 
     updateBatchSelectAllCheckbox() {
-        const checkbox = this.contentElement?.querySelector?.('.ml-missing-select-all-check');
+        const checkbox = this.contentElement?.querySelector?.('.mr-missing-select-all-check');
         if (!checkbox) return;
 
         const totalCount = (this.missingModels || []).length;

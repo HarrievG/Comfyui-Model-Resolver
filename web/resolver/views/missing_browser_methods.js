@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -152,8 +152,8 @@ export const missingBrowserMethods = {
             };
             const title = `${label}: ${statusLabels[status] || status}`;
             const iconName = this.getSearchSourceIconName(item.source);
-            const iconHtml = getSvgIcon(iconName, 'currentColor', 'ml-missing-source-icon');
-            return `<span class="ml-missing-source-dot ml-missing-source-${statusClass}" data-tooltip="${this.escapeHtml(title)}" aria-label="${this.escapeHtml(title)}">${iconHtml}</span>`;
+            const iconHtml = getSvgIcon(iconName, 'currentColor', 'mr-missing-source-icon');
+            return `<span class="mr-missing-source-dot mr-missing-source-${statusClass}" data-tooltip="${this.escapeHtml(title)}" aria-label="${this.escapeHtml(title)}">${iconHtml}</span>`;
         }).join('');
     },
 
@@ -203,27 +203,27 @@ export const missingBrowserMethods = {
             savedDetailWidth = parseInt(localStorage.getItem(this.missingBrowserSplitStorageKey) || '', 10);
         } catch (e) {}
         const splitStyle = Number.isFinite(savedDetailWidth) && savedDetailWidth > 0
-            ? `--ml-missing-detail-track:${savedDetailWidth}px;`
+            ? `--mr-missing-detail-track:${savedDetailWidth}px;`
             : '';
-        const listStyle = `--ml-missing-model-col:${listLayout.modelPx}px;--ml-missing-type-col:${listLayout.typePx}px;`;
+        const listStyle = `--mr-missing-model-col:${listLayout.modelPx}px;--mr-missing-type-col:${listLayout.typePx}px;`;
 
         let html = `
-            <div class="ml-missing-browser" style="${listStyle}">
-                <section class="ml-missing-list-pane" aria-label="Missing model list">
-                    <div class="ml-missing-list-toolbar">
+            <div class="mr-missing-browser" style="${listStyle}">
+                <section class="mr-missing-list-pane" aria-label="Missing model list">
+                    <div class="mr-missing-list-toolbar">
                         <div>
-                            <div class="ml-missing-list-title">${totalMissing} missing model${totalMissing === 1 ? '' : 's'}</div>
-                            <div class="ml-missing-list-meta">${this.escapeHtml(activeHint)}</div>
+                            <div class="mr-missing-list-title">${totalMissing} missing model${totalMissing === 1 ? '' : 's'}</div>
+                            <div class="mr-missing-list-meta">${this.escapeHtml(activeHint)}</div>
                         </div>
-                        <div class="ml-missing-list-stats">
-                            <span class="ml-missing-stat ml-missing-stat-exact">${stats.exact} exact</span>
-                            <span class="ml-missing-stat ml-missing-stat-partial">${stats.partial} partial</span>
-                            <span class="ml-missing-stat ml-missing-stat-none">${stats.none} no match</span>
+                        <div class="mr-missing-list-stats">
+                            <span class="mr-missing-stat mr-missing-stat-exact">${stats.exact} exact</span>
+                            <span class="mr-missing-stat mr-missing-stat-partial">${stats.partial} partial</span>
+                            <span class="mr-missing-stat mr-missing-stat-none">${stats.none} no match</span>
                         </div>
                     </div>
-                    <div class="ml-missing-list-head">
-                        <span class="ml-missing-head-select">
-                            <input type="checkbox" class="ml-missing-select-all-check" aria-label="Select or deselect all missing models">
+                    <div class="mr-missing-list-head">
+                        <span class="mr-missing-head-select">
+                            <input type="checkbox" class="mr-missing-select-all-check" aria-label="Select or deselect all missing models">
                         </span>
                         <span>#</span>
                         <span>Missing Model</span>
@@ -232,7 +232,7 @@ export const missingBrowserMethods = {
                         <span>Match</span>
                         <span>Sources</span>
                     </div>
-                    <div class="ml-missing-list">
+                    <div class="mr-missing-list">
         `;
 
         missingModels.forEach((missing, index) => {
@@ -251,29 +251,29 @@ export const missingBrowserMethods = {
             const nodeDisplay = this.getMissingNodeDisplay(missing);
             const nodeId = missing.node_id ?? '';
             const rowNodeHtml = nodeDisplay.canLocate
-                ? `<button type="button" class="ml-node-chip is-locatable ml-missing-row-node ml-missing-row-locate" data-node-id="${this.escapeHtml(String(nodeId))}" data-tooltip="Center this node in the ComfyUI graph." aria-label="Center ${this.escapeHtml(nodeDisplay.text)} in the ComfyUI graph">${this.getLocateIconHtml()}<span class="ml-missing-row-node-label">${this.escapeHtml(nodeDisplay.text)}</span></button>`
-                : `<span class="ml-missing-row-node">${this.escapeHtml(nodeDisplay.text)}</span>`;
+                ? `<button type="button" class="mr-node-chip is-locatable mr-missing-row-node mr-missing-row-locate" data-node-id="${this.escapeHtml(String(nodeId))}" data-tooltip="Center this node in the ComfyUI graph." aria-label="Center ${this.escapeHtml(nodeDisplay.text)} in the ComfyUI graph">${this.getLocateIconHtml()}<span class="mr-missing-row-node-label">${this.escapeHtml(nodeDisplay.text)}</span></button>`
+                : `<span class="mr-missing-row-node">${this.escapeHtml(nodeDisplay.text)}</span>`;
 
             html += `
                 <div role="button" tabindex="0"
-                    class="ml-missing-list-row ${isSelected ? 'is-selected' : ''} ${isBatchSelected ? 'is-batch-selected' : ''}"
+                    class="mr-missing-list-row ${isSelected ? 'is-selected' : ''} ${isBatchSelected ? 'is-batch-selected' : ''}"
                     data-missing-key="${this.escapeHtml(key)}">
-                    <span class="ml-missing-row-select">
-                        <input type="checkbox" class="ml-missing-row-check" data-ml-no-drag="1" aria-label="Select ${this.escapeHtml(filename)}" ${isBatchSelected ? 'checked' : ''}>
+                    <span class="mr-missing-row-select">
+                        <input type="checkbox" class="mr-missing-row-check" data-ml-no-drag="1" aria-label="Select ${this.escapeHtml(filename)}" ${isBatchSelected ? 'checked' : ''}>
                     </span>
-                    <span class="ml-missing-row-index">${index + 1}</span>
-                    <span class="ml-missing-row-model">
-                        <span class="ml-missing-row-name" data-tooltip="${this.escapeHtml(filename)}">${this.escapeHtml(formattedFilename.display)}</span>
+                    <span class="mr-missing-row-index">${index + 1}</span>
+                    <span class="mr-missing-row-model">
+                        <span class="mr-missing-row-name" data-tooltip="${this.escapeHtml(filename)}">${this.escapeHtml(formattedFilename.display)}</span>
                         ${rowNodeHtml}
                     </span>
-                    <span class="ml-missing-row-type ${typeColorClass}">${this.escapeHtml(typeLabel)}</span>
-                    <span class="ml-missing-row-best" data-tooltip="${this.escapeHtml(matchDisplay)}">
-                        ${bestMatch ? this.escapeHtml(matchDisplay) : '<span class="ml-missing-row-none">-- No local match</span>'}
+                    <span class="mr-missing-row-type ${typeColorClass}">${this.escapeHtml(typeLabel)}</span>
+                    <span class="mr-missing-row-best" data-tooltip="${this.escapeHtml(matchDisplay)}">
+                        ${bestMatch ? this.escapeHtml(matchDisplay) : '<span class="mr-missing-row-none">-- No local match</span>'}
                     </span>
-                    <span class="ml-missing-row-match ml-missing-row-match-${matchClass}">
+                    <span class="mr-missing-row-match mr-missing-row-match-${matchClass}">
                         <strong>${bestMatch ? `${confidence.toFixed(confidence % 1 ? 1 : 0)}%` : '--'}</strong>
                     </span>
-                    <span class="ml-missing-row-sources">${this.renderMissingSourcesSummary(missing)}</span>
+                    <span class="mr-missing-row-sources">${this.renderMissingSourcesSummary(missing)}</span>
                 </div>
             `;
         });
@@ -281,8 +281,8 @@ export const missingBrowserMethods = {
         html += `
                     </div>
                 </section>
-                <div class="ml-missing-browser-splitter" role="separator" aria-orientation="vertical" aria-label="Resize missing model panes" tabindex="0"></div>
-                <section class="ml-missing-detail-pane" aria-label="Missing model details" style="${splitStyle}">
+                <div class="mr-missing-browser-splitter" role="separator" aria-orientation="vertical" aria-label="Resize missing model panes" tabindex="0"></div>
+                <section class="mr-missing-detail-pane" aria-label="Missing model details" style="${splitStyle}">
                     ${detailMissing ? this.renderMissingModel(detailMissing, detailIndex) : this.renderStatusMessage('Select a missing model to inspect details.', 'info')}
                 </section>
             </div>
@@ -300,7 +300,7 @@ export const missingBrowserMethods = {
             this.displayMissingModels(container, data);
         };
 
-        const selectAllCheckbox = container.querySelector('.ml-missing-select-all-check');
+        const selectAllCheckbox = container.querySelector('.mr-missing-select-all-check');
         if (selectAllCheckbox) {
             this.updateBatchSelectAllCheckbox();
             selectAllCheckbox.addEventListener('click', (event) => {
@@ -317,8 +317,8 @@ export const missingBrowserMethods = {
             });
         }
 
-        container.querySelectorAll('.ml-missing-list-row').forEach(row => {
-            const checkbox = row.querySelector('.ml-missing-row-check');
+        container.querySelectorAll('.mr-missing-list-row').forEach(row => {
+            const checkbox = row.querySelector('.mr-missing-row-check');
             if (checkbox) {
                 checkbox.addEventListener('click', (event) => {
                     event.stopPropagation();
@@ -348,7 +348,7 @@ export const missingBrowserMethods = {
             }
 
             row.addEventListener('click', (event) => {
-                const clickedLocate = event.target instanceof Element && event.target.closest('.ml-missing-row-locate');
+                const clickedLocate = event.target instanceof Element && event.target.closest('.mr-missing-row-locate');
                 if (clickedLocate) return;
                 selectRow(row);
             });
@@ -360,7 +360,7 @@ export const missingBrowserMethods = {
             });
         });
 
-        container.querySelectorAll('.ml-missing-row-locate').forEach(button => {
+        container.querySelectorAll('.mr-missing-row-locate').forEach(button => {
             button.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -378,8 +378,8 @@ export const missingBrowserMethods = {
     },
 
     wireMissingBrowserSplitter(container) {
-        const browser = container.querySelector('.ml-missing-browser');
-        const splitter = browser?.querySelector('.ml-missing-browser-splitter');
+        const browser = container.querySelector('.mr-missing-browser');
+        const splitter = browser?.querySelector('.mr-missing-browser-splitter');
         if (!(browser instanceof HTMLElement) || !(splitter instanceof HTMLElement)) return;
 
         this.restoreMissingBrowserSplitWidth(browser);
@@ -390,7 +390,7 @@ export const missingBrowserMethods = {
         });
 
         splitter.addEventListener('dblclick', () => {
-            browser.querySelector('.ml-missing-detail-pane')?.style.removeProperty('--ml-missing-detail-track');
+            browser.querySelector('.mr-missing-detail-pane')?.style.removeProperty('--mr-missing-detail-track');
             try {
                 localStorage.removeItem(this.missingBrowserSplitStorageKey);
             } catch (e) {}
@@ -425,7 +425,7 @@ export const missingBrowserMethods = {
     startMissingBrowserSplitDrag(event, browser) {
         if (!(browser instanceof HTMLElement)) return;
 
-        const detailPane = browser.querySelector('.ml-missing-detail-pane');
+        const detailPane = browser.querySelector('.mr-missing-detail-pane');
         if (!(detailPane instanceof HTMLElement)) return;
 
         event.preventDefault();
@@ -463,7 +463,7 @@ export const missingBrowserMethods = {
         this._missingBrowserSplitFrame = requestAnimationFrame(() => {
             this._missingBrowserSplitFrame = null;
             if (!this._missingBrowserSplitDragging || !this._missingBrowserSplitDetailPane || !this._pendingMissingBrowserSplitWidth) return;
-            this._missingBrowserSplitDetailPane.style.setProperty('--ml-missing-detail-track', `${this._pendingMissingBrowserSplitWidth}px`);
+            this._missingBrowserSplitDetailPane.style.setProperty('--mr-missing-detail-track', `${this._pendingMissingBrowserSplitWidth}px`);
         });
     },
 
@@ -477,7 +477,7 @@ export const missingBrowserMethods = {
             this._missingBrowserSplitFrame = null;
         }
         if (this._missingBrowserSplitDetailPane && this._pendingMissingBrowserSplitWidth) {
-            this._missingBrowserSplitDetailPane.style.setProperty('--ml-missing-detail-track', `${this._pendingMissingBrowserSplitWidth}px`);
+            this._missingBrowserSplitDetailPane.style.setProperty('--mr-missing-detail-track', `${this._pendingMissingBrowserSplitWidth}px`);
             try {
                 localStorage.setItem(this.missingBrowserSplitStorageKey, String(this._pendingMissingBrowserSplitWidth));
             } catch (e) {}
@@ -495,7 +495,7 @@ export const missingBrowserMethods = {
     },
 
     resizeMissingBrowserDetailBy(browser, delta) {
-        const detailPane = browser.querySelector('.ml-missing-detail-pane');
+        const detailPane = browser.querySelector('.mr-missing-detail-pane');
         if (!(detailPane instanceof HTMLElement)) return;
 
         this.setMissingBrowserDetailWidth(browser, detailPane.getBoundingClientRect().width + delta);
@@ -504,9 +504,9 @@ export const missingBrowserMethods = {
     setMissingBrowserDetailWidth(browser, width, { persist = true } = {}) {
         const bounds = this.getMissingBrowserSplitBounds(browser);
         const nextWidth = Math.round(Math.max(bounds.min, Math.min(bounds.max, width)));
-        const detailPane = browser.querySelector('.ml-missing-detail-pane');
+        const detailPane = browser.querySelector('.mr-missing-detail-pane');
         const target = detailPane instanceof HTMLElement ? detailPane : browser;
-        target.style.setProperty('--ml-missing-detail-track', `${nextWidth}px`);
+        target.style.setProperty('--mr-missing-detail-track', `${nextWidth}px`);
 
         if (persist) {
             try {
@@ -517,7 +517,7 @@ export const missingBrowserMethods = {
 
     getMissingBrowserSplitBounds(browser) {
         const browserRect = browser.getBoundingClientRect();
-        const splitter = browser.querySelector('.ml-missing-browser-splitter');
+        const splitter = browser.querySelector('.mr-missing-browser-splitter');
         const splitterWidth = splitter instanceof HTMLElement
             ? splitter.getBoundingClientRect().width
             : 10;
@@ -569,12 +569,12 @@ export const missingBrowserMethods = {
                 const folder = getFolder(m);
                 const isHighlighted = i === highlightIdx;
                 const folderDisplay = folder ? folder.replace(/\\/g, '/').replace(/:/, '') : '';
-                html += `<div data-idx="${allModels.indexOf(m)}" class="ml-combo-option ${isHighlighted ? 'is-highlighted' : ''}">`;
-                html += `<div class="ml-combo-option-row">`;
+                html += `<div data-idx="${allModels.indexOf(m)}" class="mr-combo-option ${isHighlighted ? 'is-highlighted' : ''}">`;
+                html += `<div class="mr-combo-option-row">`;
                 html += `<code>${this.escapeHtml(label)}</code>`;
                 html += `</div>`;
                 if (folderDisplay) {
-                    html += `<div class="ml-combo-folder" data-tooltip="${this.escapeHtml(folderDisplay)}">Folder ${this.escapeHtml(folderDisplay)}</div>`;
+                    html += `<div class="mr-combo-folder" data-tooltip="${this.escapeHtml(folderDisplay)}">Folder ${this.escapeHtml(folderDisplay)}</div>`;
                 }
                 html += `</div>`;
             }
@@ -604,16 +604,16 @@ export const missingBrowserMethods = {
             comboInput.addEventListener('input', debouncedFilter);
             comboInput.addEventListener('focus', () => {
                 if (comboList) {
-                    comboList.classList.remove('ml-is-hidden');
-                    comboList.classList.add('ml-is-visible');
+                    comboList.classList.remove('mr-is-hidden');
+                    comboList.classList.add('mr-is-visible');
                 }
                 populateComboOptions(comboInput.value);
             });
             comboInput.addEventListener('blur', () => {
                 setTimeout(() => {
                     if (comboList) {
-                        comboList.classList.remove('ml-is-visible');
-                        comboList.classList.add('ml-is-hidden');
+                        comboList.classList.remove('mr-is-visible');
+                        comboList.classList.add('mr-is-hidden');
                     }
                 }, 200);
             });
@@ -630,8 +630,8 @@ export const missingBrowserMethods = {
         const state = this.searchResultCache.get(this.getMissingSearchKey(missing));
         const searchResultsDiv = container.querySelector(`#search-results-${missing.node_id}-${missing.widget_index}`);
         if (state && searchResultsDiv && this.hasRenderableSearchState(state)) {
-            searchResultsDiv.classList.remove('ml-is-hidden');
-            searchResultsDiv.classList.add('ml-is-visible');
+            searchResultsDiv.classList.remove('mr-is-hidden');
+            searchResultsDiv.classList.add('mr-is-visible');
             this.displaySearchResults(missing, state, searchResultsDiv);
         }
     },
@@ -753,14 +753,14 @@ export const missingBrowserMethods = {
         const nodeChipText = this.escapeHtml(nodeDisplay.text);
 
         // Start card
-        let html = `<div class="ml-card">`;
+        let html = `<div class="mr-card">`;
 
         // Card Header: Filename as headline + node chip
-        html += `<div class="ml-card-header">`;
-        html += `<div class="ml-card-title-wrap">`;
+        html += `<div class="mr-card-header">`;
+        html += `<div class="mr-card-title-wrap">`;
 
         const titleMetaParts = [];
-        let titlePrimaryHtml = `<span class="ml-card-title-primary" data-tooltip="${this.escapeHtml(missingFilename.full)}">${missingFilename.display}</span>`;
+        let titlePrimaryHtml = `<span class="mr-card-title-primary" data-tooltip="${this.escapeHtml(missingFilename.full)}">${missingFilename.display}</span>`;
         let titleSecondaryHtml = '';
 
         const modelId = missing.urn_model_id || missing.urn?.model_id;
@@ -769,40 +769,40 @@ export const missingBrowserMethods = {
         const urnLoadingId = `urn-loading-${missing.node_id}-${missing.widget_index}`;
 
         if (missing.is_urn) {
-            titleMetaParts.push(`<span class="ml-card-title-eyebrow" data-tooltip="${this.escapeHtml(missingFilename.full)}">${missingFilename.display}</span>`);
+            titleMetaParts.push(`<span class="mr-card-title-eyebrow" data-tooltip="${this.escapeHtml(missingFilename.full)}">${missingFilename.display}</span>`);
         }
 
         if (missing.is_urn && !missing.civitai_info) {
             // URN without info - show Loading and fetch async in background
-            titlePrimaryHtml = `<span class="ml-card-title-primary" id="${urnLoadingId}">Resolving CivitAI model...</span>`;
+            titlePrimaryHtml = `<span class="mr-card-title-primary" id="${urnLoadingId}">Resolving CivitAI model...</span>`;
             setTimeout(() => this.resolveUrnAsync(modelId, versionId, urnLoadingId, modelUrl), 10);
         } else if (missing.is_urn && missing.civitai_info) {
             // URN with resolved info - show model name/version
             const civitaiInfo = missing.civitai_info;
             const civitaiLabelHtml = this.renderVersionedModelNameHtml(civitaiInfo.model_name, civitaiInfo.version_name);
             if (civitaiLabelHtml) {
-                const linkHtml = modelUrl ? `<a href="${modelUrl}" target="_blank" class="ml-inline-civitai-link">${civitaiLabelHtml}</a>` : `<span class="ml-inline-civitai-link">${civitaiLabelHtml}</span>`;
-                titlePrimaryHtml = `<span class="ml-card-title-primary">${linkHtml}</span>`;
+                const linkHtml = modelUrl ? `<a href="${modelUrl}" target="_blank" class="mr-inline-civitai-link">${civitaiLabelHtml}</a>` : `<span class="mr-inline-civitai-link">${civitaiLabelHtml}</span>`;
+                titlePrimaryHtml = `<span class="mr-card-title-primary">${linkHtml}</span>`;
             }
             if (civitaiInfo.expected_filename) {
-                titleSecondaryHtml = `<span class="ml-card-title-secondary">Expected file: ${civitaiInfo.expected_filename}</span>`;
+                titleSecondaryHtml = `<span class="mr-card-title-secondary">Expected file: ${civitaiInfo.expected_filename}</span>`;
             }
         }
 
-        html += `<div class="ml-card-title-meta">`;
+        html += `<div class="mr-card-title-meta">`;
         html += titleMetaParts.join('');
-        html += `<h3 class="ml-card-title">${titlePrimaryHtml}</h3>`;
+        html += `<h3 class="mr-card-title">${titlePrimaryHtml}</h3>`;
         if (titleSecondaryHtml) {
             html += titleSecondaryHtml;
         }
         html += `</div>`;
         const locateId = `locate-${missing.node_id}-${missing.widget_index}`;
-        const nodeChipClasses = missing.is_top_level !== false ? 'ml-node-chip is-locatable' : 'ml-node-chip';
+        const nodeChipClasses = missing.is_top_level !== false ? 'mr-node-chip is-locatable' : 'mr-node-chip';
         const nodeChipTitle = missing.is_top_level !== false ? 'Center this node in the ComfyUI graph.' : '';
 
-        html += `<div class="ml-card-subtitle">`;
+        html += `<div class="mr-card-subtitle">`;
         if (missing.category) {
-            html += `<span class="ml-category-chip ${this.getModelTypeColorClass(missing.category)}" data-tooltip="${this.escapeHtml(missing.category)}">${this.getCategoryDisplayName(missing.category)}</span>`;
+            html += `<span class="mr-category-chip ${this.getModelTypeColorClass(missing.category)}" data-tooltip="${this.escapeHtml(missing.category)}">${this.getCategoryDisplayName(missing.category)}</span>`;
         }
         html += `<span id="${locateId}" class="${nodeChipClasses}"${nodeChipTitle ? ` data-tooltip="${this.escapeHtml(nodeChipTitle)}"` : ''}>`;
         if (missing.is_top_level !== false) {
@@ -815,34 +815,34 @@ export const missingBrowserMethods = {
 
         // Selected bar - shows if this slot has a queued selection (BELOW card header)
         const selectedBarId = `selected-bar-${missing.node_id}-${missing.widget_index}`;
-        html += `<div id="${selectedBarId}" class="model-linker-selected"></div>`;
+        html += `<div id="${selectedBarId}" class="model-resolver-selected"></div>`;
 
         // Two-column layout
-        html += `<div class="ml-columns">`;
+        html += `<div class="mr-columns">`;
 
         // LEFT COLUMN: Local Matches
-        html += `<div class="ml-column">`;
-        html += `<div class="ml-column-header">Local Matches</div>`;
+        html += `<div class="mr-column">`;
+        html += `<div class="mr-column-header">Local Matches</div>`;
         html += `<div id="local-matches-body-${missing.node_id}-${missing.widget_index}">`;
         html += this.renderLocalMatchesContent(missing, missingIndex);
         html += `</div>`;
 
         // Add all-models search picker - combo-style dropdown
         const comboId = `combo-${missing.node_id}-${missing.widget_index}`;
-        html += `<div class="ml-combo-section">`;
-        html += `<div class="ml-combo-row">`;
-        html += `<label class="ml-combo-label">Model</label>`;
-        html += `<input id="combo-input-${comboId}" class="ml-combo-input" type="text" placeholder="Type to filter local models...">`;
-        html += `<button id="combo-refresh-${comboId}" type="button" aria-label="Reload local model list" data-tooltip="Reload local model list" class="ml-btn ml-btn-secondary ml-btn-sm ml-btn-icon-only ml-combo-refresh-btn">${getSvgIcon('refreshCw', 'currentColor', 'ml-combo-refresh-icon')}</button>`;
+        html += `<div class="mr-combo-section">`;
+        html += `<div class="mr-combo-row">`;
+        html += `<label class="mr-combo-label">Model</label>`;
+        html += `<input id="combo-input-${comboId}" class="mr-combo-input" type="text" placeholder="Type to filter local models...">`;
+        html += `<button id="combo-refresh-${comboId}" type="button" aria-label="Reload local model list" data-tooltip="Reload local model list" class="mr-btn mr-btn-secondary mr-btn-sm mr-btn-icon-only mr-combo-refresh-btn">${getSvgIcon('refreshCw', 'currentColor', 'mr-combo-refresh-icon')}</button>`;
         html += `</div>`;
-        html += `<div id="combo-list-${comboId}" class="ml-combo-list"></div>`;
+        html += `<div id="combo-list-${comboId}" class="mr-combo-list"></div>`;
         html += `</div>`;
 
         html += `</div>`; // End left column
 
         // RIGHT COLUMN: Download Option
-        html += `<div class="ml-column">`;
-        html += `<div class="ml-column-header">Download</div>`;
+        html += `<div class="mr-column">`;
+        html += `<div class="mr-column-header">Download</div>`;
 
         const filename = missing.original_path?.split('/').pop()?.split('\\').pop() || '';
         const downloadSource = missing.download_source;
@@ -852,26 +852,26 @@ export const missingBrowserMethods = {
             html += this.renderKnownDownloadPanel(missing, downloadSource);
         } else if (perfectMatches.length > 0) {
             // Has perfect local match - download not needed, but allow online re-check.
-            html += `<div class="ml-download-section">`;
+            html += `<div class="mr-download-section">`;
             html += this.renderSearchControls(missing, { buttonText: 'Search Online' });
             html += this.renderDownloadTargetControls(missing, missing.category || 'checkpoints');
             html += `</div>`;
-            html += `<div id="search-results-${missing.node_id}-${missing.widget_index}" class="ml-search-results"></div>`;
+            html += `<div id="search-results-${missing.node_id}-${missing.widget_index}" class="mr-search-results"></div>`;
         } else if (missing.is_urn) {
-            html += `<div id="${urnDownloadId}" class="ml-download-section">`;
-            html += `<div class="ml-download-info">Resolving CivitAI download for this URN...</div>`;
+            html += `<div id="${urnDownloadId}" class="mr-download-section">`;
+            html += `<div class="mr-download-info">Resolving CivitAI download for this URN...</div>`;
             html += `</div>`;
         } else {
             // No known download - offer search
-            html += `<div class="ml-download-section">`;
+            html += `<div class="mr-download-section">`;
             html += this.renderSearchControls(missing);
             html += this.renderDownloadTargetControls(missing, missing.category || 'checkpoints');
             html += `</div>`;
-            html += `<div id="search-results-${missing.node_id}-${missing.widget_index}" class="ml-search-results"></div>`;
+            html += `<div id="search-results-${missing.node_id}-${missing.widget_index}" class="mr-search-results"></div>`;
         }
 
         // Progress container (for downloads)
-        html += `<div id="download-progress-${missing.node_id}-${missing.widget_index}" class="ml-download-progress-slot"></div>`;
+        html += `<div id="download-progress-${missing.node_id}-${missing.widget_index}" class="mr-download-progress-slot"></div>`;
 
         html += `</div>`; // End right column
         html += `</div>`; // End columns
@@ -890,30 +890,30 @@ export const missingBrowserMethods = {
         if (type === 'success') {
             children.push($el("span", {
                 textContent: "✓",
-                className: "ml-notification-icon"
+                className: "mr-notification-icon"
             }));
         } else if (type === 'error') {
             children.push($el("span", {
                 textContent: "×",
-                className: "ml-notification-icon"
+                className: "mr-notification-icon"
             }));
         } else if (type === 'info') {
             children.push($el("span", {
                 textContent: "ℹ",
-                className: "ml-notification-icon"
+                className: "mr-notification-icon"
             }));
         }
 
         // Create notification banner
         const notification = $el("div", {
-            className: `ml-notification ml-notification--${type}`
+            className: `mr-notification mr-notification--${type}`
         }, [
             ...children,
             $el("span", {
                 textContent: message
             }),
             $el("button", {
-                className: "ml-notification-close",
+                className: "mr-notification-close",
                 textContent: "×",
                 onclick: () => {
                     if (notification.parentNode) {

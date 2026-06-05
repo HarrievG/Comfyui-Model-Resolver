@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -8,7 +8,7 @@ export const workflowStateMethods = {
         try {
             return JSON.stringify(workflow);
         } catch (error) {
-            console.warn('Model Linker: workflow signature generation failed', error);
+            console.warn('Model Resolver: workflow signature generation failed', error);
             return null;
         }
     },
@@ -35,7 +35,7 @@ export const workflowStateMethods = {
         try {
             return JSON.parse(JSON.stringify(Array.isArray(list) ? list : []));
         } catch (error) {
-            console.warn('Model Linker: failed to clone queued selections', error);
+            console.warn('Model Resolver: failed to clone queued selections', error);
             return Array.isArray(list) ? list.map(item => ({ ...item })) : [];
         }
     },
@@ -67,7 +67,7 @@ export const workflowStateMethods = {
         try {
             clone = JSON.parse(JSON.stringify(state || {}));
         } catch (error) {
-            console.warn('Model Linker: failed to clone search state', error);
+            console.warn('Model Resolver: failed to clone search state', error);
             clone = { ...state };
         }
 
@@ -231,7 +231,7 @@ export const workflowStateMethods = {
 
         if (!routeChanged && !signatureChanged) return;
 
-        console.log('Model Linker: active workflow changed, refreshing current tab', {
+        console.log('Model Resolver: active workflow changed, refreshing current tab', {
             reason,
             route: currentRoute,
             tab: this.activeTab

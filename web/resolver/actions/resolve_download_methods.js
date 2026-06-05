@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -37,7 +37,7 @@ export const resolveDownloadMethods = {
                 original_lora_name: ref.name || ref.original_path
             }));
 
-            const response = await api.fetchApi('/model_linker/resolve', {
+            const response = await api.fetchApi('/model_resolver/resolve', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -71,7 +71,7 @@ export const resolveDownloadMethods = {
             }
 
         } catch (error) {
-            console.error('Model Linker: Error resolving model:', error);
+            console.error('Model Resolver: Error resolving model:', error);
             this.showNotification('Error resolving model: ' + error.message, 'error');
         }
     },
@@ -89,7 +89,7 @@ export const resolveDownloadMethods = {
             }
 
             // Analyze workflow first
-            const analyzeResponse = await api.fetchApi('/model_linker/analyze', {
+            const analyzeResponse = await api.fetchApi('/model_resolver/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow })
@@ -129,7 +129,7 @@ export const resolveDownloadMethods = {
             }
 
             // Apply resolutions
-            const resolveResponse = await api.fetchApi('/model_linker/resolve', {
+            const resolveResponse = await api.fetchApi('/model_resolver/resolve', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -167,7 +167,7 @@ export const resolveDownloadMethods = {
             }
 
         } catch (error) {
-            console.error('Model Linker: Error auto-resolving:', error);
+            console.error('Model Resolver: Error auto-resolving:', error);
             this.showNotification('Error auto-resolving: ' + error.message, 'error');
             return null;
         }
@@ -187,7 +187,7 @@ export const resolveDownloadMethods = {
             }
 
             // Analyze workflow first
-            const analyzeResponse = await api.fetchApi('/model_linker/analyze', {
+            const analyzeResponse = await api.fetchApi('/model_resolver/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow })
@@ -232,7 +232,7 @@ export const resolveDownloadMethods = {
             this.updateDownloadAllButtonState();
 
         } catch (error) {
-            console.error('Model Linker: Error in downloadAllMissing:', error);
+            console.error('Model Resolver: Error in downloadAllMissing:', error);
             this.showNotification('Error starting downloads: ' + error.message, 'error');
         }
     },
@@ -351,7 +351,7 @@ export const resolveDownloadMethods = {
                     await this.searchOnline(missing);
                 } catch (error) {
                     failed += 1;
-                    console.error('Model Linker: batch search item failed:', error);
+                    console.error('Model Resolver: batch search item failed:', error);
                 }
                 completed += 1;
                 this.updateBatchFooterButtons();
@@ -436,7 +436,7 @@ export const resolveDownloadMethods = {
             }
 
             // Re-analyze workflow to find the newly downloaded model
-            const analyzeResponse = await api.fetchApi('/model_linker/analyze', {
+            const analyzeResponse = await api.fetchApi('/model_resolver/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow })
@@ -488,7 +488,7 @@ export const resolveDownloadMethods = {
                     original_lora_name: ref.name || ref.original_path
                 }));
 
-                const resolveResponse = await api.fetchApi('/model_linker/resolve', {
+                const resolveResponse = await api.fetchApi('/model_resolver/resolve', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -513,7 +513,7 @@ export const resolveDownloadMethods = {
             await this.loadWorkflowData();
 
         } catch (error) {
-            console.error('Model Linker: Error auto-resolving after download:', error);
+            console.error('Model Resolver: Error auto-resolving after download:', error);
             // Still reload UI even on error
             await this.loadWorkflowData();
         }
@@ -544,24 +544,24 @@ export const resolveDownloadMethods = {
             // Disable button and show progress with cancel button immediately
             if (downloadBtn) {
                 downloadBtn.disabled = true;
-                downloadBtn.classList.remove('ml-is-success-action', 'ml-btn-primary');
+                downloadBtn.classList.remove('mr-is-success-action', 'mr-btn-primary');
                 downloadBtn.textContent = 'Starting...';
             }
             if (progressDiv) {
-                progressDiv.classList.remove('ml-is-hidden');
-                progressDiv.classList.add('ml-is-visible');
+                progressDiv.classList.remove('mr-is-hidden');
+                progressDiv.classList.add('mr-is-visible');
                 // Show progress bar with cancel button immediately
                 progressDiv.innerHTML = this.renderProgressWithAction({
                     percent: 0,
-                    leftText: '<span class="ml-info-accent-text">Connecting...</span>',
+                    leftText: '<span class="mr-info-accent-text">Connecting...</span>',
                     rightText: '',
-                    actionClass: 'cancel-download-btn-pending ml-btn ml-btn-danger ml-btn-sm',
+                    actionClass: 'cancel-download-btn-pending mr-btn mr-btn-danger mr-btn-sm',
                     actionText: 'Cancel'
                 });
             }
 
             // Start download
-            const response = await api.fetchApi('/model_linker/download', {
+            const response = await api.fetchApi('/model_resolver/download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -599,14 +599,14 @@ export const resolveDownloadMethods = {
             this.pollDownloadProgress(downloadId);
 
         } catch (error) {
-            console.error('Model Linker: Download error:', error);
+            console.error('Model Resolver: Download error:', error);
             if (progressDiv) {
                 progressDiv.innerHTML = this.renderStatusMessage(error.message, 'error');
             }
             if (downloadBtn) {
                 downloadBtn.disabled = false;
-                downloadBtn.classList.remove('ml-is-success-action', 'ml-btn-primary');
-                downloadBtn.innerHTML = '<span class="ml-btn-icon">☁</span> Retry';
+                downloadBtn.classList.remove('mr-is-success-action', 'mr-btn-primary');
+                downloadBtn.innerHTML = '<span class="mr-btn-icon">☁</span> Retry';
             }
             this.showNotification('Download failed: ' + error.message, 'error');
         }
@@ -620,7 +620,7 @@ export const resolveDownloadMethods = {
         if (!info) return;
 
         try {
-            const response = await api.fetchApi(`/model_linker/progress/${downloadId}`);
+            const response = await api.fetchApi(`/model_resolver/progress/${downloadId}`);
             if (!response.ok) {
                 throw new Error('Failed to get progress');
             }
@@ -639,7 +639,7 @@ export const resolveDownloadMethods = {
                         percent,
                         leftText: `${downloaded} / ${total} (${percent}%)`,
                         rightText: speed,
-                        actionClass: 'cancel-download-btn ml-btn ml-btn-danger ml-btn-sm',
+                        actionClass: 'cancel-download-btn mr-btn mr-btn-danger mr-btn-sm',
                         actionText: 'Cancel',
                         actionDataAttr: `data-download-id="${downloadId}"`
                     });
@@ -663,8 +663,8 @@ export const resolveDownloadMethods = {
                 }
                 if (downloadBtn) {
                     downloadBtn.textContent = '✓ Done';
-                    downloadBtn.classList.remove('ml-is-success-action');
-                    downloadBtn.classList.add('ml-btn-primary');
+                    downloadBtn.classList.remove('mr-is-success-action');
+                    downloadBtn.classList.add('mr-btn-primary');
                 }
                 delete this.activeDownloads[downloadId];
                 this.updateDownloadAllButtonState();
@@ -682,7 +682,7 @@ export const resolveDownloadMethods = {
                 }
                 if (downloadBtn) {
                     downloadBtn.disabled = false;
-                    downloadBtn.classList.remove('ml-is-success-action', 'ml-btn-primary');
+                    downloadBtn.classList.remove('mr-is-success-action', 'mr-btn-primary');
                     downloadBtn.textContent = 'Retry';
                 }
                 delete this.activeDownloads[downloadId];
@@ -694,8 +694,8 @@ export const resolveDownloadMethods = {
                 }
                 if (downloadBtn) {
                     downloadBtn.disabled = false;
-                    downloadBtn.classList.remove('ml-is-success-action', 'ml-btn-primary');
-                    downloadBtn.innerHTML = '<span class="ml-btn-icon">☁</span> Download';
+                    downloadBtn.classList.remove('mr-is-success-action', 'mr-btn-primary');
+                    downloadBtn.innerHTML = '<span class="mr-btn-icon">☁</span> Download';
                 }
                 delete this.activeDownloads[downloadId];
                 this.updateDownloadAllButtonState();
@@ -707,7 +707,7 @@ export const resolveDownloadMethods = {
             }
 
         } catch (error) {
-            console.error('Model Linker: Progress poll error:', error);
+            console.error('Model Resolver: Progress poll error:', error);
             const info = this.activeDownloads[downloadId];
             // Update UI to show error state instead of just disappearing
             if (info) {
@@ -718,8 +718,8 @@ export const resolveDownloadMethods = {
                 if (downloadBtn) {
                     downloadBtn.disabled = false;
                     downloadBtn.textContent = 'Retry';
-                    downloadBtn.classList.remove('ml-btn-primary');
-                    downloadBtn.classList.add('ml-is-success-action');
+                    downloadBtn.classList.remove('mr-btn-primary');
+                    downloadBtn.classList.add('mr-is-success-action');
                 }
             }
             delete this.activeDownloads[downloadId];
@@ -732,7 +732,7 @@ export const resolveDownloadMethods = {
      */
     async cancelDownload(downloadId) {
         try {
-            const response = await api.fetchApi(`/model_linker/cancel/${downloadId}`, {
+            const response = await api.fetchApi(`/model_resolver/cancel/${downloadId}`, {
                 method: 'POST'
             });
 
@@ -746,7 +746,7 @@ export const resolveDownloadMethods = {
             }
 
         } catch (error) {
-            console.error('Model Linker: Cancel error:', error);
+            console.error('Model Resolver: Cancel error:', error);
             this.showNotification('Failed to cancel download', 'error');
         }
     },
@@ -829,8 +829,8 @@ export const resolveDownloadMethods = {
                 searchBtn.innerHTML = `${this.getSearchIconHtml()} Searching ${selectedSourceLabel}...`;
             }
             if (resultsDiv) {
-                resultsDiv.classList.remove('ml-is-hidden');
-                resultsDiv.classList.add('ml-is-visible');
+                resultsDiv.classList.remove('mr-is-hidden');
+                resultsDiv.classList.add('mr-is-visible');
                 this.displaySearchResults(missing, state, resultsDiv);
             }
             for (const source of sourceIds) {
@@ -877,9 +877,9 @@ export const resolveDownloadMethods = {
                 };
 
                 try {
-                    console.log('Model Linker: Search request:', JSON.stringify(searchData));
+                    console.log('Model Resolver: Search request:', JSON.stringify(searchData));
 
-                    const response = await api.fetchApi('/model_linker/search', {
+                    const response = await api.fetchApi('/model_resolver/search', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(searchData)
@@ -890,7 +890,7 @@ export const resolveDownloadMethods = {
                     }
 
                     const data = await response.json();
-                    console.log('Model Linker: Search response:', JSON.stringify(data));
+                    console.log('Model Resolver: Search response:', JSON.stringify(data));
 
                     if (state.activeSearchRunId !== searchRunId) {
                         return { source, stale: true };
@@ -939,7 +939,7 @@ export const resolveDownloadMethods = {
                     this.applySearchResultSuggestion(missing);
                     return { source, data };
                 } catch (error) {
-                    console.error(`Model Linker: Search error for ${source}:`, error);
+                    console.error(`Model Resolver: Search error for ${source}:`, error);
                     if (state.activeSearchRunId !== searchRunId) {
                         return { source, stale: true, error };
                     }
@@ -975,7 +975,7 @@ export const resolveDownloadMethods = {
             }
 
         } catch (error) {
-            console.error('Model Linker: Search error:', error);
+            console.error('Model Resolver: Search error:', error);
             this.clearSearchProgressTimers(searchRunId);
             state.lastAttemptError = error.message;
             this.persistSearchStateForActiveWorkflow();
@@ -1027,7 +1027,7 @@ export const resolveDownloadMethods = {
                 };
                 console.log('resolveUrnAsync payload:', JSON.stringify(payload));
 
-                const response = await api.fetchApi('/model_linker/search', {
+                const response = await api.fetchApi('/model_resolver/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -1043,16 +1043,16 @@ export const resolveDownloadMethods = {
             if (data) {
                 const loadingEl = document.getElementById(loadingElementId);
                 if (loadingEl && data.civitai) {
-                    loadingEl.classList.remove('ml-is-muted', 'ml-is-error');
+                    loadingEl.classList.remove('mr-is-muted', 'mr-is-error');
                     const civitai = data.civitai;
                     const labelHtml = this.renderVersionedModelNameHtml(civitai.name, civitai.version_name)
                         || this.escapeHtml(civitai.filename || 'Model');
                     const url = modelUrl || `https://civitai.com/models/${modelId}?modelVersionId=${versionId}`;
-                    loadingEl.innerHTML = `<a href="${url}" target="_blank" class="ml-inline-civitai-link">${labelHtml}</a>`;
+                    loadingEl.innerHTML = `<a href="${url}" target="_blank" class="mr-inline-civitai-link">${labelHtml}</a>`;
                 } else if (loadingEl) {
                     loadingEl.textContent = 'Not found';
-                    loadingEl.classList.remove('ml-is-error');
-                    loadingEl.classList.add('ml-is-muted');
+                    loadingEl.classList.remove('mr-is-error');
+                    loadingEl.classList.add('mr-is-muted');
                 }
 
                 const downloadEl = document.getElementById(downloadContainerId);
@@ -1065,33 +1065,33 @@ export const resolveDownloadMethods = {
                         this.refreshUrnLocalMatches(missing);
                     }
                 } else if (downloadEl) {
-                    downloadEl.innerHTML = `<div class="ml-download-info">Unable to resolve direct download for this URN.</div>`;
+                    downloadEl.innerHTML = `<div class="mr-download-info">Unable to resolve direct download for this URN.</div>`;
                 }
             } else {
                 const loadingEl = document.getElementById(loadingElementId);
                 if (loadingEl) {
                     loadingEl.textContent = 'Error';
-                    loadingEl.classList.remove('ml-is-muted');
-                    loadingEl.classList.add('ml-is-error');
+                    loadingEl.classList.remove('mr-is-muted');
+                    loadingEl.classList.add('mr-is-error');
                 }
                 const downloadContainerId = loadingElementId.replace('urn-loading-', 'urn-download-');
                 const downloadEl = document.getElementById(downloadContainerId);
                 if (downloadEl) {
-                    downloadEl.innerHTML = `<div class="ml-download-info">Failed to resolve URN download.</div>`;
+                    downloadEl.innerHTML = `<div class="mr-download-info">Failed to resolve URN download.</div>`;
                 }
             }
         } catch (error) {
-            console.error('Model Linker: URN resolve error:', error);
+            console.error('Model Resolver: URN resolve error:', error);
             const loadingEl = document.getElementById(loadingElementId);
             if (loadingEl) {
                 loadingEl.textContent = 'Error';
-                loadingEl.classList.remove('ml-is-muted');
-                loadingEl.classList.add('ml-is-error');
+                loadingEl.classList.remove('mr-is-muted');
+                loadingEl.classList.add('mr-is-error');
             }
             const downloadContainerId = loadingElementId.replace('urn-loading-', 'urn-download-');
             const downloadEl = document.getElementById(downloadContainerId);
             if (downloadEl) {
-                downloadEl.innerHTML = `<div class="ml-download-info">Failed to resolve URN download.</div>`;
+                downloadEl.innerHTML = `<div class="mr-download-info">Failed to resolve URN download.</div>`;
             }
         }
     },
@@ -1148,10 +1148,10 @@ export const resolveDownloadMethods = {
             const renderSourceOptions = () => {
                 const options = this.getSearchSourceOptions();
                 sourceList.innerHTML = options
-                    .map(option => `<div class="ml-download-target-option" data-value="${encodeURIComponent(option.value)}" data-label="${encodeURIComponent(option.label)}">${this.escapeHtml(option.label)}</div>`)
+                    .map(option => `<div class="mr-download-target-option" data-value="${encodeURIComponent(option.value)}" data-label="${encodeURIComponent(option.label)}">${this.escapeHtml(option.label)}</div>`)
                     .join('');
                 sourceList.style.display = 'block';
-                sourceList.querySelectorAll('.ml-download-target-option').forEach(optionEl => {
+                sourceList.querySelectorAll('.mr-download-target-option').forEach(optionEl => {
                     optionEl.addEventListener('mousedown', (event) => {
                         event.preventDefault();
                         const value = decodeURIComponent(optionEl.dataset.value || '');
@@ -1372,23 +1372,23 @@ export const resolveDownloadMethods = {
 
         try {
             btn.disabled = true;
-            btn.classList.remove('ml-is-success-action', 'ml-btn-primary');
+            btn.classList.remove('mr-is-success-action', 'mr-btn-primary');
             btn.textContent = 'Starting...';
 
             if (progressDiv) {
-                progressDiv.classList.remove('ml-is-hidden');
-                progressDiv.classList.add('ml-is-visible');
+                progressDiv.classList.remove('mr-is-hidden');
+                progressDiv.classList.add('mr-is-visible');
                 // Show progress bar with cancel button immediately
                 progressDiv.innerHTML = this.renderProgressWithAction({
                     percent: 0,
-                    leftText: '<span class="ml-info-accent-text">Connecting...</span>',
+                    leftText: '<span class="mr-info-accent-text">Connecting...</span>',
                     rightText: '',
-                    actionClass: 'cancel-download-btn-pending ml-btn ml-btn-danger ml-btn-sm',
+                    actionClass: 'cancel-download-btn-pending mr-btn mr-btn-danger mr-btn-sm',
                     actionText: 'Cancel'
                 });
             }
 
-            const response = await api.fetchApi('/model_linker/download', {
+            const response = await api.fetchApi('/model_resolver/download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1426,12 +1426,12 @@ export const resolveDownloadMethods = {
             this.pollDownloadProgress(downloadId);
 
         } catch (error) {
-            console.error('Model Linker: Download error:', error);
+            console.error('Model Resolver: Download error:', error);
             if (progressDiv) {
                 progressDiv.innerHTML = this.renderStatusMessage(error.message, 'error');
             }
             btn.disabled = false;
-            btn.classList.remove('ml-is-success-action', 'ml-btn-primary');
+            btn.classList.remove('mr-is-success-action', 'mr-btn-primary');
             btn.textContent = 'Retry';
             this.showNotification('Download failed: ' + error.message, 'error');
         }

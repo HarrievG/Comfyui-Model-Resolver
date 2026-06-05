@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -9,7 +9,7 @@ export const downloadTargetMethods = {
     async ensureAllModelsLoaded() {
         if (this.allModels && this.allModels.length) return;
         try {
-            const resp = await api.fetchApi('/model_linker/models');
+            const resp = await api.fetchApi('/model_resolver/models');
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const models = await resp.json();
             const list = Array.isArray(models) ? models : [];
@@ -19,7 +19,7 @@ export const downloadTargetMethods = {
                 __label: `${m.category ? m.category + ': ' : ''}${m.relative_path || m.filename || ''}`
             })).sort((a, b) => (a.__label || '').localeCompare(b.__label || ''));
         } catch (e) {
-            console.warn('Model Linker: could not load all models', e);
+            console.warn('Model Resolver: could not load all models', e);
             this.allModels = [];
         }
     },
@@ -27,12 +27,12 @@ export const downloadTargetMethods = {
     async ensureDownloadDirectoriesLoaded() {
         if (this.downloadDirectories) return;
         try {
-            const resp = await api.fetchApi('/model_linker/directories');
+            const resp = await api.fetchApi('/model_resolver/directories');
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const directories = await resp.json();
             this.downloadDirectories = directories && typeof directories === 'object' ? directories : {};
         } catch (e) {
-            console.warn('Model Linker: could not load download directories', e);
+            console.warn('Model Resolver: could not load download directories', e);
             this.downloadDirectories = {};
         }
     },
@@ -40,12 +40,12 @@ export const downloadTargetMethods = {
     async ensureCapabilitiesLoaded() {
         if (this.capabilities) return;
         try {
-            const resp = await api.fetchApi('/model_linker/capabilities');
+            const resp = await api.fetchApi('/model_resolver/capabilities');
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             this.capabilities = data && typeof data === 'object' ? data : { sources: {} };
         } catch (e) {
-            console.warn('Model Linker: could not load capabilities', e);
+            console.warn('Model Resolver: could not load capabilities', e);
             this.capabilities = { sources: {} };
         }
     },
@@ -141,7 +141,7 @@ export const downloadTargetMethods = {
             guider: 'guider',
             guiders: 'guider'
         };
-        return `ml-type-chip ml-type-chip--${colorNames[token] || 'generic'}`;
+        return `mr-type-chip mr-type-chip--${colorNames[token] || 'generic'}`;
     },
 
     getCategoryTokenName(category = '') {
@@ -282,14 +282,14 @@ export const downloadTargetMethods = {
         }
 
         try {
-            const resp = await api.fetchApi(`/model_linker/subfolders/${encodeURIComponent(key)}`);
+            const resp = await api.fetchApi(`/model_resolver/subfolders/${encodeURIComponent(key)}`);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const subfolders = await resp.json();
             const list = Array.isArray(subfolders) ? subfolders : [];
             this.downloadSubfolders.set(key, list);
             return list;
         } catch (e) {
-            console.warn(`Model Linker: could not load subfolders for ${key}`, e);
+            console.warn(`Model Resolver: could not load subfolders for ${key}`, e);
             this.downloadSubfolders.set(key, []);
             return [];
         }
@@ -302,17 +302,17 @@ export const downloadTargetMethods = {
         const subfolderListId = `download-subfolder-list-${missing.node_id}-${missing.widget_index}`;
         const selectedCategory = defaultCategory || 'checkpoints';
 
-        let html = `<div class="ml-download-target">`;
-        html += `<div class="ml-download-target-grid">`;
-        html += `<label class="ml-download-target-label" for="${selectId}">Folder</label>`;
-        html += `<label class="ml-download-target-label" for="${subfolderId}">Subfolder (optional)</label>`;
-        html += `<div class="ml-download-target-wrap">`;
-        html += `<input id="${selectId}" class="ml-download-target-input ml-download-target-select" type="text" readonly autocomplete="off" data-value="${this.escapeHtml(selectedCategory)}" value="${this.escapeHtml(this.getCategoryDisplayName(selectedCategory))}">`;
-        html += `<div id="${categoryListId}" class="ml-download-target-list"></div>`;
+        let html = `<div class="mr-download-target">`;
+        html += `<div class="mr-download-target-grid">`;
+        html += `<label class="mr-download-target-label" for="${selectId}">Folder</label>`;
+        html += `<label class="mr-download-target-label" for="${subfolderId}">Subfolder (optional)</label>`;
+        html += `<div class="mr-download-target-wrap">`;
+        html += `<input id="${selectId}" class="mr-download-target-input mr-download-target-select" type="text" readonly autocomplete="off" data-value="${this.escapeHtml(selectedCategory)}" value="${this.escapeHtml(this.getCategoryDisplayName(selectedCategory))}">`;
+        html += `<div id="${categoryListId}" class="mr-download-target-list"></div>`;
         html += `</div>`;
-        html += `<div class="ml-download-target-wrap">`;
-        html += `<input id="${subfolderId}" class="ml-download-target-input" type="text" placeholder="e.g. ponyxl\\styles" autocomplete="off">`;
-        html += `<div id="${subfolderListId}" class="ml-download-target-list"></div>`;
+        html += `<div class="mr-download-target-wrap">`;
+        html += `<input id="${subfolderId}" class="mr-download-target-input" type="text" placeholder="e.g. ponyxl\\styles" autocomplete="off">`;
+        html += `<div id="${subfolderListId}" class="mr-download-target-list"></div>`;
         html += `</div>`;
         html += `</div>`;
         html += `</div>`;
@@ -384,13 +384,13 @@ export const downloadTargetMethods = {
                 .map(option => {
                     const value = String(option.value || '');
                     const label = String(option.label || value);
-                    return `<div class="ml-download-target-option" data-value="${encodeURIComponent(value)}" data-label="${encodeURIComponent(label)}">${this.escapeHtml(label)}</div>`;
+                    return `<div class="mr-download-target-option" data-value="${encodeURIComponent(value)}" data-label="${encodeURIComponent(label)}">${this.escapeHtml(label)}</div>`;
                 })
                 .join('');
 
             targetEl.style.display = 'block';
 
-            targetEl.querySelectorAll('.ml-download-target-option').forEach(option => {
+            targetEl.querySelectorAll('.mr-download-target-option').forEach(option => {
                 option.addEventListener('mousedown', (event) => {
                     event.preventDefault();
                     const value = decodeURIComponent(option.dataset.value || '');
@@ -463,22 +463,22 @@ export const downloadTargetMethods = {
     },
 
     getStoredTokens() {
-        const civitaiCandidateLimitRaw = parseInt(localStorage.getItem('modelLinker.civitaiCandidateLimit') || '5', 10);
+        const civitaiCandidateLimitRaw = parseInt(localStorage.getItem('ModelResolver.civitaiCandidateLimit') || '5', 10);
         const civitai_candidate_limit = Number.isFinite(civitaiCandidateLimitRaw)
             ? Math.min(20, Math.max(1, civitaiCandidateLimitRaw))
             : 5;
         const search_source_enabled = this.getSearchSourceEnabledMap();
 
         return {
-            civitai_key: localStorage.getItem('modelLinker.civitaiApiKey') || '',
-            civitai_session_token: localStorage.getItem('modelLinker.civitaiSessionToken') || '',
-            hf_token: localStorage.getItem('modelLinker.huggingFaceToken') || '',
-            brave_search_api_key: localStorage.getItem('modelLinker.braveSearchApiKey') || '',
-            civitai_use_trpc_search: localStorage.getItem('modelLinker.civitaiUseTrpcSearch') !== 'false',
-            civitai_use_html_fallback: localStorage.getItem('modelLinker.civitaiUseHtmlFallback') !== 'false',
-            hf_use_api_search: localStorage.getItem('modelLinker.hfUseApiSearch') !== 'false',
-            hf_use_comfy_org_fallback: localStorage.getItem('modelLinker.hfUseComfyOrgFallback') !== 'false',
-            hf_use_brave_fallback: localStorage.getItem('modelLinker.hfUseBraveFallback') !== 'false',
+            civitai_key: localStorage.getItem('ModelResolver.civitaiApiKey') || '',
+            civitai_session_token: localStorage.getItem('ModelResolver.civitaiSessionToken') || '',
+            hf_token: localStorage.getItem('ModelResolver.huggingFaceToken') || '',
+            brave_search_api_key: localStorage.getItem('ModelResolver.braveSearchApiKey') || '',
+            civitai_use_trpc_search: localStorage.getItem('ModelResolver.civitaiUseTrpcSearch') !== 'false',
+            civitai_use_html_fallback: localStorage.getItem('ModelResolver.civitaiUseHtmlFallback') !== 'false',
+            hf_use_api_search: localStorage.getItem('ModelResolver.hfUseApiSearch') !== 'false',
+            hf_use_comfy_org_fallback: localStorage.getItem('ModelResolver.hfUseComfyOrgFallback') !== 'false',
+            hf_use_brave_fallback: localStorage.getItem('ModelResolver.hfUseBraveFallback') !== 'false',
             civitai_candidate_limit,
             search_source_enabled
         };
@@ -495,14 +495,14 @@ export const downloadTargetMethods = {
             this.workflowSearchResultCaches.delete(key);
         }
         try {
-            const response = await api.fetchApi('/model_linker/clear-search-cache', {
+            const response = await api.fetchApi('/model_resolver/clear-search-cache', {
                 method: 'POST'
             });
             if (!response.ok) {
                 throw new Error('Failed to clear backend search cache');
             }
         } catch (error) {
-            console.error('Model Linker: Clear search cache error:', error);
+            console.error('Model Resolver: Clear search cache error:', error);
         }
     }
 };

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * css_loader
  * Loads all CSS files for the resolution master components
  */
@@ -18,8 +18,8 @@ export function loadAllStyles() {
         // Load all CSS files using getUrl for proper path resolution
         const cssFiles = [
             './css/css-variables.css',
-            './css/linker-shell.css',
-            './css/linker-main.css',
+            './css/resolver-shell.css',
+            './css/resolver-main.css',
         ];
         
         cssFiles.forEach(file => {

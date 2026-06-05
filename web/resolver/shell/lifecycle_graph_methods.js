@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -30,7 +30,7 @@ export const lifecycleGraphMethods = {
 
         // Restore fullscreen state if enabled
         try {
-            const fs = localStorage.getItem('model_linker_modal_fullscreen');
+            const fs = localStorage.getItem('model_resolver_modal_fullscreen');
             if (!this.docked && restoreFullscreen && fs === '1') this.setFullScreen(true);
         } catch (e) { }
 
@@ -55,17 +55,17 @@ export const lifecycleGraphMethods = {
     attachDragHandleIfNeeded() {
         if (this._dragHandleAttached) return;
 
-        const handle = document.getElementById('model-linker-drag-handle');
-        const topbar = this.element?.querySelector('.ml-dialog-topbar');
+        const handle = document.getElementById('model-resolver-drag-handle');
+        const topbar = this.element?.querySelector('.mr-dialog-topbar');
         if (!handle || !topbar) return;
 
         const onMouseDown = (e) => {
             if (this.fullscreen || this.docked) return; // no drag in fullscreen or docked mode
             if (e.button !== 0 || this.isTopbarDragExcluded(e.target)) return;
-            topbar.classList.add('ml-is-dragging');
+            topbar.classList.add('mr-is-dragging');
             this.startDrag(e);
         };
-        const onMouseUp = () => { topbar.classList.remove('ml-is-dragging'); };
+        const onMouseUp = () => { topbar.classList.remove('mr-is-dragging'); };
 
         topbar.addEventListener('mousedown', onMouseDown);
         document.addEventListener('mouseup', onMouseUp);
@@ -76,8 +76,8 @@ export const lifecycleGraphMethods = {
     isTopbarDragExcluded(target) {
         if (!(target instanceof Element)) return false;
         return !!target.closest([
-            '.ml-tabs',
-            '.ml-dialog-controls',
+            '.mr-tabs',
+            '.mr-dialog-controls',
             'button',
             'a',
             'input',
@@ -144,7 +144,7 @@ export const lifecycleGraphMethods = {
 
             // Call analyze endpoint
             const progressPromise = this.pollAnalysisProgress(analysisId, analysisId);
-            const response = await api.fetchApi('/model_linker/analyze', {
+            const response = await api.fetchApi('/model_resolver/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow, analysis_id: analysisId })
@@ -166,9 +166,9 @@ export const lifecycleGraphMethods = {
 
         } catch (error) {
             this._analysisProgressToken = null;
-            console.error('Model Linker: Error loading workflow data:', error);
+            console.error('Model Resolver: Error loading workflow data:', error);
             if (this.contentElement) {
-                this.contentElement.innerHTML = `<p class="ml-error-text">Error: ${error.message}</p>`;
+                this.contentElement.innerHTML = `<p class="mr-error-text">Error: ${error.message}</p>`;
             }
         }
     },
@@ -184,7 +184,7 @@ export const lifecycleGraphMethods = {
                 const workflow = app.graph.serialize();
                 return workflow;
             } catch (e) {
-                console.warn('Model Linker: Could not serialize workflow from graph:', e);
+                console.warn('Model Resolver: Could not serialize workflow from graph:', e);
             }
         }
         return null;
@@ -243,7 +243,7 @@ export const lifecycleGraphMethods = {
 
             this.showNotification(`Focused on Node #${nodeId} (${node.type})`, 'info');
         } catch (e) {
-            console.error('Model Linker: Error locating node:', e);
+            console.error('Model Resolver: Error locating node:', e);
             this.showNotification('Error locating node: ' + e.message, 'error');
         }
     },
@@ -417,13 +417,13 @@ export const lifecycleGraphMethods = {
                 info.downloadBtn = newDownloadBtn;
 
                 // Show that download is in progress
-                newProgressDiv.classList.remove('ml-is-hidden');
-                newProgressDiv.classList.add('ml-is-visible');
+                newProgressDiv.classList.remove('mr-is-hidden');
+                newProgressDiv.classList.add('mr-is-visible');
                 newProgressDiv.innerHTML = this.renderProgressWithAction({
                     percent: 0,
-                    leftText: '<span class="ml-info-accent-text">Downloading...</span>',
+                    leftText: '<span class="mr-info-accent-text">Downloading...</span>',
                     rightText: '',
-                    actionClass: 'cancel-download-btn ml-btn ml-btn-danger ml-btn-sm',
+                    actionClass: 'cancel-download-btn mr-btn mr-btn-danger mr-btn-sm',
                     actionText: 'Cancel',
                     actionDataAttr: `data-download-id="${downloadId}"`
                 });

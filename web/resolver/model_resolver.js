@@ -1,18 +1,18 @@
-import { app } from "../../../../scripts/app.js";
+﻿import { app } from "../../../../scripts/app.js";
 import { api } from "../../../../scripts/api.js";
 import { $el } from "../../../../scripts/ui.js";
 import { loadStylesWhenNeeded } from "../utils/css_loader.js";
-import { LinkerManagerDialog } from "./linker_dialog.js";
+import { ResolverManagerDialog } from "./resolver_dialog.js";
 
 // Main extension class
-export class ModelLinker {
+export class ModelResolver {
     constructor() {
-        this.linkerButton = null;
+        this.resolverButton = null;
         this.buttonGroup = null;
-        this.buttonId = "model-linker-button";
-        this.sidebarTabId = "comfyui-model-linker";
+        this.buttonId = "model-resolver-button";
+        this.sidebarTabId = "comfyui-model-resolver";
         this.sidebarRegistered = false;
-        this.openTooltip = "Open Model Linker to find or download missing workflow models. Shortcut: Ctrl+Shift+L.";
+        this.openTooltip = "Open Model Resolver to find or download missing workflow models. Shortcut: Ctrl+Shift+L.";
         this.dialog = null;
         this.isCheckingMissing = false;  // Prevent multiple simultaneous checks
         this.lastCheckedWorkflow = null;  // Track to avoid duplicate checks
@@ -26,15 +26,15 @@ export class ModelLinker {
 
         // Create dialog instance
         if (!this.dialog) {
-            this.dialog = new LinkerManagerDialog();
-            window.modelLinkerDialog = this.dialog;
+            this.dialog = new ResolverManagerDialog();
+            window.ModelResolverDialog = this.dialog;
         }
 
         // Register keyboard shortcut (Ctrl+Shift+L)
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'l') {
                 e.preventDefault();
-                this.openLinkerManager();
+                this.openResolverManager();
             }
         });
 
@@ -56,7 +56,7 @@ export class ModelLinker {
             return false;
         }
 
-        if (this.sidebarRegistered || window.__modelLinkerSidebarRegistered) {
+        if (this.sidebarRegistered || window.__ModelResolverSidebarRegistered) {
             this.sidebarRegistered = true;
             return true;
         }
@@ -65,29 +65,29 @@ export class ModelLinker {
             registerSidebarTab.call(app.extensionManager, {
                 id: this.sidebarTabId,
                 icon: "mdi mdi-link-variant",
-                title: "Model Linker",
+                title: "Model Resolver",
                 tooltip: this.openTooltip,
                 type: "custom",
                 render: (element) => this.renderSidebarPanel(element),
             });
             this.sidebarRegistered = true;
-            window.__modelLinkerSidebarRegistered = true;
+            window.__ModelResolverSidebarRegistered = true;
             return true;
         } catch (error) {
-            console.warn("Model Linker: Sidebar tab registration failed, falling back to top menu button.", error);
+            console.warn("Model Resolver: Sidebar tab registration failed, falling back to top menu button.", error);
             return false;
         }
     }
 
     attachSidebarButtonToggleHandler() {
-        window.__modelLinkerSidebarToggleOwner = this;
-        if (window.__modelLinkerSidebarToggleHandlerAttached) return;
+        window.__ModelResolverSidebarToggleOwner = this;
+        if (window.__ModelResolverSidebarToggleHandlerAttached) return;
 
-        window.__modelLinkerSidebarToggleHandlerAttached = true;
-        window.__modelLinkerSidebarToggleHandler = (event) => {
-            window.__modelLinkerSidebarToggleOwner?.handleSidebarButtonClick(event);
+        window.__ModelResolverSidebarToggleHandlerAttached = true;
+        window.__ModelResolverSidebarToggleHandler = (event) => {
+            window.__ModelResolverSidebarToggleOwner?.handleSidebarButtonClick(event);
         };
-        document.addEventListener('click', window.__modelLinkerSidebarToggleHandler, true);
+        document.addEventListener('click', window.__ModelResolverSidebarToggleHandler, true);
     }
 
     handleSidebarButtonClick(event) {
@@ -127,11 +127,11 @@ export class ModelLinker {
 
     renderSidebarPanel(element) {
         element.style.height = "100%";
-        element.classList.add("ml-sidebar-dock-panel");
+        element.classList.add("mr-sidebar-dock-panel");
 
         if (!this.dialog) {
-            this.dialog = new LinkerManagerDialog();
-            window.modelLinkerDialog = this.dialog;
+            this.dialog = new ResolverManagerDialog();
+            window.ModelResolverDialog = this.dialog;
         }
 
         if (this.dialog.shouldOpenFromSidebarFloating()) {
@@ -141,7 +141,7 @@ export class ModelLinker {
                 return;
             }
 
-            this.openLinkerManager({
+            this.openResolverManager({
                 forceFloating: true,
                 closeSidebarContainer: element,
             });
@@ -149,7 +149,7 @@ export class ModelLinker {
         }
 
         element.replaceChildren();
-        this.openLinkerManager({ dockContainer: element });
+        this.openResolverManager({ dockContainer: element });
     }
 
     async registerTopbarButton() {
@@ -159,24 +159,24 @@ export class ModelLinker {
             const { ComfyButtonGroup } = await import("../../../../scripts/ui/components/buttonGroup.js");
             const { ComfyButton } = await import("../../../../scripts/ui/components/button.js");
 
-            // Create button group with Model Linker button
-            const modelLinkerButton = new ComfyButton({
+            // Create button group with Model Resolver button
+            const ModelResolverButton = new ComfyButton({
                 icon: "link-variant",
-                action: () => this.openLinkerManager(),
-                content: "Model Linker",
+                action: () => this.openResolverManager(),
+                content: "Model Resolver",
                 classList: "comfyui-button comfyui-menu-mobile-collapse"
             }).element;
-            modelLinkerButton.id = this.buttonId;
-            this.dialog.setTooltip(modelLinkerButton, this.openTooltip);
+            ModelResolverButton.id = this.buttonId;
+            this.dialog.setTooltip(ModelResolverButton, this.openTooltip);
             this.buttonGroup = new ComfyButtonGroup(
-                modelLinkerButton
+                ModelResolverButton
             );
 
             // Insert before settings group in the menu
             app.menu?.settingsGroup.element.before(this.buttonGroup.element);
         } catch (e) {
             // Fallback for older ComfyUI versions without the new button system
-            console.log('Model Linker: New button system not available, using floating button fallback.');
+            console.log('Model Resolver: New button system not available, using floating button fallback.');
             this.createFloatingButton();
         }
     }
@@ -188,56 +188,56 @@ export class ModelLinker {
         // Watch for ComfyUI's Missing Models popup and inject our button
         this.setupMissingModelsPopupObserver();
 
-        console.log('Model Linker: Missing models popup button injection enabled');
+        console.log('Model Resolver: Missing models popup button injection enabled');
     }
 
     setupActiveWorkflowChangeListeners() {
-        if (window.__modelLinkerWorkflowChangeHandlers) {
-            for (const { target, event, handler } of window.__modelLinkerWorkflowChangeHandlers) {
+        if (window.__ModelResolverWorkflowChangeHandlers) {
+            for (const { target, event, handler } of window.__ModelResolverWorkflowChangeHandlers) {
                 target?.removeEventListener?.(event, handler);
             }
         }
 
-        if (!window.__modelLinkerHistoryPatched) {
+        if (!window.__ModelResolverHistoryPatched) {
             const originalPushState = history.pushState;
             const originalReplaceState = history.replaceState;
             history.pushState = function(...args) {
                 const result = originalPushState.apply(this, args);
-                window.dispatchEvent(new Event('model-linker-locationchange'));
+                window.dispatchEvent(new Event('model-resolver-locationchange'));
                 return result;
             };
             history.replaceState = function(...args) {
                 const result = originalReplaceState.apply(this, args);
-                window.dispatchEvent(new Event('model-linker-locationchange'));
+                window.dispatchEvent(new Event('model-resolver-locationchange'));
                 return result;
             };
-            window.__modelLinkerHistoryPatched = true;
+            window.__ModelResolverHistoryPatched = true;
         }
 
-        window.__modelLinkerWorkflowChangeOwner = this;
+        window.__ModelResolverWorkflowChangeOwner = this;
 
         const routeHandler = () => {
-            window.__modelLinkerWorkflowChangeOwner?.handleActiveWorkflowRouteChange('route-change');
+            window.__ModelResolverWorkflowChangeOwner?.handleActiveWorkflowRouteChange('route-change');
         };
         const focusHandler = () => {
-            window.__modelLinkerWorkflowChangeOwner?.handleActiveWorkflowRouteChange('window-focus');
+            window.__ModelResolverWorkflowChangeOwner?.handleActiveWorkflowRouteChange('window-focus');
         };
         const visibilityHandler = () => {
             if (document.visibilityState === 'visible') {
-                window.__modelLinkerWorkflowChangeOwner?.handleActiveWorkflowRouteChange('visibility-change');
+                window.__ModelResolverWorkflowChangeOwner?.handleActiveWorkflowRouteChange('visibility-change');
             }
         };
 
         window.addEventListener('hashchange', routeHandler);
         window.addEventListener('popstate', routeHandler);
-        window.addEventListener('model-linker-locationchange', routeHandler);
+        window.addEventListener('model-resolver-locationchange', routeHandler);
         window.addEventListener('focus', focusHandler);
         document.addEventListener('visibilitychange', visibilityHandler);
 
-        window.__modelLinkerWorkflowChangeHandlers = [
+        window.__ModelResolverWorkflowChangeHandlers = [
             { target: window, event: 'hashchange', handler: routeHandler },
             { target: window, event: 'popstate', handler: routeHandler },
-            { target: window, event: 'model-linker-locationchange', handler: routeHandler },
+            { target: window, event: 'model-resolver-locationchange', handler: routeHandler },
             { target: window, event: 'focus', handler: focusHandler },
             { target: document, event: 'visibilitychange', handler: visibilityHandler }
         ];
@@ -294,16 +294,16 @@ export class ModelLinker {
         if (!dialog) return;
 
         // Check if we already injected buttons
-        if (dialog.querySelector('#model-linker-btn-container')) return;
+        if (dialog.querySelector('#model-resolver-btn-container')) return;
 
         // Find a suitable place to inject the button
         const injectButtons = () => {
             // Auto-resolve button (green)
             const autoResolveBtn = document.createElement('button');
-            autoResolveBtn.id = 'model-linker-btn-container'; // Use this ID to prevent duplicate injection
-            autoResolveBtn.className = 'ml-popup-auto-resolve-btn';
+            autoResolveBtn.id = 'model-resolver-btn-container'; // Use this ID to prevent duplicate injection
+            autoResolveBtn.className = 'mr-popup-auto-resolve-btn';
             autoResolveBtn.textContent = '🔗 Auto-resolve 100%';
-            this.dialog?.setTooltip(autoResolveBtn, 'Link every missing model that already has an exact local match, then open Model Linker for the rest.');
+            this.dialog?.setTooltip(autoResolveBtn, 'Link every missing model that already has an exact local match, then open Model Resolver for the rest.');
             autoResolveBtn.addEventListener('click', async () => {
                 await this.handleAutoResolveInPopup(dialog, autoResolveBtn);
             });
@@ -314,7 +314,7 @@ export class ModelLinker {
                 const checkboxRow = checkbox.closest('label') || checkbox.parentElement;
                 if (checkboxRow && checkboxRow.parentElement) {
                     // Make the parent a flex container to align checkbox and button
-                    checkboxRow.parentElement.classList.add('ml-popup-inline-actions');
+                    checkboxRow.parentElement.classList.add('mr-popup-inline-actions');
                     // Insert button at the beginning (left side)
                     checkboxRow.parentElement.insertBefore(autoResolveBtn, checkboxRow);
                     return;
@@ -329,7 +329,7 @@ export class ModelLinker {
             if (modelList) {
                 // Create a wrapper and insert before the model list
                 const wrapper = document.createElement('div');
-                wrapper.className = 'ml-popup-actions-wrap';
+                wrapper.className = 'mr-popup-actions-wrap';
                 wrapper.appendChild(autoResolveBtn);
                 modelList.parentElement?.insertBefore(wrapper, modelList);
             } else {
@@ -344,7 +344,7 @@ export class ModelLinker {
                 }
             }
             
-            console.log('Model Linker: Injected buttons into Missing Models popup');
+            console.log('Model Resolver: Injected buttons into Missing Models popup');
         };
 
         // Small delay to ensure popup is fully rendered
@@ -352,7 +352,7 @@ export class ModelLinker {
     }
 
     /**
-     * Handle auto-resolve in the popup - resolve 100% matches and open Model Linker for remaining
+     * Handle auto-resolve in the popup - resolve 100% matches and open Model Resolver for remaining
      */
     async handleAutoResolveInPopup(dialog, button) {
         button.textContent = '⏳ Resolving...';
@@ -373,14 +373,14 @@ export class ModelLinker {
 
 // Create dialog if needed
         if (!this.dialog) {
-            this.dialog = new LinkerManagerDialog();
-            window.modelLinkerDialog = this.dialog;
+            this.dialog = new ResolverManagerDialog();
+            window.ModelResolverDialog = this.dialog;
         }
         
         // Run auto-resolve for 100% matches - returns the updated workflow
         const updatedWorkflow = await this.dialog.autoResolve100Percent();
         
-        // Always open Model Linker to show remaining unresolved models
+        // Always open Model Resolver to show remaining unresolved models
         // Pass the updated workflow if available to avoid race condition
         this.dialog.show(updatedWorkflow || null);
     }
@@ -389,7 +389,7 @@ export class ModelLinker {
      * Mark resolved model items in the popup as linked (green) and hide download buttons
      */
     removeResolvedFromPopup(dialog, resolvedFilenames) {
-        console.log('Model Linker: Looking for resolved filenames:', resolvedFilenames);
+        console.log('Model Resolver: Looking for resolved filenames:', resolvedFilenames);
         
         // Strategy: For each filename, find text nodes containing it, 
         // then find the nearest Download button and mark that row
@@ -413,10 +413,10 @@ export class ModelLinker {
                         // Look for Download button at this level
                         const downloadBtn = Array.from(parent.querySelectorAll('button'))
                             .find(btn => btn.textContent?.includes('Download') && 
-                                        !btn.id?.includes('model-linker'));
+                                        !btn.id?.includes('model-resolver'));
                         
                         if (downloadBtn) {
-                            console.log('Model Linker: Found entry for', filename);
+                            console.log('Model Resolver: Found entry for', filename);
                             this.markEntryAsResolved(parent, downloadBtn);
                             break;
                         }
@@ -440,16 +440,16 @@ export class ModelLinker {
         if (container.dataset.resolved === 'true') return;
         container.dataset.resolved = 'true';
         
-        console.log('Model Linker: Marking entry as resolved', container);
+        console.log('Model Resolver: Marking entry as resolved', container);
         
         // Add green background/styling to the container
-        container.classList.add('ml-resolved-entry');
+        container.classList.add('mr-resolved-entry');
         
         // Hide the Download button and replace with badge
         if (downloadBtn) {
             // Create badge
             const badge = document.createElement('span');
-            badge.className = 'ml-resolved-badge';
+            badge.className = 'mr-resolved-badge';
             badge.textContent = '✓ Linked';
             
             // Replace download button with badge
@@ -474,7 +474,7 @@ export class ModelLinker {
         const downloadButtons = dialog.querySelectorAll('button');
         let count = 0;
         for (const btn of downloadButtons) {
-            if (btn.textContent?.includes('Download') && !btn.id?.includes('model-linker')) {
+            if (btn.textContent?.includes('Download') && !btn.id?.includes('model-resolver')) {
                 count++;
             }
         }
@@ -487,7 +487,7 @@ export class ModelLinker {
      */
     updateNodesDirectly(resolutions) {
         if (!app?.graph) {
-            console.warn('Model Linker: Cannot update nodes - graph not available');
+            console.warn('Model Resolver: Cannot update nodes - graph not available');
             return;
         }
 
@@ -499,7 +499,7 @@ export class ModelLinker {
             // Find the node in the graph
             const node = app.graph.getNodeById(nodeId);
             if (!node) {
-                console.warn(`Model Linker: Node ${nodeId} not found in graph`);
+                console.warn(`Model Resolver: Node ${nodeId} not found in graph`);
                 continue;
             }
 
@@ -513,11 +513,11 @@ export class ModelLinker {
                     widget.callback(resolvedPath, app.graph, node, null, null);
                 }
                 
-                console.log(`Model Linker: Updated node ${nodeId} widget ${widgetIndex} to ${resolvedPath}`);
+                console.log(`Model Resolver: Updated node ${nodeId} widget ${widgetIndex} to ${resolvedPath}`);
             } else if (node.widgets_values) {
                 // Fallback: update widgets_values array directly
                 node.widgets_values[widgetIndex] = resolvedPath;
-                console.log(`Model Linker: Updated node ${nodeId} widgets_values[${widgetIndex}] to ${resolvedPath}`);
+                console.log(`Model Resolver: Updated node ${nodeId} widgets_values[${widgetIndex}] to ${resolvedPath}`);
             }
 
             // Mark node as dirty to trigger redraw
@@ -536,14 +536,14 @@ export class ModelLinker {
      * Check if auto-open is enabled in user settings
      */
     isAutoOpenEnabled() {
-        return localStorage.getItem('modelLinker.autoOpenOnMissing') !== 'false';
+        return localStorage.getItem('ModelResolver.autoOpenOnMissing') !== 'false';
     }
 
     /**
      * Set auto-open preference
      */
     setAutoOpenEnabled(enabled) {
-        localStorage.setItem('modelLinker.autoOpenOnMissing', enabled ? 'true' : 'false');
+        localStorage.setItem('ModelResolver.autoOpenOnMissing', enabled ? 'true' : 'false');
     }
 
     /**
@@ -582,14 +582,14 @@ export class ModelLinker {
             this.lastCheckedWorkflow = workflowHash;
 
             // Call analyze endpoint to check for missing models
-            const response = await api.fetchApi('/model_linker/analyze', {
+            const response = await api.fetchApi('/model_resolver/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow })
             });
 
             if (!response.ok) {
-                console.warn('Model Linker: Failed to analyze workflow for missing models');
+                console.warn('Model Resolver: Failed to analyze workflow for missing models');
                 return;
             }
 
@@ -597,12 +597,12 @@ export class ModelLinker {
             
             // Auto-open dialog if there are missing models
             if (data.total_missing > 0) {
-                console.log(`Model Linker: Found ${data.total_missing} missing model(s), opening dialog...`);
-                this.openLinkerManager();
+                console.log(`Model Resolver: Found ${data.total_missing} missing model(s), opening dialog...`);
+                this.openResolverManager();
             }
 
         } catch (error) {
-            console.error('Model Linker: Error checking for missing models:', error);
+            console.error('Model Resolver: Error checking for missing models:', error);
         } finally {
             this.isCheckingMissing = false;
         }
@@ -617,7 +617,7 @@ export class ModelLinker {
 
         document.querySelectorAll('.comfyui-button-group button.comfyui-button').forEach((button) => {
             const label = button.querySelector('span')?.textContent?.trim() || button.textContent?.trim();
-            if (label === 'Model Linker') {
+            if (label === 'Model Resolver') {
                 button.closest('.comfyui-button-group')?.remove();
             }
         });
@@ -629,32 +629,32 @@ export class ModelLinker {
         }
 
         // Also remove the stored reference if it exists
-        if (this.linkerButton && this.linkerButton.parentNode) {
-            this.linkerButton.remove();
-            this.linkerButton = null;
+        if (this.resolverButton && this.resolverButton.parentNode) {
+            this.resolverButton.remove();
+            this.resolverButton = null;
         }
     }
 
     createFloatingButton() {
         // Create a floating button as fallback for legacy ComfyUI versions
-        this.linkerButton = $el("button", {
+        this.resolverButton = $el("button", {
             id: this.buttonId,
-            textContent: "🔗 Model Linker",
+            textContent: "🔗 Model Resolver",
             onclick: () => {
-                this.openLinkerManager();
+                this.openResolverManager();
             },
-            className: "model-linker-floating-button"
+            className: "model-resolver-floating-button"
         });
 
-        document.body.appendChild(this.linkerButton);
-        this.dialog?.setTooltip(this.linkerButton, "Open Model Linker to find or download missing workflow models. Shortcut: Ctrl+Shift+L.");
+        document.body.appendChild(this.resolverButton);
+        this.dialog?.setTooltip(this.resolverButton, "Open Model Resolver to find or download missing workflow models. Shortcut: Ctrl+Shift+L.");
     }
 
-    async openLinkerManager(options = {}) {
+    async openResolverManager(options = {}) {
         try {
             if (!this.dialog) {
-                this.dialog = new LinkerManagerDialog();
-                window.modelLinkerDialog = this.dialog;
+                this.dialog = new ResolverManagerDialog();
+                window.ModelResolverDialog = this.dialog;
             }
             if (options.dockContainer && !options.forceFloating) {
                 await this.dialog.showDocked(options.dockContainer, options.workflow || null);
@@ -670,16 +670,16 @@ export class ModelLinker {
 
             await showPromise;
         } catch (error) {
-            console.error("🔗 Model Linker: Error creating/showing dialog:", error);
-            alert("Error opening Model Linker: " + error.message);
+            console.error("🔗 Model Resolver: Error creating/showing dialog:", error);
+            alert("Error opening Model Resolver: " + error.message);
         }
     }
 
     static switchFilter(filter) {
-        document.querySelectorAll('.ml-btn-filter').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.mr-btn-filter').forEach(b => b.classList.remove('active'));
         document.getElementById('filter-' + filter).classList.add('active');
         
-        document.querySelectorAll('.ml-model-section').forEach(s => {
+        document.querySelectorAll('.mr-model-section').forEach(s => {
             const hasActive = s.dataset.mlActive === 'true';
             const hasInactive = s.dataset.mlInactive === 'true';
             
@@ -692,7 +692,7 @@ export class ModelLinker {
             }
         });
         
-        const copySection = document.querySelector('[id^="ml-copy-"]');
+        const copySection = document.querySelector('[id^="mr-copy-"]');
         if (copySection) {
             const codeEl = copySection.querySelector('code');
             const labelEl = copySection.querySelector('div');

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Model Downloader Module
 
 Handles downloading models from various sources with progress tracking.
@@ -213,9 +213,9 @@ def download_file(
             if "civitai.com" in url
             else "URL"
         )
-        print(f"\n[Model Linker] Starting download: {filename}")
-        print(f"[Model Linker] Source: {source}")
-        print(f"[Model Linker] URL: {url}")
+        print(f"\n[Model Resolver] Starting download: {filename}")
+        print(f"[Model Resolver] Source: {source}")
+        print(f"[Model Resolver] URL: {url}")
 
         # Start download
         response = requests.get(url, headers=headers, stream=True, timeout=30)
@@ -224,7 +224,7 @@ def download_file(
         # Get total size
         total_size = int(response.headers.get("content-length", 0))
         total_size_str = format_bytes(total_size) if total_size > 0 else "unknown"
-        print(f"[Model Linker] Size: {total_size_str}")
+        print(f"[Model Resolver] Size: {total_size_str}")
 
         with download_lock:
             download_progress[download_id]["total_size"] = total_size
@@ -292,7 +292,7 @@ def download_file(
                             )
                             speed_str = format_bytes(int(smoothed_speed)) + "/s"
                             print(
-                                f"[Model Linker] Progress: {downloaded_str} / {total_str} ({progress_pct}%) - {speed_str}"
+                                f"[Model Resolver] Progress: {downloaded_str} / {total_str} ({progress_pct}%) - {speed_str}"
                             )
                     else:
                         # Just update downloaded bytes without recalculating speed
@@ -316,13 +316,13 @@ def download_file(
                 if os.path.exists(dest_path):
                     os.remove(dest_path)
                     print(
-                        f"[Model Linker] Cancelled: {filename} - incomplete file deleted"
+                        f"[Model Resolver] Cancelled: {filename} - incomplete file deleted"
                     )
                 else:
-                    print(f"[Model Linker] Cancelled: {filename} - no file to delete")
+                    print(f"[Model Resolver] Cancelled: {filename} - no file to delete")
             except Exception as e:
                 print(
-                    f"[Model Linker] Warning: Could not delete incomplete file {dest_path}: {e}"
+                    f"[Model Resolver] Warning: Could not delete incomplete file {dest_path}: {e}"
                 )
                 # Try harder on Windows - sometimes the file handle takes a moment to release
                 try:
@@ -330,7 +330,7 @@ def download_file(
                     if os.path.exists(dest_path):
                         os.remove(dest_path)
                         print(
-                            f"[Model Linker] Cancelled: {filename} - incomplete file deleted (delayed)"
+                            f"[Model Resolver] Cancelled: {filename} - incomplete file deleted (delayed)"
                         )
                 except Exception:
                     pass
@@ -350,9 +350,9 @@ def download_file(
         # CLI completion log
         elapsed = time.time() - start_time
         avg_speed = downloaded / elapsed if elapsed > 0 else 0
-        print(f"[Model Linker] ✓ Download complete: {filename}")
+        print(f"[Model Resolver] ✓ Download complete: {filename}")
         print(
-            f"[Model Linker] Size: {format_bytes(downloaded)}, Time: {elapsed:.1f}s, Avg speed: {format_bytes(int(avg_speed))}/s"
+            f"[Model Resolver] Size: {format_bytes(downloaded)}, Time: {elapsed:.1f}s, Avg speed: {format_bytes(int(avg_speed))}/s"
         )
 
     except requests.exceptions.RequestException as e:
@@ -378,8 +378,8 @@ def download_file(
         result["error"] = error_msg
 
         # CLI error log
-        print(f"[Model Linker] ✗ Download failed: {os.path.basename(dest_path)}")
-        print(f"[Model Linker] Error: {error_msg}")
+        print(f"[Model Resolver] ✗ Download failed: {os.path.basename(dest_path)}")
+        print(f"[Model Resolver] Error: {error_msg}")
 
         # Clean up partial file
         try:
@@ -396,8 +396,8 @@ def download_file(
         result["error"] = error_msg
 
         # CLI error log
-        print(f"[Model Linker] ✗ Download failed: {os.path.basename(dest_path)}")
-        print(f"[Model Linker] Error: {error_msg}")
+        print(f"[Model Resolver] ✗ Download failed: {os.path.basename(dest_path)}")
+        print(f"[Model Resolver] Error: {error_msg}")
         log_error(f"Download error: {e}", exc_info=True)
 
     return result

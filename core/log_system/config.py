@@ -1,4 +1,4 @@
-"""
+﻿"""
 @author: Azornes
 @title: AzLogs
 @version: 1.5.2
@@ -9,7 +9,7 @@
 LOG_LEVEL = "DEBUG"
 
 # Logger module name. Set to None to auto-detect from folder name.
-LOG_MODULE_NAME = "MLinker"
+LOG_MODULE_NAME = "MResolver"
 
 # Enable ANSI colors in console logs.
 USE_COLORS = True

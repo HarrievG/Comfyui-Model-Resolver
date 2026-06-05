@@ -1,4 +1,4 @@
-"""
+﻿"""
 Directory Scanner Module
 
 Scans configured model directories and finds available model files.
@@ -21,7 +21,7 @@ try:
     import folder_paths
 except ImportError:
     folder_paths = None
-    log_warn("Model Linker: folder_paths not available yet - will retry later")
+    log_warn("Model Resolver: folder_paths not available yet - will retry later")
 
 # Model file extensions to look for
 # This matches folder_paths.supported_pt_extensions
@@ -61,7 +61,7 @@ def get_model_directories() -> Dict[str, Tuple[List[str], set]]:
 
             folder_paths = fp
         except ImportError:
-            log_error("Model Linker: folder_paths still not available")
+            log_error("Model Resolver: folder_paths still not available")
             return {}
 
     return folder_paths.folder_names_and_paths.copy()

@@ -1,6 +1,6 @@
-<h1 align="center">ModelLinker – Relink missing models and download from HuggingFace/CivitAI</h1>
+<h1 align="center">ModelResolver – Relink missing models and download from HuggingFace/CivitAI</h1>
 
-<p align="center"><i>ModelLinker is a powerful ComfyUI extension for automatically resolving missing models in loaded workflows. It features intelligent local fuzzy matching, direct cloud downloads, background download tracking, and automated in-place workflow updating.</i></p>
+<p align="center"><i>ModelResolver is a powerful ComfyUI extension for automatically resolving missing models in loaded workflows. It features intelligent local fuzzy matching, direct cloud downloads, background download tracking, and automated in-place workflow updating.</i></p>
 
 > [!WARNING]
 > **WIP (Work in Progress) — Download and use at your own risk!**
@@ -9,8 +9,8 @@
 
 <p align="center">
   <img alt="ComfyUI" src="https://img.shields.io/badge/ComfyUI-1a1a1a?style=for-the-badge&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAMAAABF0y+mAAAASFBMVEVHcEwYLtsYLtkXLtkXLdkYLtkWLdcFIdoAD95uerfI1XLR3mq3xIP8/yj0/zvw/0FSYMP5/zKMmKQtPNOuuozj8FOhrZW7x4FMWFFbAAAABnRSTlMAUrPX87KxijklAAAA00lEQVR4AX3SBw6DMAxA0UzbrIzO+9+02GkEpoWP9hPZZs06Hw75aI3k4W/+wkQtnGZNhF1I34BzalQcxkmasY0b9raklNcvLYU1GNiiOeVWauOa/XS526gRyzpV/7HeUOG9Jp6vcsvUrCPeKg/3KBKBQhoTD1dQggPWzPVfFOIgo85/kR4y6oB/8SlIEh7wvmTuKd3wgLVW1sTfRBoR7oWVqy/U2NcrWDYMINE7NUuJuoV+2fhaWmnbjzcOWnRv7XbiLh/Y9dNUqk2y0QcNwTu7wgf+/BhsPUhf4QAAAABJRU5ErkJggg==" />
-  <a href="https://github.com/Azornes/comfyui-model-linker">
-    <img alt="License" src="https://img.shields.io/github/license/Azornes/comfyui-model-linker?style=for-the-badge&color=2F80ED" />
+  <a href="https://github.com/Azornes/comfyui-model-resolver">
+    <img alt="License" src="https://img.shields.io/github/license/Azornes/comfyui-model-resolver?style=for-the-badge&color=2F80ED" />
   </a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/-Python_3.10+-4B8BBE?logo=python&logoColor=FFFFFF&style=for-the-badge&logoWidth=20">
   <img alt="JavaScript" src="https://img.shields.io/badge/-JavaScript-000000?logo=javascript&logoColor=F7DF1E&style=for-the-badge&logoWidth=20">
@@ -51,7 +51,7 @@
 
 ## 📂 Supported Nodes & Model Types
 
-Model Linker supports standard ComfyUI mechanisms as well as custom implementations of popular loader nodes:
+Model Resolver supports standard ComfyUI mechanisms as well as custom implementations of popular loader nodes:
 * **Standard loaders**: CheckpointLoader, LoraLoader, VAELoader, ControlNetLoader, UpscaleModelLoader, etc.
 * **Advanced loaders**: Nodes from the `LoraManager` suite (`LoraLoaderV2`, `Lora Loader`, `Lora Stacker`), `rgthree` (`Power Lora Loader`), and LTX-Video nodes.
 * **Subgraphs**: Full support for scanning and updating nodes inside nested group subgraphs.
@@ -73,7 +73,7 @@ In the extension settings panel, you can configure API keys and authorization to
 ## ⚡ Installation
 
 ### Install via ComfyUI-Manager
-1. Search `ComfyUI Model Linker` in ComfyUI-Manager and click the `Install` button.
+1. Search `ComfyUI Model Resolver` in ComfyUI-Manager and click the `Install` button.
 2. Restart ComfyUI.
 
 ### Manual Install
@@ -83,7 +83,7 @@ In the extension settings panel, you can configure API keys and authorization to
    ```
 2. Clone this repository:
    ```bash
-   git clone https://github.com/Azornes/comfyui-model-linker.git
+   git clone https://github.com/Azornes/comfyui-model-resolver.git
    ```
 3. Start or restart ComfyUI. The extension will automatically install any missing dependencies (`requests`, `aiohttp`) and load the web interface.
 

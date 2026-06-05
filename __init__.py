@@ -1,9 +1,9 @@
-"""
-@author: Model Linker Team
-@title: ComfyUI Model Linker
-@nickname: Model Linker
+﻿"""
+@author: Model Resolver Team
+@title: ComfyUI Model Resolver
+@nickname: Model Resolver
 @version: 1.1.0
-@description: Extension for relinking missing models and downloading from HuggingFace/CivitAI
+@description: Extension for resolving missing models and downloading from HuggingFace/CivitAI
 """
 
 import asyncio
@@ -24,8 +24,8 @@ NODE_CLASS_MAPPINGS = {}
 __all__ = ["WEB_DIRECTORY"]
 
 
-class ModelLinkerExtension:
-    """Main extension class for Model Linker."""
+class ModelResolverExtension:
+    """Main extension class for Model Resolver."""
 
     def __init__(self):
         self.routes_setup = False
@@ -36,14 +36,14 @@ class ModelLinkerExtension:
         """Initialize the extension and set up API routes."""
         try:
             self.setup_routes()
-            self.logger.info("Model Linker: Extension initialized successfully")
+            self.logger.info("Model Resolver: Extension initialized successfully")
         except Exception as e:
             self.logger.error(
-                f"Model Linker: Extension initialization failed: {e}", exc_info=True
+                f"Model Resolver: Extension initialization failed: {e}", exc_info=True
             )
 
     def setup_routes(self):
-        """Register API routes for the Model Linker extension."""
+        """Register API routes for the Model Resolver extension."""
         if self.routes_setup:
             return  # Already set up
 
@@ -58,24 +58,24 @@ class ModelLinkerExtension:
                     not hasattr(PromptServer, "instance")
                     or PromptServer.instance is None
                 ):
-                    self.logger.debug("Model Linker: PromptServer not available yet")
+                    self.logger.debug("Model Resolver: PromptServer not available yet")
                     return False
 
                 routes = PromptServer.instance.routes
             except (ImportError, AttributeError) as e:
-                self.logger.debug(f"Model Linker: Could not access PromptServer: {e}")
+                self.logger.debug(f"Model Resolver: Could not access PromptServer: {e}")
                 return False
 
-            # Import linker modules
+            # Import resolver modules
             try:
-                from .core.linker import (
+                from .core.resolver import (
                     analyze_and_find_matches,
                     apply_resolution,
                     search_local_matches,
                 )
                 from .core.scanner import get_model_files
             except ImportError as e:
-                self.logger.error(f"Model Linker: Could not import core modules: {e}")
+                self.logger.error(f"Model Resolver: Could not import core modules: {e}")
                 return False
 
             # Import download modules
@@ -129,13 +129,13 @@ class ModelLinkerExtension:
                 download_available = True
             except ImportError as e:
                 self.logger.warning(
-                    f"Model Linker: Download features not available: {e}"
+                    f"Model Resolver: Download features not available: {e}"
                 )
                 download_available = False
 
             # ==================== ANALYZE ROUTES ====================
 
-            @routes.post("/model_linker/analyze")
+            @routes.post("/model_resolver/analyze")
             async def analyze_workflow(request):
                 """Analyze workflow and return missing models with matches."""
                 try:
@@ -310,7 +310,7 @@ class ModelLinkerExtension:
                                     continue
 
                                 # NOTE: Search for online sources (HuggingFace, CivitAI) is
-                                # now done on-demand via /model_linker/search endpoint
+                                # now done on-demand via /model_resolver/search endpoint
                                 # when user clicks "Search Online" button, not automatically
 
                     if analysis_id:
@@ -333,10 +333,10 @@ class ModelLinkerExtension:
                             "current": 0,
                             "total": 0,
                         }
-                    self.logger.error(f"Model Linker analyze error: {e}", exc_info=True)
+                    self.logger.error(f"Model Resolver analyze error: {e}", exc_info=True)
                     return web.json_response({"error": str(e)}, status=500)
 
-            @routes.get("/model_linker/analyze-progress/{analysis_id}")
+            @routes.get("/model_resolver/analyze-progress/{analysis_id}")
             async def get_analyze_progress(request):
                 """Get workflow analysis progress."""
                 analysis_id = request.match_info.get("analysis_id", "").strip()
@@ -359,7 +359,7 @@ class ModelLinkerExtension:
 
                 return web.json_response(progress)
 
-            @routes.post("/model_linker/resolve")
+            @routes.post("/model_resolver/resolve")
             async def resolve_models(request):
                 """Apply model resolution and return updated workflow."""
                 try:
@@ -384,12 +384,12 @@ class ModelLinkerExtension:
                         {"workflow": updated_workflow, "success": True}
                     )
                 except Exception as e:
-                    self.logger.error(f"Model Linker resolve error: {e}", exc_info=True)
+                    self.logger.error(f"Model Resolver resolve error: {e}", exc_info=True)
                     return web.json_response(
                         {"error": str(e), "success": False}, status=500
                     )
 
-            @routes.post("/model_linker/local-matches")
+            @routes.post("/model_resolver/local-matches")
             async def local_matches(request):
                 """Search local model files by filename/path."""
                 try:
@@ -411,11 +411,11 @@ class ModelLinkerExtension:
                     return web.json_response({"matches": matches})
                 except Exception as e:
                     self.logger.error(
-                        f"Model Linker local-matches error: {e}", exc_info=True
+                        f"Model Resolver local-matches error: {e}", exc_info=True
                     )
                     return web.json_response({"error": str(e)}, status=500)
 
-            @routes.post("/model_linker/open-containing-folder")
+            @routes.post("/model_resolver/open-containing-folder")
             async def open_containing_folder(request):
                 """Open Explorer at the folder containing the selected model."""
                 try:
@@ -448,12 +448,12 @@ class ModelLinkerExtension:
                     return web.json_response({"success": True})
                 except Exception as e:
                     self.logger.error(
-                        f"Model Linker open-containing-folder error: {e}",
+                        f"Model Resolver open-containing-folder error: {e}",
                         exc_info=True,
                     )
                     return web.json_response({"error": str(e)}, status=500)
 
-            @routes.get("/model_linker/models")
+            @routes.get("/model_resolver/models")
             async def get_models(request):
                 """Get list of all available models."""
                 try:
@@ -461,11 +461,11 @@ class ModelLinkerExtension:
                     return web.json_response(models)
                 except Exception as e:
                     self.logger.error(
-                        f"Model Linker get_models error: {e}", exc_info=True
+                        f"Model Resolver get_models error: {e}", exc_info=True
                     )
                     return web.json_response({"error": str(e)}, status=500)
 
-            @routes.post("/model_linker/loaded")
+            @routes.post("/model_resolver/loaded")
             async def get_loaded_models(request):
                 """Get all currently loaded models in the workflow."""
                 try:
@@ -656,13 +656,13 @@ class ModelLinkerExtension:
 
                 except Exception as e:
                     self.logger.error(
-                        f"Model Linker get_loaded_models error: {e}", exc_info=True
+                        f"Model Resolver get_loaded_models error: {e}", exc_info=True
                     )
                     return web.json_response({"error": str(e)}, status=500)
 
             # ==================== CIVITAI SEARCH ROUTE ====================
 
-            @routes.post("/model_linker/civitai-search")
+            @routes.post("/model_resolver/civitai-search")
             async def civitai_search(request):
                 """Search CivitAI for a model using file hash."""
                 try:
@@ -786,7 +786,7 @@ class ModelLinkerExtension:
 
                 except Exception as e:
                     self.logger.error(
-                        f"Model Linker civitai-search error: {e}", exc_info=True
+                        f"Model Resolver civitai-search error: {e}", exc_info=True
                     )
                     return web.json_response({"error": str(e)}, status=500)
 
@@ -794,7 +794,7 @@ class ModelLinkerExtension:
 
             if download_available:
 
-                @routes.post("/model_linker/search")
+                @routes.post("/model_resolver/search")
                 async def search_sources(request):
                     """Search for model download sources."""
                     try:
@@ -1257,10 +1257,10 @@ class ModelLinkerExtension:
                         return web.json_response(results)
 
                     except Exception as e:
-                        log_exception(f"Model Linker search error: {e}")
+                        log_exception(f"Model Resolver search error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.post("/model_linker/clear-search-cache")
+                @routes.post("/model_resolver/clear-search-cache")
                 async def clear_search_cache_route(request):
                     """Clear backend search caches after token/settings changes."""
                     try:
@@ -1274,7 +1274,7 @@ class ModelLinkerExtension:
                         log_exception(f"Clear search cache error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.post("/model_linker/civitai/session-token/check")
+                @routes.post("/model_resolver/civitai/session-token/check")
                 async def civitai_session_token_check_route(request):
                     """Check whether a CivitAI browser session token is valid."""
                     try:
@@ -1288,7 +1288,7 @@ class ModelLinkerExtension:
                         log_exception(f"CivitAI session token check error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.post("/model_linker/civitai/api-key/check")
+                @routes.post("/model_resolver/civitai/api-key/check")
                 async def civitai_api_key_check_route(request):
                     """Check whether a CivitAI API key is valid."""
                     try:
@@ -1302,7 +1302,7 @@ class ModelLinkerExtension:
                         log_exception(f"CivitAI API key check error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.post("/model_linker/huggingface/token/check")
+                @routes.post("/model_resolver/huggingface/token/check")
                 async def huggingface_token_check_route(request):
                     """Check whether a HuggingFace token is valid."""
                     try:
@@ -1314,7 +1314,7 @@ class ModelLinkerExtension:
                         log_exception(f"HuggingFace token check error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.post("/model_linker/brave/api-key/check")
+                @routes.post("/model_resolver/brave/api-key/check")
                 async def brave_api_key_check_route(request):
                     """Check whether a Brave Search API key is valid."""
                     try:
@@ -1328,7 +1328,7 @@ class ModelLinkerExtension:
                         log_exception(f"Brave Search API key check error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.get("/model_linker/huggingface/author-index/status")
+                @routes.get("/model_resolver/huggingface/author-index/status")
                 async def huggingface_author_index_status_route(request):
                     """Return local HuggingFace author fallback index status."""
                     try:
@@ -1337,7 +1337,7 @@ class ModelLinkerExtension:
                         log_exception(f"HuggingFace author index status error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.post("/model_linker/huggingface/author-index/refresh")
+                @routes.post("/model_resolver/huggingface/author-index/refresh")
                 async def huggingface_author_index_refresh_route(request):
                     """Refresh HuggingFace author fallback index."""
                     try:
@@ -1352,7 +1352,7 @@ class ModelLinkerExtension:
                         log_exception(f"HuggingFace author index refresh error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.get("/model_linker/model-list/status")
+                @routes.get("/model_resolver/model-list/status")
                 async def model_list_status_route(request):
                     """Return local model-list status and optionally compare with GitHub."""
                     try:
@@ -1367,7 +1367,7 @@ class ModelLinkerExtension:
                         log_exception(f"Model list status error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.post("/model_linker/model-list/update")
+                @routes.post("/model_resolver/model-list/update")
                 async def model_list_update_route(request):
                     """Download latest ComfyUI-Manager model-list.json."""
                     try:
@@ -1381,7 +1381,7 @@ class ModelLinkerExtension:
                         log_exception(f"Model list update error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.post("/model_linker/download")
+                @routes.post("/model_resolver/download")
                 async def download_model(request):
                     """Start downloading a model."""
                     try:
@@ -1441,13 +1441,13 @@ class ModelLinkerExtension:
 
                     except Exception as e:
                         self.logger.error(
-                            f"Model Linker download error: {e}", exc_info=True
+                            f"Model Resolver download error: {e}", exc_info=True
                         )
                         return web.json_response(
                             {"error": str(e), "success": False}, status=500
                         )
 
-                @routes.get("/model_linker/progress/{download_id}")
+                @routes.get("/model_resolver/progress/{download_id}")
                 async def get_download_progress(request):
                     """Get progress for a specific download."""
                     try:
@@ -1462,11 +1462,11 @@ class ModelLinkerExtension:
                             )
                     except Exception as e:
                         self.logger.error(
-                            f"Model Linker progress error: {e}", exc_info=True
+                            f"Model Resolver progress error: {e}", exc_info=True
                         )
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.get("/model_linker/progress")
+                @routes.get("/model_resolver/progress")
                 async def get_all_downloads_progress(request):
                     """Get progress for all downloads."""
                     try:
@@ -1474,11 +1474,11 @@ class ModelLinkerExtension:
                         return web.json_response(progress)
                     except Exception as e:
                         self.logger.error(
-                            f"Model Linker progress error: {e}", exc_info=True
+                            f"Model Resolver progress error: {e}", exc_info=True
                         )
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.post("/model_linker/cancel/{download_id}")
+                @routes.post("/model_resolver/cancel/{download_id}")
                 async def cancel_download_route(request):
                     """Cancel a download in progress."""
                     try:
@@ -1487,13 +1487,13 @@ class ModelLinkerExtension:
                         return web.json_response({"success": True})
                     except Exception as e:
                         self.logger.error(
-                            f"Model Linker cancel error: {e}", exc_info=True
+                            f"Model Resolver cancel error: {e}", exc_info=True
                         )
                         return web.json_response(
                             {"error": str(e), "success": False}, status=500
                         )
 
-                @routes.get("/model_linker/directories")
+                @routes.get("/model_resolver/directories")
                 async def get_directories(request):
                     """Get available model directories."""
                     try:
@@ -1521,11 +1521,11 @@ class ModelLinkerExtension:
                         return web.json_response(directories)
                     except Exception as e:
                         self.logger.error(
-                            f"Model Linker directories error: {e}", exc_info=True
+                            f"Model Resolver directories error: {e}", exc_info=True
                         )
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.get("/model_linker/capabilities")
+                @routes.get("/model_resolver/capabilities")
                 async def get_capabilities(request):
                     """Get optional source capabilities available in this install."""
                     try:
@@ -1539,11 +1539,11 @@ class ModelLinkerExtension:
                         )
                     except Exception as e:
                         self.logger.error(
-                            f"Model Linker capabilities error: {e}", exc_info=True
+                            f"Model Resolver capabilities error: {e}", exc_info=True
                         )
                         return web.json_response({"error": str(e)}, status=500)
 
-                @routes.get("/model_linker/subfolders/{category}")
+                @routes.get("/model_resolver/subfolders/{category}")
                 async def get_subfolders(request):
                     """Get known subfolders for a category using ComfyUI folder_paths."""
                     try:
@@ -1579,7 +1579,7 @@ class ModelLinkerExtension:
                         known_categories = set(folder_paths.folder_names_and_paths.keys())
                         if category not in known_categories:
                             self.logger.debug(
-                                f"Model Linker: skipping subfolder lookup for unknown category '{raw_category}' -> '{category}'"
+                                f"Model Resolver: skipping subfolder lookup for unknown category '{raw_category}' -> '{category}'"
                             )
                             return web.json_response([])
 
@@ -1599,31 +1599,31 @@ class ModelLinkerExtension:
                         return web.json_response(sorted(subfolders))
                     except Exception as e:
                         self.logger.error(
-                            f"Model Linker subfolders error: {e}", exc_info=True
+                            f"Model Resolver subfolders error: {e}", exc_info=True
                         )
                         return web.json_response({"error": str(e)}, status=500)
 
             self.routes_setup = True
-            self.logger.info("Model Linker: API routes registered successfully")
+            self.logger.info("Model Resolver: API routes registered successfully")
             return True
 
         except ImportError as e:
             self.logger.warning(
-                f"Model Linker: Could not register routes (missing dependency): {e}"
+                f"Model Resolver: Could not register routes (missing dependency): {e}"
             )
             return False
         except Exception as e:
             self.logger.error(
-                f"Model Linker: Error setting up routes: {e}", exc_info=True
+                f"Model Resolver: Error setting up routes: {e}", exc_info=True
             )
             return False
 
 
 # Initialize the extension
 try:
-    extension = ModelLinkerExtension()
+    extension = ModelResolverExtension()
     extension.initialize()
 except Exception as e:
     log_error(
-        f"ComfyUI Model Linker extension initialization failed: {e}", exc_info=True
+        f"ComfyUI Model Resolver extension initialization failed: {e}", exc_info=True
     )

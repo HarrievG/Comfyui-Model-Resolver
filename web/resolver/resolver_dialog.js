@@ -1,4 +1,4 @@
-import { $el, ComfyDialog } from "../../../../scripts/ui.js";
+﻿import { $el, ComfyDialog } from "../../../../scripts/ui.js";
 import { dialogShellMethods } from "./shell/dialog_shell_methods.js";
 import { lifecycleGraphMethods } from "./shell/lifecycle_graph_methods.js";
 import { workflowStateMethods } from "./shell/workflow_state_methods.js";
@@ -13,7 +13,7 @@ import { queueMethods } from "./actions/queue_methods.js";
 import { resolveDownloadMethods } from "./actions/resolve_download_methods.js";
 import { selectionMethods } from "./actions/selection_methods.js";
 import { renderFormatMethods } from "./utils/render_format_methods.js";
-export class LinkerManagerDialog extends ComfyDialog {
+export class ResolverManagerDialog extends ComfyDialog {
     constructor() {
         super();
         this.currentWorkflow = null;
@@ -39,7 +39,7 @@ export class LinkerManagerDialog extends ComfyDialog {
         this.activeFooterMenu = null;
         this.batchSearchRunning = false;
         this.boundHandleOutsideClick = this.handleOutsideClick.bind(this);
-        this.activeTabStorageKey = 'model_linker_active_tab';
+        this.activeTabStorageKey = 'model_resolver_active_tab';
         this.activeTab = this.restoreActiveTab();  // Default tab
         this.fullscreen = false;
         this.returnToDockedAfterFullscreen = false;
@@ -47,9 +47,9 @@ export class LinkerManagerDialog extends ComfyDialog {
         this.dockContainer = null;
         this.lastDockContainer = null;
         this.pendingDockToSidebar = false;
-        this.sidebarTabId = "comfyui-model-linker";
-        this.sidebarOpenModeStorageKey = "model_linker_sidebar_open_mode";
-        this.missingBrowserSplitStorageKey = "model_linker_missing_browser_detail_w";
+        this.sidebarTabId = "comfyui-model-resolver";
+        this.sidebarOpenModeStorageKey = "model_resolver_sidebar_open_mode";
+        this.missingBrowserSplitStorageKey = "model_resolver_missing_browser_detail_w";
         this.dockButton = null;
         this.undockButton = null;
         this._floatingRectBeforeDock = null;
@@ -66,44 +66,44 @@ export class LinkerManagerDialog extends ComfyDialog {
         this._boundHandleViewportResize = () => this.scheduleModalViewportClamp(true);
 
         // Create backdrop overlay for click-outside-to-close
-        this.backdrop = $el("div.model-linker-backdrop", {
+        this.backdrop = $el("div.model-resolver-backdrop", {
             parent: document.body
         });
 
         // Create context menu for model chips
-        this.contextMenu = $el("div.ml-context-menu", {
+        this.contextMenu = $el("div.mr-context-menu", {
             parent: document.body
         }, [
-            $el("div.ml-context-menu-item", {
+            $el("div.mr-context-menu-item", {
                 onclick: () => this.handleContextMenuAction('showInfo')
             }, [
-                $el("span.ml-context-menu-item-icon", { textContent: "ℹ" }),
+                $el("span.mr-context-menu-item-icon", { textContent: "ℹ" }),
                 $el("span", { textContent: "Show Info" })
             ]),
-            $el("div.ml-context-menu-divider"),
-            $el("div.ml-context-menu-item", {
+            $el("div.mr-context-menu-divider"),
+            $el("div.mr-context-menu-item", {
                 onclick: () => this.handleContextMenuAction('civitai')
             }, [
-                $el("span.ml-context-menu-item-icon", { textContent: "🌐" }),
+                $el("span.mr-context-menu-item-icon", { textContent: "🌐" }),
                 $el("span", { textContent: "Open in CivitAI" })
             ]),
-            $el("div.ml-context-menu-divider"),
-            $el("div.ml-context-menu-item", {
+            $el("div.mr-context-menu-divider"),
+            $el("div.mr-context-menu-item", {
                 onclick: () => this.handleContextMenuAction('openFolder')
             }, [
-                $el("span.ml-context-menu-item-icon", { textContent: "📁" }),
+                $el("span.mr-context-menu-item-icon", { textContent: "📁" }),
                 $el("span", { textContent: "Open Containing Folder" })
             ])
         ]);
 
-        this.tooltipElement = $el("div.ml-global-tooltip", { parent: document.body });
+        this.tooltipElement = $el("div.mr-global-tooltip", { parent: document.body });
 
         // Selected model for context menu
         this._contextMenuModel = null;
 
         // Create dialog element using $el
-        this.element = $el("div.comfy-modal.model-linker-modal", {
-            id: "model-linker-modal",
+        this.element = $el("div.comfy-modal.model-resolver-modal", {
+            id: "model-resolver-modal",
             parent: document.body
         }, [
             this.createHeader(),
@@ -140,7 +140,7 @@ function applyDialogMethods(...sources) {
         for (const key of Reflect.ownKeys(source)) {
             const descriptor = Object.getOwnPropertyDescriptor(source, key);
             descriptor.enumerable = false;
-            Object.defineProperty(LinkerManagerDialog.prototype, key, descriptor);
+            Object.defineProperty(ResolverManagerDialog.prototype, key, descriptor);
         }
     }
 }

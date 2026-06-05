@@ -1,14 +1,14 @@
-export function registerGlobalHelpers() {
+﻿export function registerGlobalHelpers() {
     // Global helper functions for inline onclick handlers
     window.MLToggleHidden = function(id, trigger, collapsedText, expandedText) {
         const element = document.getElementById(id);
         if (!element) return;
 
-        const isHidden = element.classList.toggle('ml-hidden');
+        const isHidden = element.classList.toggle('mr-hidden');
         if (trigger) {
             trigger.setAttribute('aria-expanded', String(!isHidden));
-            const label = trigger.querySelector?.('.ml-local-alternatives-label');
-            const state = trigger.querySelector?.('.ml-local-alternatives-state');
+            const label = trigger.querySelector?.('.mr-local-alternatives-label');
+            const state = trigger.querySelector?.('.mr-local-alternatives-state');
             if (label || state) {
                 if (label) label.textContent = isHidden ? collapsedText : expandedText;
                 if (state) state.textContent = isHidden ? 'Show' : 'Hide';
@@ -23,9 +23,9 @@ export function registerGlobalHelpers() {
         if (!section) return;
 
         const normalizedMode = ['all', 'active', 'inactive'].includes(mode) ? mode : 'all';
-        const codeEl = section.querySelector('.ml-copy-code');
-        const labelEl = section.querySelector('.ml-copy-label');
-        const metaEl = section.querySelector('.ml-copy-meta');
+        const codeEl = section.querySelector('.mr-copy-code');
+        const labelEl = section.querySelector('.mr-copy-label');
+        const metaEl = section.querySelector('.mr-copy-meta');
         const dataKey = normalizedMode === 'all' ? 'mlAll' : normalizedMode === 'active' ? 'mlActive' : 'mlInactive';
         const countKey = normalizedMode === 'all' ? 'mlAllCount' : normalizedMode === 'active' ? 'mlActiveCount' : 'mlInactiveCount';
         const labelMap = {
@@ -41,7 +41,7 @@ export function registerGlobalHelpers() {
             metaEl.textContent = `${count} token${count === 1 ? '' : 's'}`;
         }
 
-        section.querySelectorAll('.ml-copy-mode').forEach(btn => {
+        section.querySelectorAll('.mr-copy-mode').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.mlCopyMode === normalizedMode);
         });
     };
@@ -61,16 +61,16 @@ export function registerGlobalHelpers() {
         if (!filterBtn) return;
         
         // Update button states
-        document.querySelectorAll('.ml-btn-filter').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.mr-btn-filter').forEach(b => b.classList.remove('active'));
         filterBtn.classList.add('active');
         
         // Filter model sections
-        document.querySelectorAll('.ml-model-section').forEach(s => {
+        document.querySelectorAll('.mr-model-section').forEach(s => {
             const hasActive = s.getAttribute('data-ml-active') === 'true';
             const hasInactive = s.getAttribute('data-ml-inactive') === 'true';
             
-            const activeSection = s.querySelector('.ml-model-group-active');
-            const inactiveSection = s.querySelector('.ml-model-group-inactive');
+            const activeSection = s.querySelector('.mr-model-group-active');
+            const inactiveSection = s.querySelector('.mr-model-group-inactive');
             
             if (filter === 'all') {
                 s.style.display = 'block';
@@ -87,7 +87,7 @@ export function registerGlobalHelpers() {
             }
         });
         
-        const copySection = document.querySelector('[id^="ml-copy-"]');
+        const copySection = document.querySelector('[id^="mr-copy-"]');
         if (copySection) {
             window.MLSetCopyMode(copySection.id, filter);
         }
@@ -118,12 +118,12 @@ export function registerGlobalHelpers() {
             const model = JSON.parse(decodeURIComponent(modelData));
             
             // Get dialog instance
-            const dialog = window.modelLinkerDialog;
+            const dialog = window.ModelResolverDialog;
             if (dialog && dialog.showContextMenu) {
                 dialog.showContextMenu(event.clientX, event.clientY, model);
             }
         } catch (e) {
-            console.error('Model Linker: Error opening context menu:', e);
+            console.error('Model Resolver: Error opening context menu:', e);
         }
     };
 }

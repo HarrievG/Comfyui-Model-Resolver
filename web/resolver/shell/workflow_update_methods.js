@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -49,7 +49,7 @@ export const workflowUpdateMethods = {
      */
     async updateWorkflowInComfyUI(workflow) {
         if (!app || !app.graph) {
-            console.warn('Model Linker: Could not update workflow - app or app.graph not available');
+            console.warn('Model Resolver: Could not update workflow - app or app.graph not available');
             return;
         }
 
@@ -78,9 +78,9 @@ export const workflowUpdateMethods = {
                 return;
             }
 
-            console.warn('Model Linker: No method available to update workflow');
+            console.warn('Model Resolver: No method available to update workflow');
         } catch (error) {
-            console.error('Model Linker: Error updating workflow in ComfyUI:', error);
+            console.error('Model Resolver: Error updating workflow in ComfyUI:', error);
             // Don't throw - allow the workflow update to continue even if UI update fails
             // The backend has already updated the workflow data
         }

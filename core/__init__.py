@@ -1,5 +1,5 @@
 """
-Core modules for Model Linker extension.
+Core modules for Model Resolver extension.
 
 Modules:
 - linker: Main API for analyzing and resolving missing models
@@ -13,7 +13,7 @@ Modules:
 
 from .log_system.log_funcs import log_debug, log_info, log_warn, log_error, log_exception
 from .log_system.logger import logger
-from .linker import analyze_and_find_matches, apply_resolution
+from .resolver import analyze_and_find_matches, apply_resolution
 from .scanner import get_model_files
 from .matcher import find_matches
 

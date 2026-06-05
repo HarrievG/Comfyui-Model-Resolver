@@ -1,4 +1,4 @@
-"""
+﻿"""
 Workflow Analyzer Module
 
 Extracts model references from workflow JSON and identifies missing models.
@@ -21,7 +21,7 @@ try:
     import folder_paths
 except ImportError:
     folder_paths = None
-    log_warn("Model Linker: folder_paths not available yet - will retry later")
+    log_warn("Model Resolver: folder_paths not available yet - will retry later")
 
 
 # Common model file extensions
@@ -196,7 +196,7 @@ def try_resolve_model_path(
 
             folder_paths = fp
         except ImportError:
-            log_error("Model Linker: folder_paths not available")
+            log_error("Model Resolver: folder_paths not available")
             return None
 
     # If categories not provided, try all categories

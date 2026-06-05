@@ -1,5 +1,5 @@
-"""
-Core Linker Module
+﻿"""
+Core Resolver Module
 
 Integrates all components to provide high-level API for model linking.
 """

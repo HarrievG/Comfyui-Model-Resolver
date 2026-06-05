@@ -1,4 +1,4 @@
-import { app } from "../../../../../scripts/app.js";
+﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -11,17 +11,17 @@ export const renderFormatMethods = {
     getConfidenceBadge(confidence) {
         let badgeClass;
         if (confidence >= 95) {
-            badgeClass = 'ml-badge-high';
+            badgeClass = 'mr-badge-high';
         } else if (confidence >= 70) {
-            badgeClass = 'ml-badge-medium';
+            badgeClass = 'mr-badge-medium';
         } else {
-            badgeClass = 'ml-badge-low';
+            badgeClass = 'mr-badge-low';
         }
-        return `<span class="ml-badge ${badgeClass}">${confidence}%</span>`;
+        return `<span class="mr-badge ${badgeClass}">${confidence}%</span>`;
     },
 
     getStatusBadge(label, variant = 'neutral') {
-        return `<span class="ml-badge ml-badge-${variant}">${label}</span>`;
+        return `<span class="mr-badge mr-badge-${variant}">${label}</span>`;
     },
 
     /**
@@ -110,8 +110,8 @@ export const renderFormatMethods = {
         const icon = icons[type] || icons.info;
 
         return `
-            <div class="ml-status ml-status-${type}">
-                <span class="ml-status-icon">${icon}</span>
+            <div class="mr-status mr-status-${type}">
+                <span class="mr-status-icon">${icon}</span>
                 <span>${message}</span>
             </div>
         `;
@@ -126,11 +126,11 @@ export const renderFormatMethods = {
      */
     renderProgressBar(percent, leftText = '', rightText = '') {
         return `
-            <div class="ml-progress-container">
-                <div class="ml-progress-bar">
-                    <div class="ml-progress-fill" style="width: ${percent}%"></div>
+            <div class="mr-progress-container">
+                <div class="mr-progress-bar">
+                    <div class="mr-progress-fill" style="width: ${percent}%"></div>
                 </div>
-                <div class="ml-progress-text">
+                <div class="mr-progress-text">
                     <span>${leftText}</span>
                     <span>${rightText}</span>
                 </div>
@@ -147,13 +147,13 @@ export const renderFormatMethods = {
         const detail = total > 0 ? `${current} / ${total}` : 'Preparing...';
 
         return `
-            <div class="ml-download-section">
-                <div class="ml-status-inline">
+            <div class="mr-download-section">
+                <div class="mr-status-inline">
                     ${this.getStatusBadge('Analyzing', 'info')}
-                    <span class="ml-download-info">${message}</span>
+                    <span class="mr-download-info">${message}</span>
                 </div>
                 ${this.renderProgressBar(percent, detail, `${percent}%`)}
-                ${modelName ? `<div class="ml-download-info">${modelName}</div>` : ''}
+                ${modelName ? `<div class="mr-download-info">${modelName}</div>` : ''}
             </div>
         `;
     },
@@ -161,7 +161,7 @@ export const renderFormatMethods = {
     async pollAnalysisProgress(analysisId, token) {
         while (this._analysisProgressToken === token) {
             try {
-                const response = await api.fetchApi(`/model_linker/analyze-progress/${analysisId}`);
+                const response = await api.fetchApi(`/model_resolver/analyze-progress/${analysisId}`);
                 if (response.ok && this.contentElement && this._analysisProgressToken === token) {
                     const progress = await response.json();
                     this.contentElement.innerHTML = this.renderAnalysisProgress(progress);
@@ -170,7 +170,7 @@ export const renderFormatMethods = {
                     }
                 }
             } catch (error) {
-                console.warn('Model Linker: analysis progress polling failed', error);
+                console.warn('Model Resolver: analysis progress polling failed', error);
             }
 
             await new Promise(resolve => setTimeout(resolve, 250));
