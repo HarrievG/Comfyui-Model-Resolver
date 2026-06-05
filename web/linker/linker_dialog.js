@@ -1,0 +1,163 @@
+import { $el, ComfyDialog } from "../../../../scripts/ui.js";
+import { searchPanelMethods } from "./search_panel.js";
+import { modelInfoMethods } from "./model_info_methods.js";
+import { renderFormatMethods } from "./render_format_methods.js";
+import { workflowStateMethods } from "./workflow_state_methods.js";
+import { selectionMethods } from "./selection_methods.js";
+import { dialogShellMethods } from "./dialog_shell_methods.js";
+import { downloadTargetMethods } from "./download_target_methods.js";
+import { optionsMethods } from "./options_methods.js";
+import { tabsLoadedMethods } from "./tabs_loaded_methods.js";
+import { queueMethods } from "./queue_methods.js";
+import { lifecycleGraphMethods } from "./lifecycle_graph_methods.js";
+import { missingBrowserMethods } from "./missing_browser_methods.js";
+import { resolveDownloadMethods } from "./resolve_download_methods.js";
+import { workflowUpdateMethods } from "./workflow_update_methods.js";
+export class LinkerManagerDialog extends ComfyDialog {
+    constructor() {
+        super();
+        this.currentWorkflow = null;
+        this.missingModels = [];
+        this.allModels = null; // list of all available models for dropdown
+        this.downloadDirectories = null;
+        this.capabilities = null;
+        this.downloadSubfolders = new Map();
+        this.pendingResolutions = [];
+        this.pendingIndex = new Map(); // key -> index in pendingResolutions
+        this.workflowPendingSelections = new Map(); // workflow key -> queued selections
+        this.workflowSearchResultCaches = new Map(); // workflow key -> search results by missing model
+        this.activeDownloads = {};  // Track active downloads
+        this.searchResultCache = new Map();
+        this.searchProgressTimers = new Map();
+        this.urnResolvePromises = new Map();
+        this.urnLocalMatchPromises = new Map();
+        this.cachedAnalysisData = null;
+        this.cachedWorkflowSignature = null;
+        this.selectedMissingModelKey = null;
+        this.batchSelectedMissingKeys = new Set();
+        this.lastBatchSelectedMissingKey = null;
+        this.activeFooterMenu = null;
+        this.batchSearchRunning = false;
+        this.boundHandleOutsideClick = this.handleOutsideClick.bind(this);
+        this.activeTabStorageKey = 'model_linker_active_tab';
+        this.activeTab = this.restoreActiveTab();  // Default tab
+        this.fullscreen = false;
+        this.returnToDockedAfterFullscreen = false;
+        this.docked = false;
+        this.dockContainer = null;
+        this.lastDockContainer = null;
+        this.pendingDockToSidebar = false;
+        this.sidebarTabId = "comfyui-model-linker";
+        this.sidebarOpenModeStorageKey = "model_linker_sidebar_open_mode";
+        this.missingBrowserSplitStorageKey = "model_linker_missing_browser_detail_w";
+        this.dockButton = null;
+        this.undockButton = null;
+        this._floatingRectBeforeDock = null;
+        this._dragging = false;
+        this._dragStart = null;
+        this._analysisProgressToken = null;
+        this._locateAnimationFrame = null;
+        this._viewportClampFrame = null;
+        this.activeWorkflowRouteKey = this.getActiveWorkflowRouteKey();
+        this.activeWorkflowSignature = null;
+        this._workflowRefreshTimer = null;
+        this._workflowRefreshExpectedRoute = null;
+        this._workflowRefreshPreviousSignature = null;
+        this._boundHandleViewportResize = () => this.scheduleModalViewportClamp(true);
+
+        // Create backdrop overlay for click-outside-to-close
+        this.backdrop = $el("div.model-linker-backdrop", {
+            parent: document.body
+        });
+
+        // Create context menu for model chips
+        this.contextMenu = $el("div.ml-context-menu", {
+            parent: document.body
+        }, [
+            $el("div.ml-context-menu-item", {
+                onclick: () => this.handleContextMenuAction('showInfo')
+            }, [
+                $el("span.ml-context-menu-item-icon", { textContent: "ℹ" }),
+                $el("span", { textContent: "Show Info" })
+            ]),
+            $el("div.ml-context-menu-divider"),
+            $el("div.ml-context-menu-item", {
+                onclick: () => this.handleContextMenuAction('civitai')
+            }, [
+                $el("span.ml-context-menu-item-icon", { textContent: "🌐" }),
+                $el("span", { textContent: "Open in CivitAI" })
+            ]),
+            $el("div.ml-context-menu-divider"),
+            $el("div.ml-context-menu-item", {
+                onclick: () => this.handleContextMenuAction('openFolder')
+            }, [
+                $el("span.ml-context-menu-item-icon", { textContent: "📁" }),
+                $el("span", { textContent: "Open Containing Folder" })
+            ])
+        ]);
+
+        this.tooltipElement = $el("div.ml-global-tooltip", { parent: document.body });
+
+        // Selected model for context menu
+        this._contextMenuModel = null;
+
+        // Create dialog element using $el
+        this.element = $el("div.comfy-modal.model-linker-modal", {
+            id: "model-linker-modal",
+            parent: document.body
+        }, [
+            this.createHeader(),
+            this.createContent(),
+            this.createFooter()
+        ]);
+
+        this.tooltipObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        this.bindTooltips(node);
+                    }
+                }
+            }
+        });
+        this.tooltipObserver.observe(this.element, {
+            childList: true,
+            subtree: true
+        });
+        this.bindTooltips(this.element);
+
+        // Add click listener to hide context menu when clicking outside
+        this.boundHandleContextMenuClick = (e) => this.handleContextMenuOutsideClick(e);
+        document.addEventListener('click', this.boundHandleContextMenuClick);
+        this.boundHandleFooterMenuClick = (e) => this.handleFooterMenuOutsideClick(e);
+        document.addEventListener('click', this.boundHandleFooterMenuClick);
+        window.addEventListener('resize', this._boundHandleViewportResize);
+    }
+}
+
+function applyDialogMethods(...sources) {
+    for (const source of sources) {
+        for (const key of Reflect.ownKeys(source)) {
+            const descriptor = Object.getOwnPropertyDescriptor(source, key);
+            descriptor.enumerable = false;
+            Object.defineProperty(LinkerManagerDialog.prototype, key, descriptor);
+        }
+    }
+}
+
+applyDialogMethods(
+    searchPanelMethods,
+    modelInfoMethods,
+    renderFormatMethods,
+    workflowStateMethods,
+    selectionMethods,
+    dialogShellMethods,
+    downloadTargetMethods,
+    optionsMethods,
+    tabsLoadedMethods,
+    queueMethods,
+    lifecycleGraphMethods,
+    missingBrowserMethods,
+    resolveDownloadMethods,
+    workflowUpdateMethods
+);

@@ -1,0 +1,730 @@
+import { app } from "../../../../scripts/app.js";
+import { api } from "../../../../scripts/api.js";
+import { $el } from "../../../../scripts/ui.js";
+import { loadStylesWhenNeeded } from "../utils/css_loader.js";
+import { LinkerManagerDialog } from "./linker_dialog.js";
+
+// Main extension class
+export class ModelLinker {
+    constructor() {
+        this.linkerButton = null;
+        this.buttonGroup = null;
+        this.buttonId = "model-linker-button";
+        this.sidebarTabId = "comfyui-model-linker";
+        this.sidebarRegistered = false;
+        this.openTooltip = "Open Model Linker to find or download missing workflow models. Shortcut: Ctrl+Shift+L.";
+        this.dialog = null;
+        this.isCheckingMissing = false;  // Prevent multiple simultaneous checks
+        this.lastCheckedWorkflow = null;  // Track to avoid duplicate checks
+    }
+
+    setup = async () => {
+        loadStylesWhenNeeded();
+
+        // Remove any existing button
+        this.removeExistingButton();
+
+        // Create dialog instance
+        if (!this.dialog) {
+            this.dialog = new LinkerManagerDialog();
+            window.modelLinkerDialog = this.dialog;
+        }
+
+        // Register keyboard shortcut (Ctrl+Shift+L)
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'l') {
+                e.preventDefault();
+                this.openLinkerManager();
+            }
+        });
+
+        // Listen for workflow load events to auto-check for missing models
+        this.setupAutoOpenOnMissingModels();
+        this.setupActiveWorkflowChangeListeners();
+
+        const sidebarRegistered = this.registerSidebarButton();
+        if (!sidebarRegistered) {
+            await this.registerTopbarButton();
+        } else {
+            this.attachSidebarButtonToggleHandler();
+        }
+    }
+
+    registerSidebarButton() {
+        const registerSidebarTab = app.extensionManager?.registerSidebarTab;
+        if (typeof registerSidebarTab !== "function") {
+            return false;
+        }
+
+        if (this.sidebarRegistered || window.__modelLinkerSidebarRegistered) {
+            this.sidebarRegistered = true;
+            return true;
+        }
+
+        try {
+            registerSidebarTab.call(app.extensionManager, {
+                id: this.sidebarTabId,
+                icon: "mdi mdi-link-variant",
+                title: "Model Linker",
+                tooltip: this.openTooltip,
+                type: "custom",
+                render: (element) => this.renderSidebarPanel(element),
+            });
+            this.sidebarRegistered = true;
+            window.__modelLinkerSidebarRegistered = true;
+            return true;
+        } catch (error) {
+            console.warn("Model Linker: Sidebar tab registration failed, falling back to top menu button.", error);
+            return false;
+        }
+    }
+
+    attachSidebarButtonToggleHandler() {
+        window.__modelLinkerSidebarToggleOwner = this;
+        if (window.__modelLinkerSidebarToggleHandlerAttached) return;
+
+        window.__modelLinkerSidebarToggleHandlerAttached = true;
+        window.__modelLinkerSidebarToggleHandler = (event) => {
+            window.__modelLinkerSidebarToggleOwner?.handleSidebarButtonClick(event);
+        };
+        document.addEventListener('click', window.__modelLinkerSidebarToggleHandler, true);
+    }
+
+    handleSidebarButtonClick(event) {
+        const target = event.target instanceof Element ? event.target : null;
+        const button = target?.closest(`.${this.sidebarTabId}-tab-button`);
+        if (!(button instanceof HTMLElement)) return;
+        if (!this.dialog?.isVisible()) return;
+
+        const wasDocked = this.dialog.docked;
+        this.dialog.close({ collapseSidebar: false });
+
+        if (!wasDocked) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation?.();
+
+            requestAnimationFrame(() => {
+                if (this.isSidebarButtonActive(button)) {
+                    button.click();
+                }
+            });
+        }
+    }
+
+    isSidebarButtonActive(button) {
+        return button.matches([
+            '[aria-pressed="true"]',
+            '[aria-selected="true"]',
+            '[data-active="true"]',
+            '[data-selected="true"]',
+            '.active',
+            '.is-active',
+            '.selected',
+            '.p-highlight'
+        ].join(','));
+    }
+
+    renderSidebarPanel(element) {
+        element.style.height = "100%";
+        element.classList.add("ml-sidebar-dock-panel");
+
+        if (!this.dialog) {
+            this.dialog = new LinkerManagerDialog();
+            window.modelLinkerDialog = this.dialog;
+        }
+
+        if (this.dialog.shouldOpenFromSidebarFloating()) {
+            if (this.dialog.isVisible() && !this.dialog.docked) {
+                this.dialog.close();
+                this.dialog.closeComfySidebar(element);
+                return;
+            }
+
+            this.openLinkerManager({
+                forceFloating: true,
+                closeSidebarContainer: element,
+            });
+            return;
+        }
+
+        element.replaceChildren();
+        this.openLinkerManager({ dockContainer: element });
+    }
+
+    async registerTopbarButton() {
+        // Try to use new ComfyUI button system (like ComfyUI Manager does)
+        try {
+            // Dynamic imports for ComfyUI's button components
+            const { ComfyButtonGroup } = await import("../../../../scripts/ui/components/buttonGroup.js");
+            const { ComfyButton } = await import("../../../../scripts/ui/components/button.js");
+
+            // Create button group with Model Linker button
+            const modelLinkerButton = new ComfyButton({
+                icon: "link-variant",
+                action: () => this.openLinkerManager(),
+                content: "Model Linker",
+                classList: "comfyui-button comfyui-menu-mobile-collapse"
+            }).element;
+            modelLinkerButton.id = this.buttonId;
+            this.dialog.setTooltip(modelLinkerButton, this.openTooltip);
+            this.buttonGroup = new ComfyButtonGroup(
+                modelLinkerButton
+            );
+
+            // Insert before settings group in the menu
+            app.menu?.settingsGroup.element.before(this.buttonGroup.element);
+        } catch (e) {
+            // Fallback for older ComfyUI versions without the new button system
+            console.log('Model Linker: New button system not available, using floating button fallback.');
+            this.createFloatingButton();
+        }
+    }
+
+    /**
+     * Setup auto-open functionality when workflow is loaded with missing models
+     */
+    setupAutoOpenOnMissingModels() {
+        // Watch for ComfyUI's Missing Models popup and inject our button
+        this.setupMissingModelsPopupObserver();
+
+        console.log('Model Linker: Missing models popup button injection enabled');
+    }
+
+    setupActiveWorkflowChangeListeners() {
+        if (window.__modelLinkerWorkflowChangeHandlers) {
+            for (const { target, event, handler } of window.__modelLinkerWorkflowChangeHandlers) {
+                target?.removeEventListener?.(event, handler);
+            }
+        }
+
+        if (!window.__modelLinkerHistoryPatched) {
+            const originalPushState = history.pushState;
+            const originalReplaceState = history.replaceState;
+            history.pushState = function(...args) {
+                const result = originalPushState.apply(this, args);
+                window.dispatchEvent(new Event('model-linker-locationchange'));
+                return result;
+            };
+            history.replaceState = function(...args) {
+                const result = originalReplaceState.apply(this, args);
+                window.dispatchEvent(new Event('model-linker-locationchange'));
+                return result;
+            };
+            window.__modelLinkerHistoryPatched = true;
+        }
+
+        window.__modelLinkerWorkflowChangeOwner = this;
+
+        const routeHandler = () => {
+            window.__modelLinkerWorkflowChangeOwner?.handleActiveWorkflowRouteChange('route-change');
+        };
+        const focusHandler = () => {
+            window.__modelLinkerWorkflowChangeOwner?.handleActiveWorkflowRouteChange('window-focus');
+        };
+        const visibilityHandler = () => {
+            if (document.visibilityState === 'visible') {
+                window.__modelLinkerWorkflowChangeOwner?.handleActiveWorkflowRouteChange('visibility-change');
+            }
+        };
+
+        window.addEventListener('hashchange', routeHandler);
+        window.addEventListener('popstate', routeHandler);
+        window.addEventListener('model-linker-locationchange', routeHandler);
+        window.addEventListener('focus', focusHandler);
+        document.addEventListener('visibilitychange', visibilityHandler);
+
+        window.__modelLinkerWorkflowChangeHandlers = [
+            { target: window, event: 'hashchange', handler: routeHandler },
+            { target: window, event: 'popstate', handler: routeHandler },
+            { target: window, event: 'model-linker-locationchange', handler: routeHandler },
+            { target: window, event: 'focus', handler: focusHandler },
+            { target: document, event: 'visibilitychange', handler: visibilityHandler }
+        ];
+    }
+
+    handleActiveWorkflowRouteChange(reason = 'workflow-change') {
+        if (!this.dialog?.isVisible()) return;
+        this.dialog.scheduleActiveWorkflowRefresh(reason);
+    }
+
+    /**
+     * Setup MutationObserver to detect ComfyUI's Missing Models popup and inject our button
+     */
+    setupMissingModelsPopupObserver() {
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        this.checkAndInjectButton(node);
+                    }
+                }
+            }
+        });
+
+        // Observe the entire document for added nodes
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+
+    /**
+     * Check if a node is the Missing Models popup and inject our buttons
+     */
+    checkAndInjectButton(node) {
+        // Look for the Missing Models popup by finding elements with "Missing Models" text
+        const findMissingModelsDialog = (element) => {
+            // Check if this element or its children contain "Missing Models" heading
+            const headings = element.querySelectorAll ? element.querySelectorAll('h2, h3, [class*="title"], [class*="header"]') : [];
+            for (const heading of headings) {
+                if (heading.textContent?.includes('Missing Models')) {
+                    return element;
+                }
+            }
+            // Also check text content directly
+            if (element.textContent?.includes('Missing Models') && 
+                element.textContent?.includes('following models were not found')) {
+                return element;
+            }
+            return null;
+        };
+
+        const dialog = findMissingModelsDialog(node);
+        if (!dialog) return;
+
+        // Check if we already injected buttons
+        if (dialog.querySelector('#model-linker-btn-container')) return;
+
+        // Find a suitable place to inject the button
+        const injectButtons = () => {
+            // Auto-resolve button (green)
+            const autoResolveBtn = document.createElement('button');
+            autoResolveBtn.id = 'model-linker-btn-container'; // Use this ID to prevent duplicate injection
+            autoResolveBtn.className = 'ml-popup-auto-resolve-btn';
+            autoResolveBtn.textContent = '🔗 Auto-resolve 100%';
+            this.dialog?.setTooltip(autoResolveBtn, 'Link every missing model that already has an exact local match, then open Model Linker for the rest.');
+            autoResolveBtn.addEventListener('click', async () => {
+                await this.handleAutoResolveInPopup(dialog, autoResolveBtn);
+            });
+
+            // Find the "Don't show this again" checkbox row and add button next to it
+            const checkbox = dialog.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                const checkboxRow = checkbox.closest('label') || checkbox.parentElement;
+                if (checkboxRow && checkboxRow.parentElement) {
+                    // Make the parent a flex container to align checkbox and button
+                    checkboxRow.parentElement.classList.add('ml-popup-inline-actions');
+                    // Insert button at the beginning (left side)
+                    checkboxRow.parentElement.insertBefore(autoResolveBtn, checkboxRow);
+                    return;
+                }
+            }
+
+            // Fallback: Find the list of models and insert before it
+            const modelList = dialog.querySelector('[style*="overflow"]') || 
+                             dialog.querySelector('[class*="list"]') ||
+                             dialog.querySelector('[class*="content"]');
+            
+            if (modelList) {
+                // Create a wrapper and insert before the model list
+                const wrapper = document.createElement('div');
+                wrapper.className = 'ml-popup-actions-wrap';
+                wrapper.appendChild(autoResolveBtn);
+                modelList.parentElement?.insertBefore(wrapper, modelList);
+            } else {
+                // Find after the description text
+                const allElements = dialog.querySelectorAll('*');
+                for (const el of allElements) {
+                    if (el.textContent?.includes('following models were not found') && 
+                        el.children.length === 0) {
+                        el.parentElement?.insertBefore(btnContainer, el.nextSibling);
+                        break;
+                    }
+                }
+            }
+            
+            console.log('Model Linker: Injected buttons into Missing Models popup');
+        };
+
+        // Small delay to ensure popup is fully rendered
+        setTimeout(injectButtons, 100);
+    }
+
+    /**
+     * Handle auto-resolve in the popup - resolve 100% matches and open Model Linker for remaining
+     */
+    async handleAutoResolveInPopup(dialog, button) {
+        button.textContent = '⏳ Resolving...';
+        button.disabled = true;
+
+        // Close the popup first
+        const closeBtn = dialog.querySelector('button[class*="close"]') || 
+                        dialog.querySelector('svg')?.closest('button') ||
+                        Array.from(dialog.querySelectorAll('button')).find(b => 
+                            b.textContent === '×' || b.innerHTML.includes('×') || b.innerHTML.includes('close'));
+        
+        if (closeBtn) {
+            closeBtn.click();
+        }
+
+        // Small delay to let popup close
+        await new Promise(r => setTimeout(r, 200));
+
+// Create dialog if needed
+        if (!this.dialog) {
+            this.dialog = new LinkerManagerDialog();
+            window.modelLinkerDialog = this.dialog;
+        }
+        
+        // Run auto-resolve for 100% matches - returns the updated workflow
+        const updatedWorkflow = await this.dialog.autoResolve100Percent();
+        
+        // Always open Model Linker to show remaining unresolved models
+        // Pass the updated workflow if available to avoid race condition
+        this.dialog.show(updatedWorkflow || null);
+    }
+
+    /**
+     * Mark resolved model items in the popup as linked (green) and hide download buttons
+     */
+    removeResolvedFromPopup(dialog, resolvedFilenames) {
+        console.log('Model Linker: Looking for resolved filenames:', resolvedFilenames);
+        
+        // Strategy: For each filename, find text nodes containing it, 
+        // then find the nearest Download button and mark that row
+        for (const filename of resolvedFilenames) {
+            // Get all text in the dialog and find elements containing our filename
+            const walker = document.createTreeWalker(
+                dialog,
+                NodeFilter.SHOW_TEXT,
+                null,
+                false
+            );
+            
+            let node;
+            while (node = walker.nextNode()) {
+                if (node.textContent?.toLowerCase().includes(filename)) {
+                    // Found text containing filename - now find parent with Download button
+                    let parent = node.parentElement;
+                    let attempts = 0;
+                    
+                    while (parent && parent !== dialog && attempts < 10) {
+                        // Look for Download button at this level
+                        const downloadBtn = Array.from(parent.querySelectorAll('button'))
+                            .find(btn => btn.textContent?.includes('Download') && 
+                                        !btn.id?.includes('model-linker'));
+                        
+                        if (downloadBtn) {
+                            console.log('Model Linker: Found entry for', filename);
+                            this.markEntryAsResolved(parent, downloadBtn);
+                            break;
+                        }
+                        
+                        parent = parent.parentElement;
+                        attempts++;
+                    }
+                    
+                    // Only process first match for this filename
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Mark a model entry as resolved with visual feedback
+     */
+    markEntryAsResolved(container, downloadBtn) {
+        // Already marked?
+        if (container.dataset.resolved === 'true') return;
+        container.dataset.resolved = 'true';
+        
+        console.log('Model Linker: Marking entry as resolved', container);
+        
+        // Add green background/styling to the container
+        container.classList.add('ml-resolved-entry');
+        
+        // Hide the Download button and replace with badge
+        if (downloadBtn) {
+            // Create badge
+            const badge = document.createElement('span');
+            badge.className = 'ml-resolved-badge';
+            badge.textContent = '✓ Linked';
+            
+            // Replace download button with badge
+            downloadBtn.style.display = 'none';
+            downloadBtn.parentElement?.insertBefore(badge, downloadBtn);
+        }
+        
+        // Find and hide Copy URL button
+        const allBtns = container.querySelectorAll('button');
+        for (const btn of allBtns) {
+            if (btn.textContent?.includes('Copy URL')) {
+                btn.style.display = 'none';
+            }
+        }
+    }
+
+    /**
+     * Count remaining model items in the popup
+     */
+    countRemainingItems(dialog) {
+        // Count elements that look like model entries (have Download buttons)
+        const downloadButtons = dialog.querySelectorAll('button');
+        let count = 0;
+        for (const btn of downloadButtons) {
+            if (btn.textContent?.includes('Download') && !btn.id?.includes('model-linker')) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Update nodes directly in the graph without triggering a full workflow reload
+     * This prevents the Missing Models popup from closing
+     */
+    updateNodesDirectly(resolutions) {
+        if (!app?.graph) {
+            console.warn('Model Linker: Cannot update nodes - graph not available');
+            return;
+        }
+
+        for (const resolution of resolutions) {
+            const nodeId = resolution.node_id;
+            const widgetIndex = resolution.widget_index;
+            const resolvedPath = resolution.resolved_path;
+
+            // Find the node in the graph
+            const node = app.graph.getNodeById(nodeId);
+            if (!node) {
+                console.warn(`Model Linker: Node ${nodeId} not found in graph`);
+                continue;
+            }
+
+            // Update the widget value
+            if (node.widgets && node.widgets[widgetIndex]) {
+                const widget = node.widgets[widgetIndex];
+                widget.value = resolvedPath;
+                
+                // Trigger widget callback if it exists
+                if (widget.callback) {
+                    widget.callback(resolvedPath, app.graph, node, null, null);
+                }
+                
+                console.log(`Model Linker: Updated node ${nodeId} widget ${widgetIndex} to ${resolvedPath}`);
+            } else if (node.widgets_values) {
+                // Fallback: update widgets_values array directly
+                node.widgets_values[widgetIndex] = resolvedPath;
+                console.log(`Model Linker: Updated node ${nodeId} widgets_values[${widgetIndex}] to ${resolvedPath}`);
+            }
+
+            // Mark node as dirty to trigger redraw
+            if (node.setDirtyCanvas) {
+                node.setDirtyCanvas(true, true);
+            }
+        }
+
+        // Trigger canvas redraw
+        if (app.graph.setDirtyCanvas) {
+            app.graph.setDirtyCanvas(true, true);
+        }
+    }
+
+    /**
+     * Check if auto-open is enabled in user settings
+     */
+    isAutoOpenEnabled() {
+        return localStorage.getItem('modelLinker.autoOpenOnMissing') !== 'false';
+    }
+
+    /**
+     * Set auto-open preference
+     */
+    setAutoOpenEnabled(enabled) {
+        localStorage.setItem('modelLinker.autoOpenOnMissing', enabled ? 'true' : 'false');
+    }
+
+    /**
+     * Check for missing models and auto-open dialog if any are found
+     */
+    async checkAndOpenForMissingModels() {
+        // Check if auto-open is enabled
+        if (!this.isAutoOpenEnabled()) {
+            return;
+        }
+
+        // Prevent multiple simultaneous checks
+        if (this.isCheckingMissing) {
+            return;
+        }
+
+        this.isCheckingMissing = true;
+
+        try {
+            // Small delay to let workflow fully load
+            await new Promise(r => setTimeout(r, 500));
+
+            // Get current workflow
+            const workflow = app?.graph?.serialize();
+            if (!workflow) {
+                return;
+            }
+
+            // Create a simple hash to detect if workflow changed
+            const workflowHash = JSON.stringify(workflow.nodes?.map(n => n.type + ':' + JSON.stringify(n.widgets_values || [])));
+            
+            // Skip if we already checked this exact workflow
+            if (this.lastCheckedWorkflow === workflowHash) {
+                return;
+            }
+            this.lastCheckedWorkflow = workflowHash;
+
+            // Call analyze endpoint to check for missing models
+            const response = await api.fetchApi('/model_linker/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ workflow })
+            });
+
+            if (!response.ok) {
+                console.warn('Model Linker: Failed to analyze workflow for missing models');
+                return;
+            }
+
+            const data = await response.json();
+            
+            // Auto-open dialog if there are missing models
+            if (data.total_missing > 0) {
+                console.log(`Model Linker: Found ${data.total_missing} missing model(s), opening dialog...`);
+                this.openLinkerManager();
+            }
+
+        } catch (error) {
+            console.error('Model Linker: Error checking for missing models:', error);
+        } finally {
+            this.isCheckingMissing = false;
+        }
+    }
+
+    removeExistingButton() {
+        // Remove any existing button by ID
+        const existingButton = document.getElementById(this.buttonId);
+        if (existingButton) {
+            existingButton.remove();
+        }
+
+        document.querySelectorAll('.comfyui-button-group button.comfyui-button').forEach((button) => {
+            const label = button.querySelector('span')?.textContent?.trim() || button.textContent?.trim();
+            if (label === 'Model Linker') {
+                button.closest('.comfyui-button-group')?.remove();
+            }
+        });
+
+        // Remove button group if it exists
+        if (this.buttonGroup?.element?.parentNode) {
+            this.buttonGroup.element.remove();
+            this.buttonGroup = null;
+        }
+
+        // Also remove the stored reference if it exists
+        if (this.linkerButton && this.linkerButton.parentNode) {
+            this.linkerButton.remove();
+            this.linkerButton = null;
+        }
+    }
+
+    createFloatingButton() {
+        // Create a floating button as fallback for legacy ComfyUI versions
+        this.linkerButton = $el("button", {
+            id: this.buttonId,
+            textContent: "🔗 Model Linker",
+            onclick: () => {
+                this.openLinkerManager();
+            },
+            className: "model-linker-floating-button"
+        });
+
+        document.body.appendChild(this.linkerButton);
+        this.dialog?.setTooltip(this.linkerButton, "Open Model Linker to find or download missing workflow models. Shortcut: Ctrl+Shift+L.");
+    }
+
+    async openLinkerManager(options = {}) {
+        try {
+            if (!this.dialog) {
+                this.dialog = new LinkerManagerDialog();
+                window.modelLinkerDialog = this.dialog;
+            }
+            if (options.dockContainer && !options.forceFloating) {
+                await this.dialog.showDocked(options.dockContainer, options.workflow || null);
+                return;
+            }
+
+            const wasDocked = this.dialog.docked;
+            const showPromise = this.dialog.show(options.workflow || null);
+
+            if (options.closeSidebarContainer && !wasDocked) {
+                this.dialog.closeComfySidebar(options.closeSidebarContainer);
+            }
+
+            await showPromise;
+        } catch (error) {
+            console.error("🔗 Model Linker: Error creating/showing dialog:", error);
+            alert("Error opening Model Linker: " + error.message);
+        }
+    }
+
+    static switchFilter(filter) {
+        document.querySelectorAll('.ml-btn-filter').forEach(b => b.classList.remove('active'));
+        document.getElementById('filter-' + filter).classList.add('active');
+        
+        document.querySelectorAll('.ml-model-section').forEach(s => {
+            const hasActive = s.dataset.mlActive === 'true';
+            const hasInactive = s.dataset.mlInactive === 'true';
+            
+            if (filter === 'all') {
+                s.style.display = 'block';
+            } else if (filter === 'active') {
+                s.style.display = hasActive ? 'block' : 'none';
+            } else if (filter === 'inactive') {
+                s.style.display = hasInactive ? 'block' : 'none';
+            }
+        });
+        
+        const copySection = document.querySelector('[id^="ml-copy-"]');
+        if (copySection) {
+            const codeEl = copySection.querySelector('code');
+            const labelEl = copySection.querySelector('div');
+            
+            if (filter === 'all') {
+                codeEl.textContent = copySection.dataset.mlAll;
+                labelEl.textContent = 'Copy all:';
+            } else if (filter === 'active') {
+                codeEl.textContent = copySection.dataset.mlActive;
+                labelEl.textContent = 'Copy active:';
+            } else if (filter === 'inactive') {
+                codeEl.textContent = copySection.dataset.mlInactive;
+                labelEl.textContent = 'Copy inactive:';
+            }
+        }
+    }
+
+    static copyToClipboard(text, btn) {
+        navigator.clipboard.writeText(text).then(() => {
+            const orig = btn.textContent;
+            btn.textContent = '✓';
+            setTimeout(() => btn.textContent = orig, 1500);
+        });
+    }
+
+    static copyFromCode(sectionId, btn) {
+        const section = document.getElementById(sectionId);
+        const codeEl = section.querySelector('code');
+        navigator.clipboard.writeText(codeEl.textContent).then(() => {
+            const orig = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            setTimeout(() => btn.textContent = orig, 1500);
+        });
+    }
+}
