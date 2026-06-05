@@ -4051,6 +4051,10 @@ class LinkerManagerDialog extends ComfyDialog {
                                                         ${getSvgIcon('eye')}
                                                     </button>
                                                 </div>
+                                                <div class="ml-options-token-check">
+                                                    <button id="ml-options-civitai-key-check" type="button" class="ml-btn ml-btn-secondary ml-btn-sm">${getSvgIcon('refreshCw')} Check API key</button>
+                                                    <span id="ml-options-civitai-key-check-status" class="ml-options-token-check-status">Not checked</span>
+                                                </div>
                                             </div>
                                             <div class="ml-options-field">
                                                 <div class="ml-options-input-row">
@@ -4069,6 +4073,10 @@ class LinkerManagerDialog extends ComfyDialog {
                                                     </ol>
                                                     <p>Treat it like a password. It is only needed when session-aware CivitAI search is required.</p>
                                                 </details>
+                                                <div class="ml-options-token-check">
+                                                    <button id="ml-options-civitai-session-check" type="button" class="ml-btn ml-btn-secondary ml-btn-sm">${getSvgIcon('refreshCw')} Check session</button>
+                                                    <span id="ml-options-civitai-session-check-status" class="ml-options-token-check-status">Not checked</span>
+                                                </div>
                                             </div>
                                         </div>
                                         <label class="ml-options-toggle-row">
@@ -4116,6 +4124,10 @@ class LinkerManagerDialog extends ComfyDialog {
                                                     <button id="ml-options-hf-toggle" type="button" class="ml-options-visibility-btn" aria-label="Toggle visibility for saved HuggingFace token" data-tooltip="Show saved value">
                                                         ${getSvgIcon('eye')}
                                                     </button>
+                                                </div>
+                                                <div class="ml-options-token-check">
+                                                    <button id="ml-options-hf-token-check" type="button" class="ml-btn ml-btn-secondary ml-btn-sm">${getSvgIcon('refreshCw')} Check token</button>
+                                                    <span id="ml-options-hf-token-check-status" class="ml-options-token-check-status">Not checked</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -4166,6 +4178,10 @@ class LinkerManagerDialog extends ComfyDialog {
                                                         ${getSvgIcon('eye')}
                                                     </button>
                                                 </div>
+                                                <div class="ml-options-token-check">
+                                                    <button id="ml-options-brave-key-check" type="button" class="ml-btn ml-btn-secondary ml-btn-sm">${getSvgIcon('refreshCw')} Check API key</button>
+                                                    <span id="ml-options-brave-key-check-status" class="ml-options-token-check-status">Not checked</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -4188,9 +4204,17 @@ class LinkerManagerDialog extends ComfyDialog {
         const civitaiLimitInput = this.contentElement.querySelector('#ml-options-civitai-limit');
         const civitaiUseTrpcSearchInput = this.contentElement.querySelector('#ml-options-civitai-use-trpc-search');
         const civitaiUseHtmlFallbackInput = this.contentElement.querySelector('#ml-options-civitai-use-html-fallback');
+        const civitaiKeyCheckBtn = this.contentElement.querySelector('#ml-options-civitai-key-check');
+        const civitaiKeyCheckStatus = this.contentElement.querySelector('#ml-options-civitai-key-check-status');
+        const civitaiSessionCheckBtn = this.contentElement.querySelector('#ml-options-civitai-session-check');
+        const civitaiSessionCheckStatus = this.contentElement.querySelector('#ml-options-civitai-session-check-status');
         const hfUseApiSearchInput = this.contentElement.querySelector('#ml-options-hf-use-api-search');
         const hfUseComfyOrgFallbackInput = this.contentElement.querySelector('#ml-options-hf-use-comfy-org-fallback');
         const hfUseBraveFallbackInput = this.contentElement.querySelector('#ml-options-hf-use-brave-fallback');
+        const hfTokenCheckBtn = this.contentElement.querySelector('#ml-options-hf-token-check');
+        const hfTokenCheckStatus = this.contentElement.querySelector('#ml-options-hf-token-check-status');
+        const braveKeyCheckBtn = this.contentElement.querySelector('#ml-options-brave-key-check');
+        const braveKeyCheckStatus = this.contentElement.querySelector('#ml-options-brave-key-check-status');
         const sourceEnabledInputs = Array.from(this.contentElement.querySelectorAll('.ml-options-source-enabled'));
         const status = this.contentElement.querySelector('#ml-options-status');
         const saveBtn = this.contentElement.querySelector('#ml-options-save');
@@ -4244,6 +4268,45 @@ class LinkerManagerDialog extends ComfyDialog {
 
         const setHfIndexBusy = (busy) => {
             if (hfIndexRefreshBtn) hfIndexRefreshBtn.disabled = busy;
+        };
+
+        const setTokenCheckStatus = (statusEl, text, mode = '') => {
+            if (!statusEl) return;
+            statusEl.textContent = text;
+            statusEl.classList.remove('is-valid', 'is-invalid', 'is-pending');
+            if (mode) statusEl.classList.add(mode);
+        };
+
+        const checkCredential = async ({ input, button, statusEl, endpoint, payloadKey, missingText }) => {
+            const value = (input?.value || '').trim();
+            if (!value) {
+                setTokenCheckStatus(statusEl, missingText, 'is-invalid');
+                return;
+            }
+
+            try {
+                if (button) button.disabled = true;
+                setTokenCheckStatus(statusEl, 'Checking...', 'is-pending');
+                const response = await api.fetchApi(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [payloadKey]: value })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || `Check failed: ${response.status}`);
+                }
+                setTokenCheckStatus(
+                    statusEl,
+                    data.message || (data.valid ? 'Valid' : 'Invalid'),
+                    data.valid ? 'is-valid' : 'is-invalid'
+                );
+            } catch (error) {
+                console.error('Model Linker: Credential check error:', error);
+                setTokenCheckStatus(statusEl, error.message || 'Check failed', 'is-invalid');
+            } finally {
+                if (button) button.disabled = false;
+            }
         };
 
         const renderModelListStatus = (data = {}, checkedRemote = false) => {
@@ -4491,6 +4554,58 @@ class LinkerManagerDialog extends ComfyDialog {
         if (hfIndexRefreshBtn) {
             hfIndexRefreshBtn.addEventListener('click', () => {
                 refreshHfIndex();
+            });
+        }
+
+        if (civitaiSessionCheckBtn) {
+            civitaiSessionCheckBtn.addEventListener('click', () => {
+                checkCredential({
+                    input: civitaiSessionInput,
+                    button: civitaiSessionCheckBtn,
+                    statusEl: civitaiSessionCheckStatus,
+                    endpoint: '/model_linker/civitai/session-token/check',
+                    payloadKey: 'civitai_session_token',
+                    missingText: 'Paste token first'
+                });
+            });
+        }
+
+        if (civitaiKeyCheckBtn) {
+            civitaiKeyCheckBtn.addEventListener('click', () => {
+                checkCredential({
+                    input: civitaiInput,
+                    button: civitaiKeyCheckBtn,
+                    statusEl: civitaiKeyCheckStatus,
+                    endpoint: '/model_linker/civitai/api-key/check',
+                    payloadKey: 'civitai_key',
+                    missingText: 'Paste API key first'
+                });
+            });
+        }
+
+        if (hfTokenCheckBtn) {
+            hfTokenCheckBtn.addEventListener('click', () => {
+                checkCredential({
+                    input: hfInput,
+                    button: hfTokenCheckBtn,
+                    statusEl: hfTokenCheckStatus,
+                    endpoint: '/model_linker/huggingface/token/check',
+                    payloadKey: 'hf_token',
+                    missingText: 'Paste token first'
+                });
+            });
+        }
+
+        if (braveKeyCheckBtn) {
+            braveKeyCheckBtn.addEventListener('click', () => {
+                checkCredential({
+                    input: braveInput,
+                    button: braveKeyCheckBtn,
+                    statusEl: braveKeyCheckStatus,
+                    endpoint: '/model_linker/brave/api-key/check',
+                    payloadKey: 'brave_search_api_key',
+                    missingText: 'Paste API key first'
+                });
             });
         }
 

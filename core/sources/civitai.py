@@ -50,6 +50,170 @@ def clear_search_cache():
     _search_cache.clear()
 
 
+def check_civitai_session_token(session_token: Optional[str]) -> Dict[str, Any]:
+    """Check whether a CivitAI browser session token is accepted by civitai.com."""
+    token = (session_token or "").strip()
+    if not token:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "missing",
+            "message": "Paste a CivitAI session token first.",
+        }
+
+    headers = {
+        "accept": "application/json",
+        "Cookie": f"__Secure-civitai-token={token}",
+        "user-agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/147.0.0.0 Safari/537.36"
+        ),
+    }
+
+    try:
+        response = requests.get(
+            "https://civitai.com/api/v1/me", headers=headers, timeout=10
+        )
+        if response.status_code == 200:
+            username = ""
+            try:
+                data = response.json()
+                username = (
+                    data.get("username")
+                    or data.get("name")
+                    or data.get("email")
+                    or ""
+                )
+            except Exception:
+                username = ""
+
+            message = "Session token is valid."
+            if username:
+                message = f"Session token is valid for {username}."
+
+            return {
+                "success": True,
+                "valid": True,
+                "status": "valid",
+                "message": message,
+                "username": username,
+            }
+
+        if response.status_code in {401, 403}:
+            return {
+                "success": True,
+                "valid": False,
+                "status": "invalid",
+                "message": "Session token is not accepted by CivitAI.",
+                "status_code": response.status_code,
+            }
+
+        return {
+            "success": False,
+            "valid": False,
+            "status": "error",
+            "message": f"CivitAI returned HTTP {response.status_code}.",
+            "status_code": response.status_code,
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "timeout",
+            "message": "CivitAI did not respond before the timeout.",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "error",
+            "message": str(e),
+        }
+
+
+def check_civitai_api_key(api_key: Optional[str]) -> Dict[str, Any]:
+    """Check whether a CivitAI API key is accepted by civitai.com."""
+    key = (api_key or "").strip()
+    if not key:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "missing",
+            "message": "Paste a CivitAI API key first.",
+        }
+
+    headers = {
+        "accept": "application/json",
+        "Authorization": f"Bearer {key}",
+        "user-agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/147.0.0.0 Safari/537.36"
+        ),
+    }
+
+    try:
+        response = requests.get(
+            "https://civitai.com/api/v1/me", headers=headers, timeout=10
+        )
+        if response.status_code == 200:
+            username = ""
+            try:
+                data = response.json()
+                username = (
+                    data.get("username")
+                    or data.get("name")
+                    or data.get("email")
+                    or ""
+                )
+            except Exception:
+                username = ""
+
+            message = "CivitAI API key is valid."
+            if username:
+                message = f"CivitAI API key is valid for {username}."
+
+            return {
+                "success": True,
+                "valid": True,
+                "status": "valid",
+                "message": message,
+                "username": username,
+            }
+
+        if response.status_code in {401, 403}:
+            return {
+                "success": True,
+                "valid": False,
+                "status": "invalid",
+                "message": "CivitAI API key is not accepted.",
+                "status_code": response.status_code,
+            }
+
+        return {
+            "success": False,
+            "valid": False,
+            "status": "error",
+            "message": f"CivitAI returned HTTP {response.status_code}.",
+            "status_code": response.status_code,
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "timeout",
+            "message": "CivitAI did not respond before the timeout.",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "error",
+            "message": str(e),
+        }
+
+
 def _build_civitai_result_from_version(
     model_id: int,
     model_name: str,

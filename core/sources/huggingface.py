@@ -45,6 +45,141 @@ def clear_search_cache():
     _search_cache.clear()
 
 
+def check_huggingface_token(token: Optional[str]) -> Dict[str, Any]:
+    """Check whether a HuggingFace access token is accepted."""
+    value = (token or "").strip()
+    if not value:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "missing",
+            "message": "Paste a HuggingFace token first.",
+        }
+
+    headers = {"Authorization": f"Bearer {value}"}
+    try:
+        response = requests.get(f"{HF_API_URL}/whoami-v2", headers=headers, timeout=10)
+        if response.status_code == 404:
+            response = requests.get(f"{HF_API_URL}/whoami", headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            username = ""
+            try:
+                data = response.json()
+                username = data.get("name") or data.get("user", {}).get("name") or ""
+            except Exception:
+                username = ""
+
+            message = "HuggingFace token is valid."
+            if username:
+                message = f"HuggingFace token is valid for {username}."
+
+            return {
+                "success": True,
+                "valid": True,
+                "status": "valid",
+                "message": message,
+                "username": username,
+            }
+
+        if response.status_code in {401, 403}:
+            return {
+                "success": True,
+                "valid": False,
+                "status": "invalid",
+                "message": "HuggingFace token is not accepted.",
+                "status_code": response.status_code,
+            }
+
+        return {
+            "success": False,
+            "valid": False,
+            "status": "error",
+            "message": f"HuggingFace returned HTTP {response.status_code}.",
+            "status_code": response.status_code,
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "timeout",
+            "message": "HuggingFace did not respond before the timeout.",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "error",
+            "message": str(e),
+        }
+
+
+def check_brave_search_api_key(api_key: Optional[str]) -> Dict[str, Any]:
+    """Check whether a Brave Search API key is accepted."""
+    key = (api_key or "").strip()
+    if not key:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "missing",
+            "message": "Paste a Brave Search API key first.",
+        }
+
+    headers = {"X-Subscription-Token": key}
+    params = {"q": "test", "count": 1}
+    try:
+        response = requests.get(
+            BRAVE_SEARCH_API_URL, headers=headers, params=params, timeout=10
+        )
+        if response.status_code == 200:
+            return {
+                "success": True,
+                "valid": True,
+                "status": "valid",
+                "message": "Brave Search API key is valid.",
+            }
+
+        if response.status_code in {401, 403}:
+            return {
+                "success": True,
+                "valid": False,
+                "status": "invalid",
+                "message": "Brave Search API key is not accepted.",
+                "status_code": response.status_code,
+            }
+
+        if response.status_code == 429:
+            return {
+                "success": False,
+                "valid": False,
+                "status": "limited",
+                "message": "Brave Search rate limit was reached.",
+                "status_code": response.status_code,
+            }
+
+        return {
+            "success": False,
+            "valid": False,
+            "status": "error",
+            "message": f"Brave Search returned HTTP {response.status_code}.",
+            "status_code": response.status_code,
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "timeout",
+            "message": "Brave Search did not respond before the timeout.",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "error",
+            "message": str(e),
+        }
+
+
 def _author_index_cache_key(author: str, headers: Dict[str, str]) -> str:
     auth_key = "token" if headers.get("Authorization") else "public"
     return f"{author}::{auth_key}"

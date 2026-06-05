@@ -101,6 +101,8 @@ class ModelLinkerExtension:
                     search_huggingface_for_file,
                     get_author_fallback_index_status,
                     refresh_author_fallback_index,
+                    check_huggingface_token,
+                    check_brave_search_api_key,
                     clear_search_cache as clear_huggingface_search_cache,
                 )
                 from .core.sources.civitai import (
@@ -108,6 +110,8 @@ class ModelLinkerExtension:
                     search_civitai,
                     get_civitai_download_url,
                     resolve_urn,
+                    check_civitai_api_key,
+                    check_civitai_session_token,
                     clear_search_cache as clear_civitai_search_cache,
                 )
                 from .core.sources.civarchive import (
@@ -1268,6 +1272,60 @@ class ModelLinkerExtension:
                         return web.json_response({"success": True})
                     except Exception as e:
                         log_exception(f"Clear search cache error: {e}")
+                        return web.json_response({"error": str(e)}, status=500)
+
+                @routes.post("/model_linker/civitai/session-token/check")
+                async def civitai_session_token_check_route(request):
+                    """Check whether a CivitAI browser session token is valid."""
+                    try:
+                        data = await request.json()
+                        token = data.get("civitai_session_token", "")
+                        result = await asyncio.to_thread(
+                            check_civitai_session_token, token
+                        )
+                        return web.json_response(result)
+                    except Exception as e:
+                        log_exception(f"CivitAI session token check error: {e}")
+                        return web.json_response({"error": str(e)}, status=500)
+
+                @routes.post("/model_linker/civitai/api-key/check")
+                async def civitai_api_key_check_route(request):
+                    """Check whether a CivitAI API key is valid."""
+                    try:
+                        data = await request.json()
+                        api_key = data.get("civitai_key", "")
+                        result = await asyncio.to_thread(
+                            check_civitai_api_key, api_key
+                        )
+                        return web.json_response(result)
+                    except Exception as e:
+                        log_exception(f"CivitAI API key check error: {e}")
+                        return web.json_response({"error": str(e)}, status=500)
+
+                @routes.post("/model_linker/huggingface/token/check")
+                async def huggingface_token_check_route(request):
+                    """Check whether a HuggingFace token is valid."""
+                    try:
+                        data = await request.json()
+                        token = data.get("hf_token", "")
+                        result = await asyncio.to_thread(check_huggingface_token, token)
+                        return web.json_response(result)
+                    except Exception as e:
+                        log_exception(f"HuggingFace token check error: {e}")
+                        return web.json_response({"error": str(e)}, status=500)
+
+                @routes.post("/model_linker/brave/api-key/check")
+                async def brave_api_key_check_route(request):
+                    """Check whether a Brave Search API key is valid."""
+                    try:
+                        data = await request.json()
+                        api_key = data.get("brave_search_api_key", "")
+                        result = await asyncio.to_thread(
+                            check_brave_search_api_key, api_key
+                        )
+                        return web.json_response(result)
+                    except Exception as e:
+                        log_exception(f"Brave Search API key check error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 
                 @routes.get("/model_linker/huggingface/author-index/status")

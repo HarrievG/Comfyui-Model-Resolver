@@ -3542,6 +3542,8 @@
     flex-direction: column;
     gap: 0;
     align-items: stretch;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 .ml-options-help,
 #model-linker-modal .ml-options-help {
@@ -3578,6 +3580,32 @@
 #model-linker-modal .ml-options-help code {
     color: var(--ml-text);
     font-size: var(--ml-font-xs);
+}
+.ml-options-token-check,
+#model-linker-modal .ml-options-token-check {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+.ml-options-token-check-status,
+#model-linker-modal .ml-options-token-check-status {
+    color: var(--ml-text-muted);
+    font-size: var(--ml-font-sm);
+    font-weight: 600;
+}
+.ml-options-token-check-status.is-pending,
+#model-linker-modal .ml-options-token-check-status.is-pending {
+    color: var(--ml-text-secondary);
+}
+.ml-options-token-check-status.is-valid,
+#model-linker-modal .ml-options-token-check-status.is-valid {
+    color: var(--ml-color-success);
+}
+.ml-options-token-check-status.is-invalid,
+#model-linker-modal .ml-options-token-check-status.is-invalid {
+    color: var(--ml-color-error-light);
 }
 .ml-options-label {
     display: flex;
@@ -3650,8 +3678,7 @@
     grid-template-columns: minmax(150px, 1fr) minmax(0, 380px) 42px;
     align-items: center;
     gap: 10px;
-    padding: 14px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding: 14px 0 0;
     min-width: 0;
 }
 .ml-options-input-row > .ml-options-label {
