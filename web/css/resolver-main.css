@@ -2470,6 +2470,20 @@
     text-align: left;
     justify-content: flex-start;
 }
+.mr-footer-menu-checkbox,
+#model-resolver-modal .mr-footer-menu .mr-footer-menu-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+.mr-footer-menu-checkbox-input {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    accent-color: #72d38a;
+    flex: 0 0 auto;
+}
 .mr-footer-menu-item:hover,
 .mr-footer-menu-item:focus-visible {
     outline: none;

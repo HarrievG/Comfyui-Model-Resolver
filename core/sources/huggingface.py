@@ -668,6 +668,7 @@ def search_huggingface_for_file(
     use_api_search: bool = True,
     use_comfy_org_fallback: bool = True,
     use_brave_fallback: bool = True,
+    force_refresh: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """
     Search HuggingFace for a specific model file.
@@ -689,7 +690,8 @@ def search_huggingface_for_file(
     methods_key = (
         f"api{int(bool(use_api_search))}_"
         f"comfy{int(bool(use_comfy_org_fallback))}_"
-        f"brave{int(bool(use_brave_fallback))}"
+        f"brave{int(bool(use_brave_fallback))}_"
+        f"force{int(bool(force_refresh))}"
     )
     cache_key = f"hf_{filename}_exact{exact_only}_{token_key}_{brave_key}_{methods_key}"
     if cache_key in _search_cache:
@@ -751,7 +753,11 @@ def search_huggingface_for_file(
         author_fallback_repo_count = 0
         if use_comfy_org_fallback:
             for author in HF_AUTHOR_FALLBACKS:
-                index = _get_author_index(author, headers={})
+                index = _get_author_index(
+                    author,
+                    headers={},
+                    force_refresh=force_refresh,
+                )
                 if index:
                     result = _find_matching_file_in_author_index(
                         index, filename, exact_only=exact_only

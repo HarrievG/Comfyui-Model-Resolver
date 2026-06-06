@@ -323,7 +323,7 @@ export const resolveDownloadMethods = {
         return missingModels;
     },
 
-    async searchMissingBatch(mode = 'selected', source = 'all') {
+    async searchMissingBatch(mode = 'selected', source = 'all', { forceSearch = false } = {}) {
         if (this.batchSearchRunning) {
             this.stopBatchSearch();
             return;
@@ -353,7 +353,7 @@ export const resolveDownloadMethods = {
                 const state = this.getSearchStateForWorkflow(batchWorkflowKey, missing);
                 state.selectedSource = source || 'all';
                 try {
-                    await this.searchOnline(missing, { workflowKey: batchWorkflowKey });
+                    await this.searchOnline(missing, { workflowKey: batchWorkflowKey, forceSearch });
                 } catch (error) {
                     failed += 1;
                     console.error('Model Resolver: batch search item failed:', error);
@@ -778,7 +778,7 @@ export const resolveDownloadMethods = {
     /**
      * Search online for a model
      */
-    async searchOnline(missing, { workflowKey = this.getWorkflowScopedQueueKey() } = {}) {
+    async searchOnline(missing, { workflowKey = this.getWorkflowScopedQueueKey(), forceSearch = false } = {}) {
         let filename = missing.original_path?.split('/').pop()?.split('\\').pop() || '';
         let category = missing.category || '';
         const state = this.getSearchStateForWorkflow(workflowKey, missing);
@@ -903,7 +903,8 @@ export const resolveDownloadMethods = {
                 brave_search_api_key: tokens.brave_search_api_key,
                 hf_use_api_search: tokens.hf_use_api_search,
                 hf_use_comfy_org_fallback: tokens.hf_use_comfy_org_fallback,
-                hf_use_brave_fallback: tokens.hf_use_brave_fallback
+                hf_use_brave_fallback: tokens.hf_use_brave_fallback,
+                force_search: Boolean(forceSearch)
             };
             if (isUrn && missing.urn) {
                 baseSearchData.model_id = missing.urn.model_id;
@@ -950,7 +951,8 @@ export const resolveDownloadMethods = {
                     const found = this.hasSearchResults(data);
                     anyFound = anyFound || found;
                     state.results = this.mergeSearchResults(state.results, data, {
-                        searchedAt: new Date().toISOString()
+                        searchedAt: new Date().toISOString(),
+                        forceRefresh: Boolean(forceSearch)
                     });
                     state.lastAttemptSources = Array.from(attemptedSources);
                     state.lastAttemptFound = anyFound;
@@ -1193,7 +1195,9 @@ export const resolveDownloadMethods = {
         if (searchBtn && searchBtn.dataset.mlSearchBound !== 'true') {
             searchBtn.dataset.mlSearchBound = 'true';
             searchBtn.addEventListener('click', () => {
-                this.searchOnline(missing);
+                this.searchOnline(missing, {
+                    forceSearch: this.hasSearchResultsForMissing(missing)
+                });
             });
         }
 

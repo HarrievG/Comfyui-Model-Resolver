@@ -949,9 +949,31 @@ class ModelResolverExtension:
                         search_lora_manager_archive_source = (
                             "lora_manager_archive" in normalized_sources
                         )
+                        force_search = data.get("force_search", False)
+                        force_search = (
+                            force_search
+                            if isinstance(force_search, bool)
+                            else str(force_search).lower() == "true"
+                        )
+
+                        if force_search:
+                            if search_local:
+                                reload_popular_databases()
+                                reload_model_list()
+                            if search_huggingface_source:
+                                clear_huggingface_search_cache()
+                            if search_civitai_source:
+                                clear_civitai_search_cache()
+                            if search_civarchive_source:
+                                clear_civarchive_search_cache()
+                            if search_lora_manager_archive_source:
+                                clear_lora_manager_archive_search_cache()
+                            log_info(
+                                f"Force search enabled: cleared cache for sources={sorted(normalized_sources)}"
+                            )
 
                         log_info(
-                            f"Search request: filename={filename}, category={category}, is_urn={is_urn}, model_id={data.get('model_id')}, version_id={data.get('version_id')}, sources={sorted(normalized_sources)}, civitai_candidate_limit={civitai_candidate_limit}, civarchive_candidate_limit={civarchive_candidate_limit}"
+                            f"Search request: filename={filename}, category={category}, is_urn={is_urn}, model_id={data.get('model_id')}, version_id={data.get('version_id')}, sources={sorted(normalized_sources)}, force_search={force_search}, civitai_candidate_limit={civitai_candidate_limit}, civarchive_candidate_limit={civarchive_candidate_limit}"
                         )
 
                         results = {
@@ -1013,13 +1035,20 @@ class ModelResolverExtension:
                             timestamp = (
                                 result.get("searched_at")
                                 or result.get("searchedAt")
-                                or self.search_result_timestamps.get(signature)
+                                or (
+                                    None
+                                    if force_search
+                                    else self.search_result_timestamps.get(signature)
+                                )
                             )
                             if not timestamp:
                                 timestamp = current_search_timestamp()
-                            self.search_result_timestamps.setdefault(
-                                signature, timestamp
-                            )
+                            if force_search:
+                                self.search_result_timestamps[signature] = timestamp
+                            else:
+                                self.search_result_timestamps.setdefault(
+                                    signature, timestamp
+                                )
                             result["searched_at"] = timestamp
                             return result
 
@@ -1095,6 +1124,7 @@ class ModelResolverExtension:
                                 use_api_search=hf_use_api_search,
                                 use_comfy_org_fallback=hf_use_comfy_org_fallback,
                                 use_brave_fallback=hf_use_brave_fallback,
+                                force_refresh=force_search,
                             )
                             log_search_result("huggingface", hf_result)
                             return {"huggingface": hf_result}, bool(hf_result)

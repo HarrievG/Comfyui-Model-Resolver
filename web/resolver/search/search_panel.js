@@ -135,19 +135,25 @@ export const searchPanelMethods = {
 
     /**
      * Merge new search results into cached per-source results.
-     * Empty responses do not delete previously found results.
+     * Empty normal responses do not delete previous results; forced refreshes do.
      */
-    mergeSearchResults(existingResults = {}, newResults = {}, { searchedAt = null } = {}) {
+    mergeSearchResults(existingResults = {}, newResults = {}, { searchedAt = null, forceRefresh = false } = {}) {
+        const searchedSources = new Set(Array.isArray(newResults.searched_sources) ? newResults.searched_sources : []);
         const pickResult = (source) => {
             if (newResults[source]) {
                 const existingTimestamp = this.getSearchResultTimestamp(existingResults[source]);
-                const resultTimestamp = this.areSearchResultsSame(existingResults[source], newResults[source])
+                const resultTimestamp = !forceRefresh && this.areSearchResultsSame(existingResults[source], newResults[source])
                     ? existingTimestamp
                     : null;
                 return this.withSearchResultTimestamp(
                     newResults[source],
                     resultTimestamp || searchedAt
                 );
+            }
+            const sourceWasSearched = searchedSources.has(source)
+                || (searchedSources.has('local') && (source === 'popular' || source === 'model_list'));
+            if (forceRefresh && sourceWasSearched) {
+                return null;
             }
             return existingResults[source] || null;
         };

@@ -44,6 +44,7 @@ export class ResolverManagerDialog extends ComfyDialog {
         this.activeFooterMenu = null;
         this.batchSearchRunning = false;
         this.batchSearchCancelRequested = false;
+        this.forceBatchSearch = false;
         this.boundHandleOutsideClick = this.handleOutsideClick.bind(this);
         this.activeTabStorageKey = 'model_resolver_active_tab';
         this.activeTab = this.restoreActiveTab();  // Default tab
