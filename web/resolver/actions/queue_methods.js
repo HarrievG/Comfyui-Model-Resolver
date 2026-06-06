@@ -728,15 +728,19 @@ export const queueMethods = {
         this.selectMenuButton = this.footerMenuButtons.get('select');
         this.selectMenuWrap = selectMenu;
 
+        const hasSelectedMissingModels = () => this.getSelectedMissingModels().length > 0;
         const searchMenu = this.createFooterMenu('search', 'Search', [
             { label: 'Stop Searching', className: 'mr-footer-menu-danger', visibleWhen: () => this.batchSearchRunning, action: () => this.stopBatchSearch() },
             { type: 'divider', visibleWhen: () => this.batchSearchRunning },
-            { label: 'Search Selected', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('selected', 'all') },
+            { label: 'Search Selected', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'all') },
             { label: 'Search All Missing', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('all', 'all') },
             { label: 'Search Unsearched', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('unsearched', 'all') },
             { type: 'divider', visibleWhen: () => !this.batchSearchRunning },
-            { label: 'Selected: CivitAI', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('selected', 'civitai') },
-            { label: 'Selected: HuggingFace', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('selected', 'huggingface') }
+            { label: 'Selected: Local Database', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'local') },
+            { label: 'Selected: CivitAI', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'civitai') },
+            { label: 'Selected: HuggingFace', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'huggingface') },
+            { label: 'Selected: CivArchive', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'civarchive') },
+            { label: 'Selected: LoRA Manager Archive', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'lora_manager_archive') }
         ]);
         this.searchMenuButton = this.footerMenuButtons.get('search');
         this.searchMenuWrap = searchMenu;
@@ -790,7 +794,7 @@ export const queueMethods = {
         this.updateApplyPendingButton();
 
         const downloadMenu = this.createFooterMenu('download', 'Download', [
-            { label: 'Download Selected', action: () => this.downloadMissingBatch('selected') },
+            { label: 'Download Selected', disabledWhen: () => !hasSelectedMissingModels(), action: () => this.downloadMissingBatch('selected') },
             { label: 'Download All With Sources', action: () => this.downloadMissingBatch('all') },
             'divider',
             { label: 'Cancel Downloads', action: () => { this.closeFooterMenus(); this.cancelAllDownloads(); } }
