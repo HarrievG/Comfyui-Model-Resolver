@@ -311,6 +311,7 @@ export const workflowStateMethods = {
         this.searchResultCache.clear();
         this.urnResolvePromises.clear();
         this.urnLocalMatchPromises.clear();
+        this.downloadTargetSelections?.clear();
         this.pendingResolutions = [];
         this.rebuildPendingIndex();
         this.updateApplyPendingButton?.();

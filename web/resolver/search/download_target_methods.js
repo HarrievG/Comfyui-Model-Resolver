@@ -186,6 +186,28 @@ export const downloadTargetMethods = {
         return this.downloadSubfolders.get((category || '').toLowerCase()) || [];
     },
 
+    getDownloadTargetKey(missing = {}) {
+        return this.getMissingModelKey?.(missing)
+            || `${missing.node_id}:${missing.widget_index}:${missing.subgraph_id || ''}:${missing.is_top_level !== false ? 'T' : 'F'}`;
+    },
+
+    getSavedDownloadTargetSelection(missing = {}) {
+        const key = this.getDownloadTargetKey(missing);
+        return this.downloadTargetSelections?.get(key) || null;
+    },
+
+    saveDownloadTargetSelection(missing = {}, patch = {}) {
+        if (!this.downloadTargetSelections) {
+            this.downloadTargetSelections = new Map();
+        }
+        const key = this.getDownloadTargetKey(missing);
+        const current = this.downloadTargetSelections.get(key) || {};
+        this.downloadTargetSelections.set(key, {
+            ...current,
+            ...patch
+        });
+    },
+
     normalizeFolderToken(value = '') {
         return String(value || '')
             .toLowerCase()
@@ -253,14 +275,44 @@ export const downloadTargetMethods = {
 
     async applySuggestedCivitaiSubfolder(missing, categoryEl, subfolderEl) {
         if (!categoryEl || !subfolderEl || subfolderEl.value.trim()) return;
+        const saved = this.getSavedDownloadTargetSelection(missing);
+        if (saved?.subfolderTouched) return;
+
+        const category = this.getDropdownValue(categoryEl);
+        await this.ensureDownloadSubfoldersLoaded(category);
+        const latestSaved = this.getSavedDownloadTargetSelection(missing);
+        if (latestSaved?.subfolderTouched || subfolderEl.value.trim()) return;
+
+        const folders = this.getAvailableSubfolders(category);
+        const suggestion = this.getSuggestedCivitaiSubfolder(missing, category, folders);
+        if (suggestion) {
+            subfolderEl.value = suggestion;
+            this.saveDownloadTargetSelection(missing, {
+                category,
+                subfolder: suggestion,
+                subfolderTouched: false
+            });
+        }
+    },
+
+    async forceSuggestedCivitaiSubfolder(missing, categoryEl, subfolderEl) {
+        if (!categoryEl || !subfolderEl) return;
 
         const category = this.getDropdownValue(categoryEl);
         await this.ensureDownloadSubfoldersLoaded(category);
         const folders = this.getAvailableSubfolders(category);
         const suggestion = this.getSuggestedCivitaiSubfolder(missing, category, folders);
-        if (suggestion) {
-            subfolderEl.value = suggestion;
+        if (!suggestion) {
+            this.showNotification?.('No subfolder suggestion available for this model.', 'info');
+            return;
         }
+
+        subfolderEl.value = suggestion;
+        this.saveDownloadTargetSelection(missing, {
+            category,
+            subfolder: suggestion,
+            subfolderTouched: true
+        });
     },
 
     applySearchResultSuggestion(missing) {
@@ -298,9 +350,12 @@ export const downloadTargetMethods = {
     renderDownloadTargetControls(missing, defaultCategory = 'checkpoints') {
         const selectId = `download-category-${missing.node_id}-${missing.widget_index}`;
         const subfolderId = `download-subfolder-${missing.node_id}-${missing.widget_index}`;
+        const suggestId = `download-subfolder-suggest-${missing.node_id}-${missing.widget_index}`;
         const categoryListId = `download-category-list-${missing.node_id}-${missing.widget_index}`;
         const subfolderListId = `download-subfolder-list-${missing.node_id}-${missing.widget_index}`;
-        const selectedCategory = defaultCategory || 'checkpoints';
+        const saved = this.getSavedDownloadTargetSelection(missing);
+        const selectedCategory = saved?.category || defaultCategory || 'checkpoints';
+        const selectedSubfolder = saved ? saved.subfolder || '' : '';
 
         let html = `<div class="mr-download-target">`;
         html += `<div class="mr-download-target-grid">`;
@@ -311,7 +366,10 @@ export const downloadTargetMethods = {
         html += `<div id="${categoryListId}" class="mr-download-target-list"></div>`;
         html += `</div>`;
         html += `<div class="mr-download-target-wrap">`;
-        html += `<input id="${subfolderId}" class="mr-download-target-input" type="text" placeholder="e.g. ponyxl\\styles" autocomplete="off">`;
+        html += `<div class="mr-download-subfolder-control">`;
+        html += `<input id="${subfolderId}" class="mr-download-target-input" type="text" placeholder="e.g. ponyxl\\styles" autocomplete="off" value="${this.escapeHtml(selectedSubfolder)}">`;
+        html += `<button id="${suggestId}" class="mr-btn mr-btn-secondary mr-btn-sm mr-download-suggest-btn" type="button" data-tooltip="Apply suggested subfolder">Suggest</button>`;
+        html += `</div>`;
         html += `<div id="${subfolderListId}" class="mr-download-target-list"></div>`;
         html += `</div>`;
         html += `</div>`;
@@ -322,9 +380,15 @@ export const downloadTargetMethods = {
     getDownloadTargetSelection(missing, fallbackCategory = 'checkpoints') {
         const categoryEl = this.contentElement?.querySelector(`#download-category-${missing.node_id}-${missing.widget_index}`);
         const subfolderEl = this.contentElement?.querySelector(`#download-subfolder-${missing.node_id}-${missing.widget_index}`);
+        const category = this.getDropdownValue(categoryEl) || fallbackCategory || 'checkpoints';
+        const subfolder = (subfolderEl?.value || '').trim();
+        this.saveDownloadTargetSelection(missing, {
+            category,
+            subfolder
+        });
         return {
-            category: this.getDropdownValue(categoryEl) || fallbackCategory || 'checkpoints',
-            subfolder: (subfolderEl?.value || '').trim()
+            category,
+            subfolder
         };
     },
 
@@ -358,6 +422,7 @@ export const downloadTargetMethods = {
     wireDownloadTargetAutocomplete(container, missing) {
         const categoryEl = container.querySelector(`#download-category-${missing.node_id}-${missing.widget_index}`);
         const subfolderEl = container.querySelector(`#download-subfolder-${missing.node_id}-${missing.widget_index}`);
+        const suggestBtn = container.querySelector(`#download-subfolder-suggest-${missing.node_id}-${missing.widget_index}`);
         const categoryListEl = container.querySelector(`#download-category-list-${missing.node_id}-${missing.widget_index}`);
         const listEl = container.querySelector(`#download-subfolder-list-${missing.node_id}-${missing.widget_index}`);
         if (!categoryEl || !subfolderEl || !listEl) return;
@@ -411,6 +476,11 @@ export const downloadTargetMethods = {
             renderOptions(categoryListEl, options, (value, label) => {
                 this.setDropdownValue(categoryEl, value, label);
                 subfolderEl.value = '';
+                this.saveDownloadTargetSelection(missing, {
+                    category: value,
+                    subfolder: '',
+                    subfolderTouched: false
+                });
                 listEl.innerHTML = '';
                 listEl.style.display = 'none';
                 this.applySuggestedCivitaiSubfolder(missing, categoryEl, subfolderEl);
@@ -428,6 +498,11 @@ export const downloadTargetMethods = {
 
             renderOptions(listEl, filtered, (value) => {
                 subfolderEl.value = value;
+                this.saveDownloadTargetSelection(missing, {
+                    category: this.getDropdownValue(categoryEl),
+                    subfolder: value,
+                    subfolderTouched: true
+                });
             });
         };
 
@@ -455,10 +530,30 @@ export const downloadTargetMethods = {
         });
 
         subfolderEl.addEventListener('input', () => {
+            this.saveDownloadTargetSelection(missing, {
+                category: this.getDropdownValue(categoryEl),
+                subfolder: subfolderEl.value,
+                subfolderTouched: true
+            });
             populateSubfolderOptions(subfolderEl.value);
         });
 
         subfolderEl.addEventListener('blur', () => hideList(listEl));
+
+        if (suggestBtn && suggestBtn.dataset.mlSuggestBound !== 'true') {
+            suggestBtn.dataset.mlSuggestBound = 'true';
+            suggestBtn.addEventListener('click', async () => {
+                suggestBtn.disabled = true;
+                try {
+                    await this.forceSuggestedCivitaiSubfolder(missing, categoryEl, subfolderEl);
+                    listEl.innerHTML = '';
+                    listEl.style.display = 'none';
+                } finally {
+                    suggestBtn.disabled = false;
+                }
+            });
+        }
+
         this.applySuggestedCivitaiSubfolder(missing, categoryEl, subfolderEl);
     },
 
@@ -581,6 +676,7 @@ export const downloadTargetMethods = {
         this.downloadDirectories = null;
         this.capabilities = null;
         this.downloadSubfolders.clear();
+        this.downloadTargetSelections?.clear();
         this._analysisProgressToken = null;
 
         await this.ensureCapabilitiesLoaded();

@@ -22,6 +22,7 @@ export class ResolverManagerDialog extends ComfyDialog {
         this.downloadDirectories = null;
         this.capabilities = null;
         this.downloadSubfolders = new Map();
+        this.downloadTargetSelections = new Map(); // missing model key -> user/suggested download target
         this.pendingResolutions = [];
         this.pendingIndex = new Map(); // key -> index in pendingResolutions
         this.workflowPendingSelections = new Map(); // workflow key -> queued selections

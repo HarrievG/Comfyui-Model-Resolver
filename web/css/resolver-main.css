@@ -4136,6 +4136,23 @@
     min-width: 0;
     width: 100%;
 }
+.mr-download-subfolder-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+.mr-download-suggest-btn,
+#model-resolver-modal .mr-download-suggest-btn {
+    min-width: 58px;
+    height: var(--mr-download-control-height, 36px);
+    min-height: var(--mr-download-control-height, 36px);
+    padding: 0 9px;
+    border-radius: var(--mr-missing-control-radius, 7px);
+    font-size: 11px;
+    line-height: 1;
+}
 @media (max-width: 720px) {
     .mr-download-target-label {
         min-height: 0;
