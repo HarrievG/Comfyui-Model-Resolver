@@ -557,6 +557,7 @@ export const queueMethods = {
             : 'Apply the model links you selected from local matches or search results.';
         this.applyPendingBtn.textContent = `Apply Selected (${count})`;
         this.setTooltip(this.applyPendingBtn, tooltip);
+        this.applyPendingBtn.disabled = isEmpty;
         this.applyPendingBtn.setAttribute('aria-disabled', String(isEmpty));
         this.applyPendingBtn.classList.toggle('mr-btn-is-disabled', isEmpty);
         this.updateBatchFooterButtons();
@@ -597,6 +598,9 @@ export const queueMethods = {
         if (this.applyPendingBtn) {
             this.applyPendingBtn.textContent = `Apply Selected (${pendingCount})`;
         }
+        if (this.linkMenuButton) {
+            this.linkMenuButton.classList.toggle('mr-btn-is-disabled', totalCount === 0 && pendingCount === 0);
+        }
         this.updateFooterMenuItemVisibility?.();
     },
 
@@ -622,25 +626,47 @@ export const queueMethods = {
 
         const menuChildren = items.map(item => {
             const isDivider = item === 'divider' || item?.type === 'divider';
-            const element = isDivider
-                ? $el("div.mr-footer-menu-divider", {})
-                : $el("button.mr-footer-menu-item", {
+            let element;
+            if (isDivider) {
+                element = $el("div.mr-footer-menu-divider", {});
+            } else {
+                const attributes = {
                     type: 'button',
                     role: 'menuitem',
                     onclick: (event) => {
                         event.stopPropagation();
+                        if (element.disabled || element.classList.contains('mr-btn-is-disabled')) return;
                         item.action();
                     }
-                }, [$el("span", { textContent: item.label })]);
+                };
+                if (item.id) attributes.id = item.id;
+                if (item.ariaLabel) attributes['aria-label'] = item.ariaLabel;
+                element = $el("button.mr-footer-menu-item", attributes, [$el("span", { textContent: item.label })]);
+            }
 
             if (item?.className) {
                 element.classList.add(...String(item.className).split(/\s+/).filter(Boolean));
             }
-            if (typeof item?.visibleWhen === 'function') {
+            if (item?.refName) {
+                this[item.refName] = element;
+            }
+            if (typeof item?.visibleWhen === 'function' || typeof item?.disabledWhen === 'function') {
                 if (!this.footerMenuItems) this.footerMenuItems = new Map();
                 if (!this.footerMenuItems.has(name)) this.footerMenuItems.set(name, []);
-                this.footerMenuItems.get(name).push({ element, visibleWhen: item.visibleWhen });
-                element.style.display = item.visibleWhen() ? '' : 'none';
+                this.footerMenuItems.get(name).push({
+                    element,
+                    visibleWhen: item.visibleWhen,
+                    disabledWhen: item.disabledWhen
+                });
+                if (typeof item.visibleWhen === 'function') {
+                    element.style.display = item.visibleWhen() ? '' : 'none';
+                }
+                if (typeof item.disabledWhen === 'function') {
+                    const disabled = item.disabledWhen();
+                    element.disabled = disabled;
+                    element.setAttribute('aria-disabled', String(disabled));
+                    element.classList.toggle('mr-btn-is-disabled', disabled);
+                }
             }
             return element;
         });
@@ -657,7 +683,15 @@ export const queueMethods = {
         if (!this.footerMenuItems) return;
         for (const entries of this.footerMenuItems.values()) {
             for (const entry of entries) {
-                entry.element.style.display = entry.visibleWhen() ? '' : 'none';
+                if (typeof entry.visibleWhen === 'function') {
+                    entry.element.style.display = entry.visibleWhen() ? '' : 'none';
+                }
+                if (typeof entry.disabledWhen === 'function') {
+                    const disabled = entry.disabledWhen();
+                    entry.element.disabled = disabled;
+                    entry.element.setAttribute('aria-disabled', String(disabled));
+                    entry.element.classList.toggle('mr-btn-is-disabled', disabled);
+                }
             }
         }
     },
@@ -666,6 +700,14 @@ export const queueMethods = {
         this.footerMenus = new Map();
         this.footerMenuButtons = new Map();
         this.footerMenuItems = new Map();
+        this.linkMenuButton = null;
+        this.linkMenuWrap = null;
+        this.queueExactButton = null;
+        this.applyPendingBtn = null;
+        this.clearSelectedButton = null;
+        this.autoResolveButton = null;
+        this.downloadMenuButton = null;
+        this.downloadAllButton = null;
 
         const selectMenu = this.createFooterMenu('select', 'Select (0/0)', [
             { label: 'Select All', action: () => this.selectBatchMissingModels('all') },
@@ -699,55 +741,53 @@ export const queueMethods = {
         this.searchMenuButton = this.footerMenuButtons.get('search');
         this.searchMenuWrap = searchMenu;
 
-        // Store reference to download all button so we can update its text
-        this.downloadAllButton = $el("button.mr-btn.mr-btn-download.mr-footer-btn", {
-            "data-tooltip": "Download every missing model that has a known download source.",
-            "aria-label": "Download all missing models",
-            onclick: () => this.handleDownloadAllClick()
-        }, [
-            $el("span.mr-btn-icon", { textContent: "☁" }),
-            $el("span", { textContent: " Download All Missing" })
-        ]);
-
-        // Auto-resolve button (secondary style)
-        this.autoResolveButton = $el("button.mr-btn.mr-btn-secondary.mr-footer-btn", {
-            "data-tooltip": "Automatically link all missing models with a 100% local match.",
-            "aria-label": "Auto-link all 100 percent local matches",
-            onclick: () => this.autoResolve100Percent()
-        }, [
-            $el("span.mr-btn-icon", { textContent: "🔗" }),
-            $el("span", { textContent: " Auto-Link 100%" })
-        ]);
-        this.queueExactButton = $el("button.mr-btn.mr-btn-secondary.mr-footer-btn", {
-            type: 'button',
-            onclick: () => this.queueExactLocalMatchesBatch('selected')
-        }, [
-            $el("span", { textContent: "Queue Exact" })
-        ]);
-
-        // Apply pending resolutions button
-        this.applyPendingBtn = $el("button.mr-btn.mr-btn-primary.mr-footer-btn", {
-            id: "apply-pending-resolutions",
-            "data-tooltip": "Apply the model links you selected from local matches or search results.",
-            "aria-label": "Apply selected model links",
-            "aria-disabled": "true",
-            textContent: "Apply Selected (0)",
-            onclick: () => {
-                if ((this.pendingResolutions?.length || 0) === 0) return;
-                this.applyPendingResolutions();
+        const hasExactLocalMatches = () => this.getMissingWithExactLocalMatches(this.missingModels || []).length > 0;
+        const linkMenu = this.createFooterMenu('link', 'Link', [
+            {
+                label: 'Queue Exact',
+                refName: 'queueExactButton',
+                ariaLabel: 'Queue exact local matches',
+                action: () => this.queueExactLocalMatchesBatch('selected')
+            },
+            {
+                label: 'Apply Selected (0)',
+                id: 'apply-pending-resolutions',
+                refName: 'applyPendingBtn',
+                ariaLabel: 'Apply selected model links',
+                disabledWhen: () => (this.pendingResolutions?.length || 0) === 0,
+                action: () => {
+                    if ((this.pendingResolutions?.length || 0) === 0) return;
+                    this.applyPendingResolutions();
+                }
+            },
+            {
+                label: 'Clear All Selected',
+                refName: 'clearSelectedButton',
+                ariaLabel: 'Clear all queued selected model links',
+                disabledWhen: () => (this.pendingResolutions?.length || 0) === 0,
+                action: () => {
+                    this.clearAllQueued();
+                    this.closeFooterMenus();
+                }
+            },
+            { type: 'divider', visibleWhen: hasExactLocalMatches },
+            {
+                label: 'Auto-Link 100%',
+                refName: 'autoResolveButton',
+                ariaLabel: 'Auto-link all 100 percent local matches',
+                visibleWhen: hasExactLocalMatches,
+                action: () => this.autoResolve100Percent()
             }
-        });
-        this.applyPendingBtn.classList.add('mr-btn-is-disabled');
-        this.downloadAllButton.setAttribute('aria-label', 'Download all missing models');
-        this.autoResolveButton.setAttribute('aria-label', 'Auto-link all 100 percent local matches');
-        this.queueExactButton.setAttribute('aria-label', 'Queue exact local matches');
-        this.applyPendingBtn.setAttribute('aria-label', 'Apply selected model links');
-        this.applyPendingBtn.setAttribute('aria-disabled', 'true');
-
-        this.setTooltip(this.downloadAllButton, 'Download every missing model that has a known download source.');
-        this.setTooltip(this.autoResolveButton, 'Automatically link all missing models with a 100% local match.');
+        ]);
+        this.linkMenuButton = this.footerMenuButtons.get('link');
+        this.linkMenuWrap = linkMenu;
+        this.linkMenuButton.setAttribute('aria-label', 'Local link actions');
+        this.setTooltip(this.linkMenuButton, 'Queue exact local matches, apply queued links, or auto-link 100% matches.');
         this.setTooltip(this.queueExactButton, 'Queue exact local matches for the selected rows, or all exact matches if nothing is selected.');
         this.setTooltip(this.applyPendingBtn, 'Apply the model links you selected from local matches or search results.');
+        this.setTooltip(this.clearSelectedButton, 'Clear all queued model links without changing the workflow.');
+        this.setTooltip(this.autoResolveButton, 'Automatically link all missing models with a 100% local match.');
+        this.updateApplyPendingButton();
 
         const downloadMenu = this.createFooterMenu('download', 'Download', [
             { label: 'Download Selected', action: () => this.downloadMissingBatch('selected') },
@@ -764,9 +804,7 @@ export const queueMethods = {
         return $el("div.mr-footer", {}, [
             selectMenu,
             searchMenu,
-            this.queueExactButton,
-            this.applyPendingBtn,
-            this.autoResolveButton,
+            linkMenu,
             downloadMenu
         ]);
     },

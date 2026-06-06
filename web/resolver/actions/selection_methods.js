@@ -33,9 +33,7 @@ export const selectionMethods = {
         [
             this.selectMenuWrap,
             this.searchMenuWrap,
-            this.queueExactButton,
-            this.applyPendingBtn,
-            this.autoResolveButton,
+            this.linkMenuWrap,
             this.downloadMenuWrap
         ].forEach(element => {
             if (element) element.style.display = display;

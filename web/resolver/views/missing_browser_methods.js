@@ -647,17 +647,11 @@ export const missingBrowserMethods = {
 
         // Check if there are active downloads
         const activeCount = Object.keys(this.activeDownloads).length;
-
-        // Check if any model has a 100% confidence match
-        const hasAny100Match = missingModels.some(m =>
-            (m.matches || []).some(match => match.confidence === 100)
+        const hasAny100Match = missingModels.some(missing =>
+            (missing.matches || []).some(match => match.confidence === 100)
         );
 
-        // Show/hide Auto-Link button based on whether 100% matches exist
         this.setMissingFooterControlsVisible(totalMissing > 0 || activeCount > 0);
-        if (this.autoResolveButton) {
-            this.autoResolveButton.style.display = hasAny100Match ? 'inline-flex' : 'none';
-        }
 
         // Hide download all button if no missing models
         if (this.downloadAllButton) {

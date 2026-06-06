@@ -2449,10 +2449,32 @@
     outline: none;
     background: rgba(255,255,255,0.07);
 }
+.mr-footer-menu-item:disabled,
+.mr-footer-menu-item.mr-btn-is-disabled {
+    color: rgba(255,255,255,0.34);
+    cursor: not-allowed;
+}
+.mr-footer-menu-item:disabled:hover,
+.mr-footer-menu-item.mr-btn-is-disabled:hover,
+.mr-footer-menu-item:disabled:focus-visible,
+.mr-footer-menu-item.mr-btn-is-disabled:focus-visible {
+    background: transparent;
+}
 #model-resolver-modal .mr-footer-menu .mr-footer-menu-item:hover,
 #model-resolver-modal .mr-footer-menu .mr-footer-menu-item:focus-visible {
     outline: none;
     background: rgba(255,255,255,0.07) !important;
+}
+#model-resolver-modal .mr-footer-menu .mr-footer-menu-item:disabled,
+#model-resolver-modal .mr-footer-menu .mr-footer-menu-item.mr-btn-is-disabled {
+    color: rgba(255,255,255,0.34);
+    cursor: not-allowed;
+}
+#model-resolver-modal .mr-footer-menu .mr-footer-menu-item:disabled:hover,
+#model-resolver-modal .mr-footer-menu .mr-footer-menu-item.mr-btn-is-disabled:hover,
+#model-resolver-modal .mr-footer-menu .mr-footer-menu-item:disabled:focus-visible,
+#model-resolver-modal .mr-footer-menu .mr-footer-menu-item.mr-btn-is-disabled:focus-visible {
+    background: transparent !important;
 }
 #model-resolver-modal .mr-footer-menu .mr-footer-menu-danger {
     color: var(--mr-color-error-light, #f55);
