@@ -61,6 +61,7 @@ def search_local_matches(
     category: Optional[str] = None,
     similarity_threshold: float = 0.0,
     max_matches_per_model: int = 10,
+    force_rescan: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Search local model files using the same matcher as workflow analysis.
@@ -74,7 +75,7 @@ def search_local_matches(
     Returns:
         Deduplicated list of local matches sorted by similarity
     """
-    available_models = get_model_files()
+    available_models = get_model_files(force_rescan=force_rescan)
 
     candidates = available_models
     if category and category != "unknown":

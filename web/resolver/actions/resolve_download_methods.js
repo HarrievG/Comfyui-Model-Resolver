@@ -447,99 +447,144 @@ export const resolveDownloadMethods = {
     },
 
     /**
-     * Auto-resolve a model after download completes
-     * Reloads the workflow analysis and resolves if the downloaded model is found
+     * Refresh local matches after a download completes.
      */
-    async autoResolveAfterDownload(missing, downloadedFilename) {
+    getDownloadedLocalMatchTarget(missing = {}, downloadedFilename = '') {
+        return downloadedFilename
+            || missing.civitai_info?.expected_filename
+            || missing.download_source?.filename
+            || missing.original_path?.split('/').pop()?.split('\\').pop()
+            || '';
+    },
+
+    async refreshLocalMatchesForDownloadedMissing(missing, downloadedFilename, { progressDiv = null, category = '' } = {}) {
+        if (!missing) return [];
+
+        const targetFilename = this.getDownloadedLocalMatchTarget(missing, downloadedFilename);
+        if (!targetFilename) return [];
+
+        if (progressDiv) {
+            progressDiv.innerHTML = this.renderStatusMessage(`Checking local matches for ${targetFilename}...`, 'info');
+        }
+        const body = this.contentElement?.querySelector(`#local-matches-body-${missing.node_id}-${missing.widget_index}`);
+        if (body) {
+            body.innerHTML = `<div class="mr-no-matches">Checking local matches for ${this.escapeHtml(targetFilename)}...</div>`;
+        }
+
+        const response = await api.fetchApi('/model_resolver/local-matches', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filename: targetFilename,
+                category: category || missing.category || '',
+                force_rescan: true
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Local match refresh failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const matches = Array.isArray(data.matches) ? data.matches : [];
+        const missingKey = this.getMissingModelKey(missing);
+        const currentMissing = (this.missingModels || []).find(item => this.getMissingModelKey(item) === missingKey) || missing;
+        currentMissing.matches = matches;
+        missing.matches = matches;
+        this.allModels = null;
+        this.invalidateLoadedModelsCacheForActiveWorkflow?.();
+        this.refreshLocalMatchesUiForMissing(currentMissing);
+        return matches;
+    },
+
+    refreshLocalMatchesUiForMissing(missing) {
+        if (!missing || !this.contentElement) return;
+
+        const body = this.contentElement.querySelector(`#local-matches-body-${missing.node_id}-${missing.widget_index}`);
+        const displayIndex = Number.isFinite(missing.__displayIndex) ? missing.__displayIndex : 0;
+        if (body) {
+            body.innerHTML = this.renderLocalMatchesContent(missing, displayIndex);
+            this.wireLocalMatchButtons(body, missing, displayIndex);
+        }
+
+        this.refreshMissingListRowForMissing(missing);
+        this.updateBatchFooterButtons?.();
+    },
+
+    refreshMissingListRowForMissing(missing) {
+        if (!missing || !this.contentElement) return;
+
+        const missingKey = this.getMissingModelKey(missing);
+        const row = Array.from(this.contentElement.querySelectorAll('.mr-missing-list-row'))
+            .find(item => item.dataset.missingKey === missingKey);
+        if (!row) return;
+
+        const bestMatch = this.getBestLocalMatch(missing, 70);
+        const confidence = bestMatch ? Number(bestMatch.confidence || 0) : 0;
+        const matchName = bestMatch?.model?.relative_path || bestMatch?.filename || bestMatch?.path || '';
+        const matchDisplay = matchName || 'No local match';
+        const matchClass = confidence === 100 ? 'exact' : (bestMatch ? 'partial' : 'none');
+
+        const bestEl = row.querySelector('.mr-missing-row-best');
+        if (bestEl) {
+            bestEl.setAttribute('data-tooltip', matchDisplay);
+            bestEl.innerHTML = bestMatch
+                ? this.escapeHtml(matchDisplay)
+                : '<span class="mr-missing-row-none">-- No local match</span>';
+        }
+
+        const matchEl = row.querySelector('.mr-missing-row-match');
+        if (matchEl) {
+            matchEl.className = `mr-missing-row-match mr-missing-row-match-${matchClass}`;
+            matchEl.innerHTML = `<strong>${bestMatch ? `${confidence.toFixed(confidence % 1 ? 1 : 0)}%` : '--'}</strong>`;
+        }
+
+        const sourcesEl = row.querySelector('.mr-missing-row-sources');
+        if (sourcesEl) {
+            sourcesEl.innerHTML = this.renderMissingSourcesSummary(missing);
+        }
+
+        const stats = this.getMissingModelSummaryStats(this.missingModels || []);
+        const exactEl = this.contentElement.querySelector('.mr-missing-stat-exact');
+        const partialEl = this.contentElement.querySelector('.mr-missing-stat-partial');
+        const noneEl = this.contentElement.querySelector('.mr-missing-stat-none');
+        if (exactEl) exactEl.textContent = `${stats.exact} exact`;
+        if (partialEl) partialEl.textContent = `${stats.partial} partial`;
+        if (noneEl) noneEl.textContent = `${stats.none} no match`;
+    },
+
+    async refreshAfterDownload(missing, downloadedFilename, { progressDiv = null, downloadBtn = null, category = '' } = {}) {
         try {
-            const workflow = this.getCurrentWorkflow();
-            if (!workflow) {
-                // Just reload the UI to show updated state
-                await this.loadWorkflowData(null, { force: true });
-                return;
-            }
-
-            // Re-analyze workflow to find the newly downloaded model
-            const analyzeResponse = await api.fetchApi('/model_resolver/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ workflow })
+            const matches = await this.refreshLocalMatchesForDownloadedMissing(missing, downloadedFilename, { progressDiv, category });
+            const downloadedLower = String(downloadedFilename || '').toLowerCase();
+            const perfectMatch = matches.find(match => {
+                const matchFilename = match.filename || match.model?.filename || '';
+                return match.confidence === 100
+                    || (downloadedLower && matchFilename.toLowerCase() === downloadedLower);
             });
 
-            if (!analyzeResponse.ok) {
-                // Just reload UI
-                await this.loadWorkflowData(null, { force: true });
-                return;
+            if (progressDiv) {
+                progressDiv.innerHTML = this.renderStatusMessage(
+                    perfectMatch?.model
+                        ? 'Download complete. Exact local match is ready.'
+                        : 'Download complete. Local matches updated.',
+                    'success'
+                );
             }
-
-            const analyzeData = await analyzeResponse.json();
-            const missingModels = analyzeData.missing_models || [];
-
-            // Find the missing model entry that matches our download by filename
-            const targetMissing = missingModels.find(m => {
-                const missingFilename = m.original_path?.split('/').pop()?.split('\\').pop() || '';
-                return missingFilename.toLowerCase() === downloadedFilename.toLowerCase();
-            });
-
-            if (!targetMissing) {
-                // Model no longer missing - already resolved or workflow changed
-                await this.loadWorkflowData(null, { force: true });
-                return;
+            if (downloadBtn) {
+                downloadBtn.textContent = '✓ Done';
             }
-
-            // Look for a 100% match with the downloaded filename
-            const matches = targetMissing.matches || [];
-            const perfectMatch = matches.find(m => {
-                const matchFilename = m.filename || m.model?.filename || '';
-                // Check for exact match or 100% confidence
-                return m.confidence === 100 ||
-                       matchFilename.toLowerCase() === downloadedFilename.toLowerCase();
-            });
-
-            if (perfectMatch && perfectMatch.model) {
-                // Auto-resolve ALL nodes that need this model
-                // all_node_refs contains all nodes referencing this model (deduplicated)
-                const nodeRefs = targetMissing.all_node_refs || [targetMissing];
-                const resolutions = nodeRefs.map(ref => ({
-                    node_id: ref.node_id,
-                    widget_index: ref.widget_index,
-                    resolved_path: perfectMatch.model.path,
-                    category: ref.category,
-                    resolved_model: perfectMatch.model,
-                    subgraph_id: ref.subgraph_id,
-                    is_top_level: ref.is_top_level,
-                    is_lora_v2: ref.is_lora_v2,
-                    original_lora_name: ref.name || ref.original_path
-                }));
-
-                const resolveResponse = await api.fetchApi('/model_resolver/resolve', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        workflow,
-                        resolutions: resolutions
-                    })
-                });
-
-                if (resolveResponse.ok) {
-                    const resolveData = await resolveResponse.json();
-                    if (resolveData.success) {
-                        await this.updateWorkflowInComfyUI(resolveData.workflow);
-                        const count = resolutions.length;
-                        this.showNotification(`✓ Auto-resolved: ${downloadedFilename} (${count} reference${count > 1 ? 's' : ''})`, 'success');
-                        await this.loadWorkflowData(resolveData.workflow, { force: true });
-                        return;
-                    }
-                }
-            }
-
-            // If we couldn't auto-resolve, just reload the UI
-            await this.loadWorkflowData(null, { force: true });
 
         } catch (error) {
-            console.error('Model Resolver: Error auto-resolving after download:', error);
-            // Still reload UI even on error
-            await this.loadWorkflowData(null, { force: true });
+            console.error('Model Resolver: Error refreshing after download:', error);
+            if (progressDiv) {
+                progressDiv.innerHTML = this.renderStatusMessage(`Downloaded, but local re-check failed: ${error.message}`, 'warning');
+            }
+            if (downloadBtn) {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = 'Link manually';
+            }
+            this.showNotification('Downloaded, but local re-check failed: ' + error.message, 'warning');
         }
     },
 
@@ -609,7 +654,7 @@ export const resolveDownloadMethods = {
 
             // Track download and poll for progress
             const downloadId = data.download_id;
-            this.activeDownloads[downloadId] = { missing, progressDiv, downloadBtn };
+            this.activeDownloads[downloadId] = { missing, progressDiv, downloadBtn, category };
 
             // Update the Download All button state
             this.updateDownloadAllButtonState();
@@ -650,7 +695,7 @@ export const resolveDownloadMethods = {
             }
 
             const progress = await response.json();
-            const { progressDiv, downloadBtn, missing } = info;
+            const { progressDiv, downloadBtn, missing, category } = info;
 
             if (progress.status === 'downloading' || progress.status === 'starting') {
                 const percent = progress.progress || 0;
@@ -683,7 +728,7 @@ export const resolveDownloadMethods = {
 
             } else if (progress.status === 'completed') {
                 if (progressDiv) {
-                    progressDiv.innerHTML = this.renderStatusMessage('Download complete! Auto-linking...', 'success');
+                    progressDiv.innerHTML = this.renderStatusMessage('Download complete. Checking local matches...', 'success');
                 }
                 if (downloadBtn) {
                     downloadBtn.textContent = '✓ Done';
@@ -694,10 +739,14 @@ export const resolveDownloadMethods = {
                 this.updateDownloadAllButtonState();
                 this.showNotification(`Downloaded: ${progress.filename}`, 'success');
 
-                // Auto-resolve: Reload workflow data and try to resolve the downloaded model
-                // Small delay to ensure file system is updated
+                // Refresh local matches only for this downloaded missing model.
+                // Small delay to ensure file system is updated.
                 setTimeout(async () => {
-                    await this.autoResolveAfterDownload(missing, progress.filename);
+                    await this.refreshAfterDownload(missing, progress.filename, {
+                        progressDiv,
+                        downloadBtn,
+                        category
+                    });
                 }, 500);
 
             } else if (progress.status === 'error') {
@@ -1487,7 +1536,7 @@ export const resolveDownloadMethods = {
 
             // Track and poll
             const downloadId = data.download_id;
-            this.activeDownloads[downloadId] = { missing, progressDiv, downloadBtn: btn };
+            this.activeDownloads[downloadId] = { missing, progressDiv, downloadBtn: btn, category: targetSelection.category };
 
             // Update the Download All button state
             this.updateDownloadAllButtonState();

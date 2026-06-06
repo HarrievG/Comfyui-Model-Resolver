@@ -401,6 +401,12 @@ class ModelResolverExtension:
                     data = await request.json()
                     filename = data.get("filename", "")
                     category = data.get("category", "")
+                    force_rescan = data.get("force_rescan", False)
+                    force_rescan = (
+                        force_rescan
+                        if isinstance(force_rescan, bool)
+                        else str(force_rescan).lower() == "true"
+                    )
 
                     if not filename:
                         return web.json_response(
@@ -412,6 +418,7 @@ class ModelResolverExtension:
                         category=category or None,
                         similarity_threshold=0.0,
                         max_matches_per_model=10,
+                        force_rescan=force_rescan,
                     )
                     return web.json_response({"matches": matches})
                 except Exception as e:

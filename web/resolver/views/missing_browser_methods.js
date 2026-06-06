@@ -666,7 +666,7 @@ export const missingBrowserMethods = {
         // If no missing models but downloads are active, show a waiting message
         if (totalMissing === 0 && activeCount > 0) {
             container.innerHTML = this.renderStatusMessage(
-                `${activeCount} download${activeCount > 1 ? 's' : ''} in progress. Models will be auto-linked when complete.`,
+                `${activeCount} download${activeCount > 1 ? 's' : ''} in progress. Local matches will refresh when complete.`,
                 'info'
             );
             return;
