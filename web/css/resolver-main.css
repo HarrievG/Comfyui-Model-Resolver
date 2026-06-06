@@ -1956,10 +1956,27 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.mr-search-source-cell {
+    display: inline-grid;
+    max-width: 100%;
+    gap: 3px;
+    justify-items: start;
+}
 .mr-search-source-pill > span {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.mr-search-source-date {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--mr-text-muted);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .mr-search-source-icon {
     display: block;

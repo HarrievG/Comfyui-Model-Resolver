@@ -949,7 +949,9 @@ export const resolveDownloadMethods = {
 
                     const found = this.hasSearchResults(data);
                     anyFound = anyFound || found;
-                    state.results = this.mergeSearchResults(state.results, data);
+                    state.results = this.mergeSearchResults(state.results, data, {
+                        searchedAt: new Date().toISOString()
+                    });
                     state.lastAttemptSources = Array.from(attemptedSources);
                     state.lastAttemptFound = anyFound;
                     this.clearSearchProgressTimer(searchRunId, source);
@@ -1314,7 +1316,8 @@ export const resolveDownloadMethods = {
                 downloadUrl: popular.url,
                 downloadFilename: popularFilename,
                 category: popular.directory || missing.category,
-                openUrl: this.getModelCardUrl(popular.url)
+                openUrl: this.getModelCardUrl(popular.url),
+                searchedAt: this.getSearchResultTimestamp(popular)
             });
         }
 
@@ -1330,7 +1333,8 @@ export const resolveDownloadMethods = {
                 downloadUrl: modelListResult.url,
                 downloadFilename: modelListResult.filename,
                 category: modelListResult.directory || missing.category,
-                openUrl: this.getModelCardUrl(modelListResult.url)
+                openUrl: this.getModelCardUrl(modelListResult.url),
+                searchedAt: this.getSearchResultTimestamp(modelListResult)
             });
         }
 
@@ -1348,7 +1352,8 @@ export const resolveDownloadMethods = {
                 downloadUrl: hfResult.url,
                 downloadFilename: hfResult.filename,
                 category: missing.category,
-                openUrl: hfModelUrl
+                openUrl: hfModelUrl,
+                searchedAt: this.getSearchResultTimestamp(hfResult)
             });
         }
 
@@ -1367,7 +1372,8 @@ export const resolveDownloadMethods = {
                 downloadUrl: civarchiveResult.download_url,
                 downloadFilename: archiveFilename,
                 category: missing.category,
-                openUrl: civarchiveResult.url
+                openUrl: civarchiveResult.url,
+                searchedAt: this.getSearchResultTimestamp(civarchiveResult)
             });
         }
 
@@ -1386,7 +1392,8 @@ export const resolveDownloadMethods = {
                 downloadUrl: loraManagerArchiveResult.download_url || '',
                 downloadFilename: archiveFilename,
                 category: missing.category,
-                openUrl: loraManagerArchiveResult.url
+                openUrl: loraManagerArchiveResult.url,
+                searchedAt: this.getSearchResultTimestamp(loraManagerArchiveResult)
             });
         }
 
@@ -1406,7 +1413,8 @@ export const resolveDownloadMethods = {
                 downloadUrl: civitaiResult.download_url,
                 downloadFilename,
                 category: missing.category,
-                openUrl: modelUrl
+                openUrl: modelUrl,
+                searchedAt: this.getSearchResultTimestamp(civitaiResult)
             });
         }
 

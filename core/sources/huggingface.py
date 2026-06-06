@@ -40,9 +40,11 @@ _author_index_lock = threading.RLock()
 
 
 def clear_search_cache():
-    """Clear cached HuggingFace search results."""
-    global _search_cache
+    """Clear cached HuggingFace search results and in-memory indexes."""
+    global _search_cache, _author_index_cache
     _search_cache.clear()
+    with _author_index_lock:
+        _author_index_cache.clear()
 
 
 def check_huggingface_token(token: Optional[str]) -> Dict[str, Any]:

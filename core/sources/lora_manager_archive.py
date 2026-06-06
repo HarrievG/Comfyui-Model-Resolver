@@ -44,9 +44,10 @@ GENERIC_FILENAME_TOKENS = {
 
 
 def clear_search_cache():
-    """Clear cached LoRA Manager archive search results."""
-    global _search_cache
+    """Clear cached LoRA Manager archive search results and DB path."""
+    global _search_cache, _db_path_cache
     _search_cache.clear()
+    _db_path_cache = None
 
 
 def get_lora_manager_archive_db_path() -> Optional[str]:

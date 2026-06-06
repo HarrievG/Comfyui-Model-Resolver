@@ -45,9 +45,11 @@ CIVITAI_TYPE_MAP = {
 
 
 def clear_search_cache():
-    """Clear cached CivitAI search results."""
-    global _search_cache
+    """Clear cached CivitAI search, URN, and hash results."""
+    global _search_cache, _urn_cache, _hash_cache
     _search_cache.clear()
+    _urn_cache.clear()
+    _hash_cache.clear()
 
 
 def check_civitai_session_token(session_token: Optional[str]) -> Dict[str, Any]:

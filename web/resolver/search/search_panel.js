@@ -137,14 +137,62 @@ export const searchPanelMethods = {
      * Merge new search results into cached per-source results.
      * Empty responses do not delete previously found results.
      */
-    mergeSearchResults(existingResults = {}, newResults = {}) {
+    mergeSearchResults(existingResults = {}, newResults = {}, { searchedAt = null } = {}) {
+        const pickResult = (source) => {
+            if (newResults[source]) {
+                const existingTimestamp = this.getSearchResultTimestamp(existingResults[source]);
+                const resultTimestamp = this.areSearchResultsSame(existingResults[source], newResults[source])
+                    ? existingTimestamp
+                    : null;
+                return this.withSearchResultTimestamp(
+                    newResults[source],
+                    resultTimestamp || searchedAt
+                );
+            }
+            return existingResults[source] || null;
+        };
+
         return {
-            popular: newResults.popular || existingResults.popular || null,
-            model_list: newResults.model_list || existingResults.model_list || null,
-            huggingface: newResults.huggingface || existingResults.huggingface || null,
-            civitai: newResults.civitai || existingResults.civitai || null,
-            civarchive: newResults.civarchive || existingResults.civarchive || null,
-            lora_manager_archive: newResults.lora_manager_archive || existingResults.lora_manager_archive || null
+            popular: pickResult('popular'),
+            model_list: pickResult('model_list'),
+            huggingface: pickResult('huggingface'),
+            civitai: pickResult('civitai'),
+            civarchive: pickResult('civarchive'),
+            lora_manager_archive: pickResult('lora_manager_archive')
+        };
+    },
+
+    getSearchResultSignature(result) {
+        if (Array.isArray(result)) {
+            return result.map(item => this.getSearchResultSignature(item)).join('|');
+        }
+        if (!result || typeof result !== 'object') return '';
+
+        return [
+            result.download_url || result.url || result.model_url || '',
+            result.filename || result.path || '',
+            result.repo_id || result.repo || '',
+            result.model_id || '',
+            result.version_id || '',
+            result.name || ''
+        ].map(value => String(value || '').trim()).join('::');
+    },
+
+    areSearchResultsSame(previousResult, nextResult) {
+        const previousSignature = this.getSearchResultSignature(previousResult);
+        const nextSignature = this.getSearchResultSignature(nextResult);
+        return Boolean(previousSignature && nextSignature && previousSignature === nextSignature);
+    },
+
+    withSearchResultTimestamp(result, searchedAt = null) {
+        if (!result || !searchedAt) return result;
+        if (Array.isArray(result)) {
+            return result.map(item => this.withSearchResultTimestamp(item, searchedAt));
+        }
+        if (typeof result !== 'object') return result;
+        return {
+            ...result,
+            searchedAt: result.searchedAt || result.searched_at || searchedAt
         };
     },
 
@@ -267,6 +315,12 @@ export const searchPanelMethods = {
      */
     hasSearchResults(data = {}) {
         return !!(data.popular || data.model_list || data.huggingface || data.civitai || data.civarchive || data.lora_manager_archive);
+    },
+
+    hasSearchResultsForMissing(missing = {}) {
+        if (missing?.download_source?.url) return true;
+        const state = this.searchResultCache?.get(this.getMissingSearchKey(missing));
+        return this.hasSearchResults(state?.results || {});
     },
 
     /**
@@ -641,14 +695,46 @@ export const searchPanelMethods = {
         return icons[sourceKey] || 'globe';
     },
 
-    renderSearchSourcePill(sourceKey, sourceLabel) {
+    getSearchResultTimestamp(result = {}) {
+        if (Array.isArray(result)) {
+            return this.getSearchResultTimestamp(result[0] || {});
+        }
+        return result?.searchedAt
+            || result?.searched_at
+            || result?.cachedAt
+            || result?.cached_at
+            || result?.updatedAt
+            || result?.updated_at
+            || '';
+    },
+
+    formatSearchResultTimestamp(value, { compact = false } = {}) {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+
+        const monthNames = compact
+            ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const pad = (number) => String(number).padStart(2, '0');
+        const time = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+
+        return `${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} ${time}`;
+    },
+
+    renderSearchSourcePill(sourceKey, sourceLabel, searchedAt = '') {
         const iconName = this.getSearchSourceIconName(sourceKey);
         const iconHtml = getSvgIcon(iconName, 'currentColor', 'mr-search-source-icon');
+        const sourceDate = this.formatSearchResultTimestamp(searchedAt, { compact: true });
+        const sourceDateTitle = this.formatSearchResultTimestamp(searchedAt);
         return `
-            <span class="mr-search-source-pill mr-search-source-${sourceKey}" data-tooltip="${this.escapeHtml(sourceLabel)}">
-                ${iconHtml}
-                <span>${this.escapeHtml(sourceLabel)}</span>
-            </span>
+            <div class="mr-search-source-cell">
+                <span class="mr-search-source-pill mr-search-source-${sourceKey}" data-tooltip="${this.escapeHtml(sourceLabel)}">
+                    ${iconHtml}
+                    <span>${this.escapeHtml(sourceLabel)}</span>
+                </span>
+                ${sourceDate ? `<small class="mr-search-source-date" data-tooltip="Result saved ${this.escapeHtml(sourceDateTitle)}">${this.escapeHtml(sourceDate)}</small>` : ''}
+            </div>
         `;
     },
 
@@ -675,7 +761,7 @@ export const searchPanelMethods = {
             return Math.max(max, count);
         }, 1);
 
-        const sourcePx = textWidth('x'.repeat(maxSourceLabel), 6, 34, 100) + 52;
+        const sourcePx = Math.max(118, textWidth('x'.repeat(maxSourceLabel), 6, 34, 100) + 52);
         const matchPx = textWidth('x'.repeat(maxMatchLabel), 7, 34, 76) + 22;
         const sizePx = textWidth('x'.repeat(maxSizeLabel), 6.5, 28, 72) + 22;
         const actionsPx = Math.max(60, (maxActions * 24) + (Math.max(0, maxActions - 1) * 6) + 22);
@@ -762,7 +848,8 @@ export const searchPanelMethods = {
             downloadUrl: downloadSource.url,
             downloadFilename,
             category: downloadSource.directory || downloadSource.category || missing.category || 'checkpoints',
-            openUrl: modelUrl
+            openUrl: modelUrl,
+            searchedAt: this.getSearchResultTimestamp(downloadSource)
         };
     },
 
@@ -818,7 +905,7 @@ export const searchPanelMethods = {
         for (const row of rows) {
             const sourceKey = String(row.sourceKey || '').replace(/[^a-z0-9_-]/gi, '');
             const sourceLabel = row.sourceLabel || row.sourceKey || 'Source';
-            const sourcePill = this.renderSearchSourcePill(sourceKey, sourceLabel);
+            const sourcePill = this.renderSearchSourcePill(sourceKey, sourceLabel, row.searchedAt || row.sourceDate || '');
             const rawModel = row.model || row.filename || 'Model';
             const rawVersion = row.version || '';
             const model = this.escapeHtml(rawModel);
@@ -886,9 +973,10 @@ export const searchPanelMethods = {
         const searchSourcesId = `search-sources-${missing.node_id}-${missing.widget_index}`;
         const searchSourceSelectId = `search-source-select-${missing.node_id}-${missing.widget_index}`;
         const searchSourceListId = `search-source-list-${missing.node_id}-${missing.widget_index}`;
-        const buttonText = options.buttonText || 'Search';
         const state = this.getSearchState(missing);
         const selectedSource = state.selectedSource || 'all';
+        const buttonText = options.buttonText
+            || (this.hasSearchResultsForMissing(missing) ? 'Search Again' : 'Search');
 
         let html = `<div id="${searchSourcesId}" class="mr-search-source-bar">`;
         html += `<button id="search-${missing.node_id}-${missing.widget_index}" class="mr-btn mr-btn-link">`;

@@ -533,16 +533,19 @@ export const downloadTargetMethods = {
         }
     },
 
-    async clearSearchCaches() {
+    clearFrontendSearchCaches() {
         for (const state of this.searchResultCache.values()) {
             state.activeSearchRunId = null;
         }
         this.clearAllSearchProgressTimers();
+        this.backgroundSearchJobs?.clear();
         this.searchResultCache.clear();
-        const key = this.getWorkflowScopedQueueKey();
-        if (key) {
-            this.workflowSearchResultCaches.delete(key);
-        }
+        this.workflowSearchResultCaches.clear();
+        this.urnResolvePromises.clear();
+        this.urnLocalMatchPromises.clear();
+    },
+
+    async clearBackendSearchCaches({ throwOnError = false } = {}) {
         try {
             const response = await api.fetchApi('/model_resolver/clear-search-cache', {
                 method: 'POST'
@@ -550,8 +553,41 @@ export const downloadTargetMethods = {
             if (!response.ok) {
                 throw new Error('Failed to clear backend search cache');
             }
+            return true;
         } catch (error) {
             console.error('Model Resolver: Clear search cache error:', error);
+            if (throwOnError) {
+                throw error;
+            }
+            return false;
         }
+    },
+
+    async clearSearchCaches() {
+        this.clearFrontendSearchCaches();
+        await this.clearBackendSearchCaches();
+    },
+
+    async clearAllResolverCaches() {
+        this.clearFrontendSearchCaches();
+
+        this.workflowAnalysisCaches.clear();
+        this.workflowLoadedModelCaches.clear();
+        this.cachedAnalysisData = null;
+        this.cachedWorkflowSignature = null;
+        this.cachedLoadedModelsData = null;
+        this.cachedLoadedModelsSignature = null;
+        this.allModels = null;
+        this.downloadDirectories = null;
+        this.capabilities = null;
+        this.downloadSubfolders.clear();
+        this._analysisProgressToken = null;
+
+        await this.ensureCapabilitiesLoaded();
+        this.refreshMissingListStats?.();
+        this.updateBatchFooterButtons?.();
+        this.updateDownloadAllButtonState?.();
+
+        await this.clearBackendSearchCaches({ throwOnError: true });
     }
 };

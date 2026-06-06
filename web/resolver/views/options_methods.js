@@ -76,6 +76,18 @@ export const optionsMethods = {
                                 </button>
                             </div>
                         </div>
+                        <div class="mr-options-sidebar-group">
+                            <div class="mr-options-sidebar-label">System</div>
+                            <div class="mr-options-nav">
+                                <button type="button" class="mr-options-nav-btn" data-target="mr-options-section-maintenance">
+                                    <span class="mr-options-nav-main">
+                                        <span class="mr-options-nav-icon" aria-hidden="true">${getSvgIcon('database')}</span>
+                                        <span>Maintenance</span>
+                                    </span>
+                                    <span class="mr-options-nav-meta">05</span>
+                                </button>
+                            </div>
+                        </div>
                         <div class="mr-options-actions">
                             <div id="mr-options-status" class="mr-options-status">Saved only on this machine.</div>
                             <button id="mr-options-save" class="mr-btn mr-btn-primary mr-footer-btn">Save</button>
@@ -287,6 +299,24 @@ export const optionsMethods = {
                                 </div>
                             </div>
                         </section>
+                        <section id="mr-options-section-maintenance" class="mr-options-card mr-options-section is-hidden">
+                            <div class="mr-options-section-head">
+                                <h4 class="mr-options-section-title">Maintenance</h4>
+                            </div>
+                            <div class="mr-options-grid">
+                                <div class="mr-options-panel">
+                                    <div class="mr-options-stack">
+                                        <div class="mr-options-db-message">
+                                            Clears only Model Resolver's temporary memory: remembered workflow analysis, search results, provider lookups, source status, folder lists, and subfolder suggestions. It does not delete downloaded models, metadata files, saved options, or API keys.
+                                        </div>
+                                        <div class="mr-options-db-actions">
+                                            <button id="mr-options-clear-all-cache" type="button" class="mr-btn mr-btn-secondary">${getSvgIcon('refreshCw')} Clear Frontend and Backend Cache</button>
+                                        </div>
+                                        <div id="mr-options-clear-cache-status" class="mr-options-db-message">Use this when search results look stale or the resolver gets into an inconsistent state. Your model files stay untouched.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
                     </div>
                 </div>
             </div>
@@ -328,6 +358,8 @@ export const optionsMethods = {
         const hfIndexStateEl = this.contentElement.querySelector('#mr-options-hf-index-state');
         const hfIndexMessageEl = this.contentElement.querySelector('#mr-options-hf-index-message');
         const hfIndexRefreshBtn = this.contentElement.querySelector('#mr-options-hf-index-refresh');
+        const clearAllCacheBtn = this.contentElement.querySelector('#mr-options-clear-all-cache');
+        const clearAllCacheStatus = this.contentElement.querySelector('#mr-options-clear-cache-status');
         const navButtons = Array.from(this.contentElement.querySelectorAll('.mr-options-nav-btn'));
         const optionSections = Array.from(this.contentElement.querySelectorAll('.mr-options-section'));
         const trackedInputs = [
@@ -573,6 +605,25 @@ export const optionsMethods = {
             }
         };
 
+        const clearAllCachesFromOptions = async () => {
+            try {
+                if (clearAllCacheBtn) clearAllCacheBtn.disabled = true;
+                if (clearAllCacheStatus) clearAllCacheStatus.textContent = 'Clearing frontend and backend cache...';
+                await this.clearAllResolverCaches();
+                if (clearAllCacheStatus) clearAllCacheStatus.textContent = 'Frontend and backend cache cleared.';
+                this.showNotification('Resolver cache cleared', 'success');
+                if (this.activeTab === 'options') {
+                    this.displayOptions();
+                }
+            } catch (error) {
+                console.error('Model Resolver: clear all cache error:', error);
+                if (clearAllCacheStatus) clearAllCacheStatus.textContent = error.message || 'Failed to clear cache.';
+                this.showNotification('Cache clear failed', 'error');
+            } finally {
+                if (clearAllCacheBtn) clearAllCacheBtn.disabled = false;
+            }
+        };
+
         const setActiveNav = (targetId) => {
             navButtons.forEach((btn) => {
                 btn.classList.toggle('is-active', btn.dataset.target === targetId);
@@ -653,6 +704,12 @@ export const optionsMethods = {
         if (hfIndexRefreshBtn) {
             hfIndexRefreshBtn.addEventListener('click', () => {
                 refreshHfIndex();
+            });
+        }
+
+        if (clearAllCacheBtn) {
+            clearAllCacheBtn.addEventListener('click', () => {
+                clearAllCachesFromOptions();
             });
         }
 

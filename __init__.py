@@ -31,6 +31,7 @@ class ModelResolverExtension:
         self.routes_setup = False
         self.logger = create_module_logger(__name__)
         self.analysis_progress = {}
+        self.search_result_timestamps = {}
 
     def initialize(self):
         """Initialize the extension and set up API routes."""
@@ -73,7 +74,7 @@ class ModelResolverExtension:
                     apply_resolution,
                     search_local_matches,
                 )
-                from .core.scanner import get_model_files
+                from .core.scanner import get_model_files, invalidate_model_files_cache
             except ImportError as e:
                 self.logger.error(f"Model Resolver: Could not import core modules: {e}")
                 return False
@@ -90,12 +91,14 @@ class ModelResolverExtension:
                 from .core.sources.popular import (
                     get_popular_model_url,
                     search_popular_models,
+                    reload_databases as reload_popular_databases,
                 )
                 from .core.sources.model_list import (
                     search_model_list,
                     search_model_list_multiple,
                     get_model_list_update_status,
                     update_model_list_from_remote,
+                    reload_model_list,
                 )
                 from .core.sources.huggingface import (
                     search_huggingface_for_file,
@@ -962,6 +965,79 @@ class ModelResolverExtension:
                             "searched_sources": sorted(normalized_sources),
                         }
 
+                        def current_search_timestamp():
+                            from datetime import datetime, timezone
+
+                            return (
+                                datetime.now(timezone.utc)
+                                .replace(microsecond=0)
+                                .isoformat()
+                            )
+
+                        def get_search_result_signature(source_key, result):
+                            if isinstance(result, list):
+                                return "|".join(
+                                    get_search_result_signature(source_key, item)
+                                    for item in result
+                                )
+                            if not isinstance(result, dict):
+                                return ""
+
+                            parts = [
+                                source_key,
+                                result.get("download_url")
+                                or result.get("url")
+                                or result.get("model_url")
+                                or "",
+                                result.get("filename") or result.get("path") or "",
+                                result.get("repo_id") or result.get("repo") or "",
+                                result.get("model_id") or "",
+                                result.get("version_id") or "",
+                                result.get("name") or "",
+                            ]
+                            return "::".join(str(part).strip() for part in parts)
+
+                        def stamp_search_result(source_key, result):
+                            if isinstance(result, list):
+                                return [
+                                    stamp_search_result(source_key, item)
+                                    for item in result
+                                ]
+                            if not isinstance(result, dict):
+                                return result
+
+                            signature = get_search_result_signature(source_key, result)
+                            if not signature:
+                                return result
+
+                            timestamp = (
+                                result.get("searched_at")
+                                or result.get("searchedAt")
+                                or self.search_result_timestamps.get(signature)
+                            )
+                            if not timestamp:
+                                timestamp = current_search_timestamp()
+                            self.search_result_timestamps.setdefault(
+                                signature, timestamp
+                            )
+                            result["searched_at"] = timestamp
+                            return result
+
+                        def stamp_search_results(payload):
+                            for source_key in (
+                                "popular",
+                                "model_list",
+                                "huggingface",
+                                "civitai",
+                                "civarchive",
+                                "lora_manager_archive",
+                            ):
+                                if payload.get(source_key):
+                                    payload[source_key] = stamp_search_result(
+                                        source_key, payload[source_key]
+                                    )
+                            return payload
+
                         def search_local_sources():
                             source_results = {"popular": None, "model_list": None}
                             source_found = False
@@ -1254,6 +1330,7 @@ class ModelResolverExtension:
                         log_info(
                             f"Search summary: found={results['found']}, searched_sources={results['searched_sources']}"
                         )
+                        stamp_search_results(results)
                         return web.json_response(results)
 
                     except Exception as e:
@@ -1268,8 +1345,12 @@ class ModelResolverExtension:
                         clear_civitai_search_cache()
                         clear_civarchive_search_cache()
                         clear_lora_manager_archive_search_cache()
+                        reload_popular_databases()
+                        reload_model_list()
+                        invalidate_model_files_cache()
+                        self.search_result_timestamps.clear()
                         log_info("Cleared backend search caches")
-                        return web.json_response({"success": True})
+                        return web.json_response({"success": True, "cleared": "all"})
                     except Exception as e:
                         log_exception(f"Clear search cache error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
@@ -1376,6 +1457,7 @@ class ModelResolverExtension:
                         clear_civitai_search_cache()
                         clear_civarchive_search_cache()
                         clear_lora_manager_archive_search_cache()
+                        self.search_result_timestamps.clear()
                         return web.json_response(result)
                     except Exception as e:
                         log_exception(f"Model list update error: {e}")

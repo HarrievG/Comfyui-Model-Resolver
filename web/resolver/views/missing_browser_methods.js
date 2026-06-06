@@ -848,7 +848,9 @@ export const missingBrowserMethods = {
         } else if (perfectMatches.length > 0) {
             // Has perfect local match - download not needed, but allow online re-check.
             html += `<div class="mr-download-section">`;
-            html += this.renderSearchControls(missing, { buttonText: 'Search Online' });
+            html += this.renderSearchControls(missing, {
+                buttonText: this.hasSearchResultsForMissing(missing) ? 'Search Again' : 'Search Online'
+            });
             html += this.renderDownloadTargetControls(missing, missing.category || 'checkpoints');
             html += `</div>`;
             html += `<div id="search-results-${missing.node_id}-${missing.widget_index}" class="mr-search-results"></div>`;
