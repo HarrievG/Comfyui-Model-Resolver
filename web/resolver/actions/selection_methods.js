@@ -20,6 +20,7 @@ export const selectionMethods = {
     },
 
     closeFooterMenus() {
+        this.clearFooterMenuPreview?.();
         this.activeFooterMenu = null;
         this.footerMenus?.forEach?.((menu, name) => {
             menu.classList.remove('is-open');

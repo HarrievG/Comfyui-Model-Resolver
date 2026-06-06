@@ -609,6 +609,15 @@
 .mr-missing-list-row.is-selected.is-batch-selected {
     background: linear-gradient(90deg, rgba(114,211,138,0.13) 0%, rgba(78,161,255,0.065) 58%, rgba(78,161,255,0.025) 100%);
 }
+#model-resolver-modal .mr-missing-list-row.is-menu-preview {
+    background: linear-gradient(90deg, rgba(255,204,102,0.11) 0%, rgba(255,204,102,0.052) 56%, rgba(255,204,102,0.018) 100%);
+    box-shadow: inset 3px 0 0 rgba(255,204,102,0.74), inset 0 0 0 1px rgba(255,204,102,0.12);
+}
+#model-resolver-modal .mr-missing-list-row.is-selected.is-menu-preview,
+#model-resolver-modal .mr-missing-list-row.is-batch-selected.is-menu-preview {
+    background: linear-gradient(90deg, rgba(255,204,102,0.13) 0%, rgba(78,161,255,0.07) 58%, rgba(114,211,138,0.028) 100%);
+    box-shadow: inset 3px 0 0 rgba(255,204,102,0.82), inset 0 0 0 1px rgba(255,204,102,0.14);
+}
 .mr-missing-row-select {
     display: flex;
     justify-content: center;

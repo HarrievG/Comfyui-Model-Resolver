@@ -604,6 +604,62 @@ export const queueMethods = {
         this.updateFooterMenuItemVisibility?.();
     },
 
+    getMissingModelsForPendingResolutions() {
+        const pending = Array.isArray(this.pendingResolutions) ? this.pendingResolutions : [];
+        if (!pending.length) return [];
+
+        const pendingKeys = new Set(pending.map(resolution => this.getMissingModelKey(resolution)));
+        return (this.missingModels || []).filter(missing => pendingKeys.has(this.getMissingModelKey(missing)));
+    },
+
+    getQueueExactLocalMatchPreviewModels() {
+        const selected = this.getSelectedMissingModels();
+        const targets = selected.length ? selected : (this.missingModels || []);
+        return targets.filter(missing => this.getBestLocalMatch(missing, 100)?.model);
+    },
+
+    getDownloadableBatchPreviewModels(mode = 'all') {
+        const targets = mode === 'selected'
+            ? this.getSelectedMissingModels()
+            : (this.missingModels || []);
+
+        return targets.filter(missing => {
+            if (this.getBestLocalMatch(missing, 100)) return false;
+            return Boolean(this.getBestDownloadSourceForMissing(missing)?.url);
+        });
+    },
+
+    getActiveDownloadMissingModels() {
+        const activeKeys = new Set(
+            Object.values(this.activeDownloads || {})
+                .map(info => info?.missing)
+                .filter(Boolean)
+                .map(missing => this.getMissingModelKey(missing))
+        );
+        if (!activeKeys.size) return [];
+
+        return (this.missingModels || []).filter(missing => activeKeys.has(this.getMissingModelKey(missing)));
+    },
+
+    previewFooterMenuModels(models = []) {
+        const keys = new Set(
+            (Array.isArray(models) ? models : [])
+                .filter(Boolean)
+                .map(missing => this.getMissingModelKey(missing))
+        );
+
+        this.contentElement?.querySelectorAll?.('.mr-missing-list-row')?.forEach(row => {
+            const key = row.getAttribute('data-missing-key');
+            row.classList.toggle('is-menu-preview', Boolean(key && keys.has(key)));
+        });
+    },
+
+    clearFooterMenuPreview() {
+        this.contentElement?.querySelectorAll?.('.mr-missing-list-row.is-menu-preview')?.forEach(row => {
+            row.classList.remove('is-menu-preview');
+        });
+    },
+
     createFooterMenu(name, label, items = [], buttonClass = 'mr-btn-secondary') {
         const button = $el(`button.mr-btn.${buttonClass}.mr-footer-btn.mr-footer-menu-button`, {
             type: 'button',
@@ -649,6 +705,24 @@ export const queueMethods = {
             }
             if (item?.refName) {
                 this[item.refName] = element;
+            }
+            if (!isDivider && typeof item?.previewModels === 'function') {
+                const showPreview = () => {
+                    if (element.disabled || element.classList.contains('mr-btn-is-disabled')) {
+                        this.clearFooterMenuPreview();
+                        return;
+                    }
+                    try {
+                        this.previewFooterMenuModels(item.previewModels());
+                    } catch (error) {
+                        console.warn('Model Resolver: footer menu preview failed:', error);
+                        this.clearFooterMenuPreview();
+                    }
+                };
+                element.addEventListener('mouseenter', showPreview);
+                element.addEventListener('focus', showPreview);
+                element.addEventListener('mouseleave', () => this.clearFooterMenuPreview());
+                element.addEventListener('blur', () => this.clearFooterMenuPreview());
             }
             if (typeof item?.visibleWhen === 'function' || typeof item?.disabledWhen === 'function') {
                 if (!this.footerMenuItems) this.footerMenuItems = new Map();
@@ -710,20 +784,27 @@ export const queueMethods = {
         this.downloadAllButton = null;
 
         const selectMenu = this.createFooterMenu('select', 'Select (0/0)', [
-            { label: 'Select All', action: () => this.selectBatchMissingModels('all') },
-            { label: 'Select None', action: () => this.selectBatchMissingModels('none') },
-            { label: 'Invert Selection', action: () => this.selectBatchMissingModels('invert') },
+            { label: 'Select All', previewModels: () => this.missingModels || [], action: () => this.selectBatchMissingModels('all') },
+            { label: 'Select None', previewModels: () => this.getSelectedMissingModels(), action: () => this.selectBatchMissingModels('none') },
+            {
+                label: 'Invert Selection',
+                previewModels: () => {
+                    const selectedKeys = this.batchSelectedMissingKeys || new Set();
+                    return (this.missingModels || []).filter(missing => !selectedKeys.has(this.getMissingModelKey(missing)));
+                },
+                action: () => this.selectBatchMissingModels('invert')
+            },
             'divider',
-            { label: 'Select Exact Local', action: () => this.selectBatchMissingModels('exact') },
-            { label: 'Select No Exact Local', action: () => this.selectBatchMissingModels('no_exact') },
-            { label: 'Select Partial Local', action: () => this.selectBatchMissingModels('partial') },
-            { label: 'Select No Local Match', action: () => this.selectBatchMissingModels('no_local') },
+            { label: 'Select Exact Local', previewModels: () => this.getMissingWithExactLocalMatches(), action: () => this.selectBatchMissingModels('exact') },
+            { label: 'Select No Exact Local', previewModels: () => this.getMissingWithoutExactLocalMatches(), action: () => this.selectBatchMissingModels('no_exact') },
+            { label: 'Select Partial Local', previewModels: () => this.getMissingWithPartialLocalMatches(), action: () => this.selectBatchMissingModels('partial') },
+            { label: 'Select No Local Match', previewModels: () => this.getMissingWithoutLocalMatches(), action: () => this.selectBatchMissingModels('no_local') },
             'divider',
-            { label: 'Select With Download Source', action: () => this.selectBatchMissingModels('downloadable') },
-            { label: 'Select Without Download Source', action: () => this.selectBatchMissingModels('no_download') },
+            { label: 'Select With Download Source', previewModels: () => this.getMissingWithDownloadSources(), action: () => this.selectBatchMissingModels('downloadable') },
+            { label: 'Select Without Download Source', previewModels: () => this.getMissingWithoutDownloadSources(), action: () => this.selectBatchMissingModels('no_download') },
             'divider',
-            { label: 'Select Searched', action: () => this.selectBatchMissingModels('searched') },
-            { label: 'Select Unsearched', action: () => this.selectBatchMissingModels('unsearched') }
+            { label: 'Select Searched', previewModels: () => this.getSearchedMissingModels(), action: () => this.selectBatchMissingModels('searched') },
+            { label: 'Select Unsearched', previewModels: () => this.getUnsearchedMissingModels(), action: () => this.selectBatchMissingModels('unsearched') }
         ]);
         this.selectMenuButton = this.footerMenuButtons.get('select');
         this.selectMenuWrap = selectMenu;
@@ -732,15 +813,15 @@ export const queueMethods = {
         const searchMenu = this.createFooterMenu('search', 'Search', [
             { label: 'Stop Searching', className: 'mr-footer-menu-danger', visibleWhen: () => this.batchSearchRunning, action: () => this.stopBatchSearch() },
             { type: 'divider', visibleWhen: () => this.batchSearchRunning },
-            { label: 'Search Selected', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'all') },
-            { label: 'Search All Missing', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('all', 'all') },
-            { label: 'Search Unsearched', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('unsearched', 'all') },
+            { label: 'Search Selected', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), previewModels: () => this.getSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'all') },
+            { label: 'Search All Missing', visibleWhen: () => !this.batchSearchRunning, previewModels: () => this.missingModels || [], action: () => this.searchMissingBatch('all', 'all') },
+            { label: 'Search Unsearched', visibleWhen: () => !this.batchSearchRunning, previewModels: () => this.getUnsearchedMissingModels(), action: () => this.searchMissingBatch('unsearched', 'all') },
             { type: 'divider', visibleWhen: () => !this.batchSearchRunning },
-            { label: 'Selected: Local Database', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'local') },
-            { label: 'Selected: CivitAI', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'civitai') },
-            { label: 'Selected: HuggingFace', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'huggingface') },
-            { label: 'Selected: CivArchive', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'civarchive') },
-            { label: 'Selected: LoRA Manager Archive', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'lora_manager_archive') }
+            { label: 'Selected: Local Database', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), previewModels: () => this.getSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'local') },
+            { label: 'Selected: CivitAI', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), previewModels: () => this.getSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'civitai') },
+            { label: 'Selected: HuggingFace', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), previewModels: () => this.getSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'huggingface') },
+            { label: 'Selected: CivArchive', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), previewModels: () => this.getSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'civarchive') },
+            { label: 'Selected: LoRA Manager Archive', visibleWhen: () => !this.batchSearchRunning, disabledWhen: () => !hasSelectedMissingModels(), previewModels: () => this.getSelectedMissingModels(), action: () => this.searchMissingBatch('selected', 'lora_manager_archive') }
         ]);
         this.searchMenuButton = this.footerMenuButtons.get('search');
         this.searchMenuWrap = searchMenu;
@@ -751,6 +832,7 @@ export const queueMethods = {
                 label: 'Queue Exact',
                 refName: 'queueExactButton',
                 ariaLabel: 'Queue exact local matches',
+                previewModels: () => this.getQueueExactLocalMatchPreviewModels(),
                 action: () => this.queueExactLocalMatchesBatch('selected')
             },
             {
@@ -759,6 +841,7 @@ export const queueMethods = {
                 refName: 'applyPendingBtn',
                 ariaLabel: 'Apply selected model links',
                 disabledWhen: () => (this.pendingResolutions?.length || 0) === 0,
+                previewModels: () => this.getMissingModelsForPendingResolutions(),
                 action: () => {
                     if ((this.pendingResolutions?.length || 0) === 0) return;
                     this.applyPendingResolutions();
@@ -769,6 +852,7 @@ export const queueMethods = {
                 refName: 'clearSelectedButton',
                 ariaLabel: 'Clear all queued selected model links',
                 disabledWhen: () => (this.pendingResolutions?.length || 0) === 0,
+                previewModels: () => this.getMissingModelsForPendingResolutions(),
                 action: () => {
                     this.clearAllQueued();
                     this.closeFooterMenus();
@@ -780,6 +864,7 @@ export const queueMethods = {
                 refName: 'autoResolveButton',
                 ariaLabel: 'Auto-link all 100 percent local matches',
                 visibleWhen: hasExactLocalMatches,
+                previewModels: () => this.getMissingWithExactLocalMatches(),
                 action: () => this.autoResolve100Percent()
             }
         ]);
@@ -794,10 +879,10 @@ export const queueMethods = {
         this.updateApplyPendingButton();
 
         const downloadMenu = this.createFooterMenu('download', 'Download', [
-            { label: 'Download Selected', disabledWhen: () => !hasSelectedMissingModels(), action: () => this.downloadMissingBatch('selected') },
-            { label: 'Download All With Sources', action: () => this.downloadMissingBatch('all') },
+            { label: 'Download Selected', disabledWhen: () => !hasSelectedMissingModels(), previewModels: () => this.getDownloadableBatchPreviewModels('selected'), action: () => this.downloadMissingBatch('selected') },
+            { label: 'Download All With Sources', previewModels: () => this.getDownloadableBatchPreviewModels('all'), action: () => this.downloadMissingBatch('all') },
             'divider',
-            { label: 'Cancel Downloads', action: () => { this.closeFooterMenus(); this.cancelAllDownloads(); } }
+            { label: 'Cancel Downloads', previewModels: () => this.getActiveDownloadMissingModels(), action: () => { this.closeFooterMenus(); this.cancelAllDownloads(); } }
         ], 'mr-btn-download');
         this.downloadMenuButton = this.footerMenuButtons.get('download');
         this.downloadMenuWrap = downloadMenu;
