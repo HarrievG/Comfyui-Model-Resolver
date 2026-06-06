@@ -193,8 +193,8 @@ export class ModelResolver {
 
     setupActiveWorkflowChangeListeners() {
         if (window.__ModelResolverWorkflowChangeHandlers) {
-            for (const { target, event, handler } of window.__ModelResolverWorkflowChangeHandlers) {
-                target?.removeEventListener?.(event, handler);
+            for (const { target, event, handler, options } of window.__ModelResolverWorkflowChangeHandlers) {
+                target?.removeEventListener?.(event, handler, options);
             }
         }
 
@@ -214,10 +214,40 @@ export class ModelResolver {
             window.__ModelResolverHistoryPatched = true;
         }
 
+        if (!window.__ModelResolverLoadGraphDataPatched && typeof app.loadGraphData === 'function') {
+            const originalLoadGraphData = app.loadGraphData;
+            app.loadGraphData = function(...args) {
+                const result = originalLoadGraphData.apply(this, args);
+                Promise.resolve(result).then(() => {
+                    setTimeout(() => {
+                        window.dispatchEvent(new Event('model-resolver-active-workflowchange'));
+                    }, 0);
+                }, () => {
+                    setTimeout(() => {
+                        window.dispatchEvent(new Event('model-resolver-active-workflowchange'));
+                    }, 0);
+                });
+                return result;
+            };
+            window.__ModelResolverLoadGraphDataPatched = true;
+        }
+
         window.__ModelResolverWorkflowChangeOwner = this;
 
         const routeHandler = () => {
             window.__ModelResolverWorkflowChangeOwner?.handleActiveWorkflowRouteChange('route-change');
+        };
+        const activeWorkflowHandler = () => {
+            window.__ModelResolverWorkflowChangeOwner?.handleActiveWorkflowRouteChange('active-workflow-change');
+        };
+        const documentClickHandler = (event) => {
+            const owner = window.__ModelResolverWorkflowChangeOwner;
+            if (!owner?.dialog?.isVisible()) return;
+
+            const target = event.target instanceof Element ? event.target : null;
+            if (target?.closest('#model-resolver-modal, .model-resolver-backdrop')) return;
+
+            owner.handleActiveWorkflowRouteChange('document-click');
         };
         const focusHandler = () => {
             window.__ModelResolverWorkflowChangeOwner?.handleActiveWorkflowRouteChange('window-focus');
@@ -231,6 +261,8 @@ export class ModelResolver {
         window.addEventListener('hashchange', routeHandler);
         window.addEventListener('popstate', routeHandler);
         window.addEventListener('model-resolver-locationchange', routeHandler);
+        window.addEventListener('model-resolver-active-workflowchange', activeWorkflowHandler);
+        document.addEventListener('click', documentClickHandler, true);
         window.addEventListener('focus', focusHandler);
         document.addEventListener('visibilitychange', visibilityHandler);
 
@@ -238,6 +270,8 @@ export class ModelResolver {
             { target: window, event: 'hashchange', handler: routeHandler },
             { target: window, event: 'popstate', handler: routeHandler },
             { target: window, event: 'model-resolver-locationchange', handler: routeHandler },
+            { target: window, event: 'model-resolver-active-workflowchange', handler: activeWorkflowHandler },
+            { target: document, event: 'click', handler: documentClickHandler, options: true },
             { target: window, event: 'focus', handler: focusHandler },
             { target: document, event: 'visibilitychange', handler: visibilityHandler }
         ];

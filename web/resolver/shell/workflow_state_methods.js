@@ -28,6 +28,7 @@ export const workflowStateMethods = {
     },
 
     getWorkflowScopedQueueKey(route = this.activeWorkflowRouteKey, signature = this.activeWorkflowSignature) {
+        if (route && signature) return `${route}\n${signature}`;
         return route || signature || null;
     },
 
@@ -216,8 +217,14 @@ export const workflowStateMethods = {
         const routeChanged = currentRoute !== this.activeWorkflowRouteKey;
         const signatureChanged = signature && signature !== this.activeWorkflowSignature;
         const graphStillLooksOld = routeChanged && previousSignature && signature === previousSignature;
+        const possiblePendingGraphSwitch = (
+            reason === 'document-click' &&
+            previousSignature &&
+            signature === previousSignature
+        );
+        const maxAttempts = possiblePendingGraphSwitch ? 3 : 8;
 
-        if ((!signature || graphStillLooksOld) && attempt < 8) {
+        if ((!signature || graphStillLooksOld || possiblePendingGraphSwitch) && attempt < maxAttempts) {
             setTimeout(() => {
                 this.refreshForActiveWorkflowChange({
                     reason,
