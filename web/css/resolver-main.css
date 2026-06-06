@@ -537,6 +537,24 @@
     gap: 6px;
     flex-wrap: wrap;
 }
+.mr-missing-list-tools {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.mr-missing-refresh-btn,
+#model-resolver-modal .mr-missing-refresh-btn {
+    min-height: 26px;
+    padding: 0 8px;
+    gap: 5px;
+    font-size: 11px;
+}
+.mr-missing-refresh-btn svg {
+    width: 13px;
+    height: 13px;
+}
 .mr-missing-stat {
     display: inline-flex;
     align-items: center;

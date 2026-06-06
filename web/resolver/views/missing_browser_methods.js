@@ -215,10 +215,15 @@ export const missingBrowserMethods = {
                             <div class="mr-missing-list-title">${totalMissing} missing model${totalMissing === 1 ? '' : 's'}</div>
                             <div class="mr-missing-list-meta">${this.escapeHtml(activeHint)}</div>
                         </div>
-                        <div class="mr-missing-list-stats">
-                            <span class="mr-missing-stat mr-missing-stat-exact">${stats.exact} exact</span>
-                            <span class="mr-missing-stat mr-missing-stat-partial">${stats.partial} partial</span>
-                            <span class="mr-missing-stat mr-missing-stat-none">${stats.none} no match</span>
+                        <div class="mr-missing-list-tools">
+                            <div class="mr-missing-list-stats">
+                                <span class="mr-missing-stat mr-missing-stat-exact">${stats.exact} exact</span>
+                                <span class="mr-missing-stat mr-missing-stat-partial">${stats.partial} partial</span>
+                                <span class="mr-missing-stat mr-missing-stat-none">${stats.none} no match</span>
+                            </div>
+                            <button id="mr-refresh-missing-analysis" type="button" class="mr-btn mr-btn-secondary mr-btn-sm mr-missing-refresh-btn" data-tooltip="Re-analyze workflow and refresh local matches">
+                                ${getSvgIcon('refreshCw')} Refresh
+                            </button>
                         </div>
                     </div>
                     <div class="mr-missing-list-head">
@@ -292,6 +297,12 @@ export const missingBrowserMethods = {
 
     wireMissingModelsBrowser(container, data, sortedMissingModels) {
         this.wireMissingBrowserSplitter(container);
+
+        const refreshBtn = container.querySelector('#mr-refresh-missing-analysis');
+        if (refreshBtn && refreshBtn.dataset.mlRefreshBound !== 'true') {
+            refreshBtn.dataset.mlRefreshBound = 'true';
+            refreshBtn.addEventListener('click', () => this.refreshMissingAnalysis(refreshBtn));
+        }
 
         const selectRow = (row) => {
             const key = row.dataset.missingKey;
@@ -727,6 +738,30 @@ export const missingBrowserMethods = {
         this.scheduleInitialUrnLocalMatchRefresh(sortedMissingModels, container, data);
         this.reconnectActiveSearchProgress(sortedMissingModels);
         this.updateBatchFooterButtons();
+    },
+
+    async refreshMissingAnalysis(button = null) {
+        if (button?.disabled) return;
+
+        try {
+            if (button) {
+                button.disabled = true;
+                button.classList.add('mr-btn-is-disabled');
+            }
+
+            this.showNotification('Refreshing missing models and local matches...', 'info');
+            this.allModels = null;
+            this.invalidateLoadedModelsCacheForActiveWorkflow?.();
+            await this.loadWorkflowData(null, { force: true });
+        } catch (error) {
+            console.error('Model Resolver: missing analysis refresh failed:', error);
+            this.showNotification('Refresh failed: ' + error.message, 'error');
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.classList.remove('mr-btn-is-disabled');
+            }
+        }
     },
 
     renderMissingModel(missing, missingIndex = 0) {
