@@ -576,8 +576,10 @@ export const queueMethods = {
             this.selectMenuButton.classList.toggle('mr-btn-is-disabled', totalCount === 0);
         }
         if (this.searchMenuButton) {
-            this.searchMenuButton.textContent = this.batchSearchRunning ? 'Searching...' : 'Search';
-            this.searchMenuButton.classList.toggle('mr-btn-is-disabled', totalCount === 0 || this.batchSearchRunning);
+            this.searchMenuButton.textContent = this.batchSearchRunning
+                ? (this.batchSearchCancelRequested ? 'Stopping...' : 'Searching...')
+                : 'Search';
+            this.searchMenuButton.classList.toggle('mr-btn-is-disabled', totalCount === 0 && !this.batchSearchRunning);
         }
         if (this.downloadMenuButton) {
             const label = activeCount > 0 ? `Cancel Downloads (${activeCount})` : 'Download';
@@ -595,6 +597,7 @@ export const queueMethods = {
         if (this.applyPendingBtn) {
             this.applyPendingBtn.textContent = `Apply Selected (${pendingCount})`;
         }
+        this.updateFooterMenuItemVisibility?.();
     },
 
     createFooterMenu(name, label, items = [], buttonClass = 'mr-btn-secondary') {
@@ -605,9 +608,7 @@ export const queueMethods = {
             onclick: (event) => {
                 event.stopPropagation();
                 if (button.classList.contains('mr-btn-is-disabled')) {
-                    if (name === 'search' && this.batchSearchRunning) {
-                        this.showNotification('Batch search is already running.', 'info');
-                    } else if (name === 'download') {
+                    if (name === 'download') {
                         this.showNotification('No missing models have downloadable sources yet.', 'info');
                     } else {
                         this.showNotification('No missing models available.', 'info');
@@ -618,8 +619,9 @@ export const queueMethods = {
             }
         }, [$el("span", { textContent: label })]);
 
-        const menu = $el("div.mr-footer-menu", { role: 'menu' }, items.map(item => (
-            item === 'divider'
+        const menuChildren = items.map(item => {
+            const isDivider = item === 'divider' || item?.type === 'divider';
+            const element = isDivider
                 ? $el("div.mr-footer-menu-divider", {})
                 : $el("button.mr-footer-menu-item", {
                     type: 'button',
@@ -628,8 +630,21 @@ export const queueMethods = {
                         event.stopPropagation();
                         item.action();
                     }
-                }, [$el("span", { textContent: item.label })])
-        )));
+                }, [$el("span", { textContent: item.label })]);
+
+            if (item?.className) {
+                element.classList.add(...String(item.className).split(/\s+/).filter(Boolean));
+            }
+            if (typeof item?.visibleWhen === 'function') {
+                if (!this.footerMenuItems) this.footerMenuItems = new Map();
+                if (!this.footerMenuItems.has(name)) this.footerMenuItems.set(name, []);
+                this.footerMenuItems.get(name).push({ element, visibleWhen: item.visibleWhen });
+                element.style.display = item.visibleWhen() ? '' : 'none';
+            }
+            return element;
+        });
+
+        const menu = $el("div.mr-footer-menu", { role: 'menu' }, menuChildren);
 
         this.footerMenuButtons.set(name, button);
         this.footerMenus.set(name, menu);
@@ -637,9 +652,19 @@ export const queueMethods = {
         return $el("div.mr-footer-menu-wrap", {}, [button, menu]);
     },
 
+    updateFooterMenuItemVisibility() {
+        if (!this.footerMenuItems) return;
+        for (const entries of this.footerMenuItems.values()) {
+            for (const entry of entries) {
+                entry.element.style.display = entry.visibleWhen() ? '' : 'none';
+            }
+        }
+    },
+
     createFooter() {
         this.footerMenus = new Map();
         this.footerMenuButtons = new Map();
+        this.footerMenuItems = new Map();
 
         const selectMenu = this.createFooterMenu('select', 'Select (0/0)', [
             { label: 'Select All', action: () => this.selectBatchMissingModels('all') },
@@ -661,12 +686,14 @@ export const queueMethods = {
         this.selectMenuWrap = selectMenu;
 
         const searchMenu = this.createFooterMenu('search', 'Search', [
-            { label: 'Search Selected', action: () => this.searchMissingBatch('selected', 'all') },
-            { label: 'Search All Missing', action: () => this.searchMissingBatch('all', 'all') },
-            { label: 'Search Unsearched', action: () => this.searchMissingBatch('unsearched', 'all') },
-            'divider',
-            { label: 'Selected: CivitAI', action: () => this.searchMissingBatch('selected', 'civitai') },
-            { label: 'Selected: HuggingFace', action: () => this.searchMissingBatch('selected', 'huggingface') }
+            { label: 'Stop Searching', className: 'mr-footer-menu-danger', visibleWhen: () => this.batchSearchRunning, action: () => this.stopBatchSearch() },
+            { type: 'divider', visibleWhen: () => this.batchSearchRunning },
+            { label: 'Search Selected', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('selected', 'all') },
+            { label: 'Search All Missing', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('all', 'all') },
+            { label: 'Search Unsearched', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('unsearched', 'all') },
+            { type: 'divider', visibleWhen: () => !this.batchSearchRunning },
+            { label: 'Selected: CivitAI', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('selected', 'civitai') },
+            { label: 'Selected: HuggingFace', visibleWhen: () => !this.batchSearchRunning, action: () => this.searchMissingBatch('selected', 'huggingface') }
         ]);
         this.searchMenuButton = this.footerMenuButtons.get('search');
         this.searchMenuWrap = searchMenu;

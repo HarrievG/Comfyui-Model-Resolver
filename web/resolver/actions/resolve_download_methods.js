@@ -325,7 +325,7 @@ export const resolveDownloadMethods = {
 
     async searchMissingBatch(mode = 'selected', source = 'all') {
         if (this.batchSearchRunning) {
-            this.showNotification('Batch search is already running.', 'info');
+            this.stopBatchSearch();
             return;
         }
 
@@ -337,6 +337,7 @@ export const resolveDownloadMethods = {
         }
 
         this.batchSearchRunning = true;
+        this.batchSearchCancelRequested = false;
         this.updateBatchFooterButtons();
         this.closeFooterMenus();
         this.showNotification(`Searching ${targets.length} missing model${targets.length > 1 ? 's' : ''}...`, 'info');
@@ -346,6 +347,9 @@ export const resolveDownloadMethods = {
         let failed = 0;
         try {
             for (const missing of targets) {
+                if (this.batchSearchCancelRequested) {
+                    break;
+                }
                 const state = this.getSearchStateForWorkflow(batchWorkflowKey, missing);
                 state.selectedSource = source || 'all';
                 try {
@@ -358,13 +362,32 @@ export const resolveDownloadMethods = {
                 this.updateBatchFooterButtons();
             }
         } finally {
+            const cancelled = this.batchSearchCancelRequested;
             this.batchSearchRunning = false;
+            this.batchSearchCancelRequested = false;
             this.persistSearchStateForActiveWorkflow();
             this.updateBatchFooterButtons();
+            const suffix = failed ? `, ${failed} failed` : '';
+            if (cancelled) {
+                this.showNotification(`Stopped search after ${completed} of ${targets.length} model${targets.length === 1 ? '' : 's'}${suffix}.`, 'info');
+                return;
+            }
         }
 
         const suffix = failed ? `, ${failed} failed` : '';
         this.showNotification(`Finished search for ${completed} model${completed === 1 ? '' : 's'}${suffix}.`, failed ? 'error' : 'success');
+    },
+
+    stopBatchSearch() {
+        if (!this.batchSearchRunning) {
+            this.closeFooterMenus();
+            return;
+        }
+
+        this.batchSearchCancelRequested = true;
+        this.closeFooterMenus();
+        this.updateBatchFooterButtons();
+        this.showNotification('Stopping batch search after the current model...', 'info');
     },
 
     async downloadMissingBatch(mode = 'selected') {
