@@ -134,6 +134,15 @@ export const optionsMethods = {
                                                 <span class="mr-options-switch"></span>
                                             </span>
                                         </label>
+                                        <label class="mr-options-toggle-row">
+                                            <div class="mr-options-toggle-copy">
+                                                <span class="mr-options-toggle-title">Auto-fill subfolder <span class="mr-tooltip-badge" data-tooltip="When enabled, Model Resolver fills a suggested LoRA subfolder when it can infer one from CivitAI metadata and your existing folders. When disabled, the field stays empty unless you click Suggest.">?</span></span>
+                                            </div>
+                                            <span class="mr-options-toggle-control">
+                                                <input id="mr-options-auto-fill-subfolder" class="mr-options-switch-input" type="checkbox" ${tokens.auto_fill_subfolder ? 'checked' : ''}>
+                                                <span class="mr-options-switch"></span>
+                                            </span>
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -402,6 +411,7 @@ export const optionsMethods = {
         const hfUseComfyOrgFallbackInput = this.contentElement.querySelector('#mr-options-hf-use-comfy-org-fallback');
         const hfUseBraveFallbackInput = this.contentElement.querySelector('#mr-options-hf-use-brave-fallback');
         const autoFillBaseModelInput = this.contentElement.querySelector('#mr-options-auto-fill-base-model');
+        const autoFillSubfolderInput = this.contentElement.querySelector('#mr-options-auto-fill-subfolder');
         const hfTokenCheckBtn = this.contentElement.querySelector('#mr-options-hf-token-check');
         const hfTokenCheckStatus = this.contentElement.querySelector('#mr-options-hf-token-check-status');
         const braveKeyCheckBtn = this.contentElement.querySelector('#mr-options-brave-key-check');
@@ -442,6 +452,7 @@ export const optionsMethods = {
             hfUseComfyOrgFallbackInput,
             hfUseBraveFallbackInput,
             autoFillBaseModelInput,
+            autoFillSubfolderInput,
             ...sourceEnabledInputs,
         ].filter(Boolean);
 
@@ -970,6 +981,7 @@ export const optionsMethods = {
                     hf_use_comfy_org_fallback:    Boolean(hfUseComfyOrgFallbackInput?.checked),
                     hf_use_brave_fallback:        Boolean(hfUseBraveFallbackInput?.checked),
                     auto_fill_base_model:          Boolean(autoFillBaseModelInput?.checked),
+                    auto_fill_subfolder:           Boolean(autoFillSubfolderInput?.checked),
                     brave_search_api_key:         braveInput?.value || '',
                     search_source_enabled:        sourceEnabled,
                 };
@@ -985,6 +997,7 @@ export const optionsMethods = {
                 localStorage.setItem('ModelResolver.hfUseComfyOrgFallback',  newSettings.hf_use_comfy_org_fallback ? 'true' : 'false');
                 localStorage.setItem('ModelResolver.hfUseBraveFallback',     newSettings.hf_use_brave_fallback ? 'true' : 'false');
                 localStorage.setItem('ModelResolver.autoFillBaseModel',      newSettings.auto_fill_base_model ? 'true' : 'false');
+                localStorage.setItem('ModelResolver.autoFillSubfolder',      newSettings.auto_fill_subfolder ? 'true' : 'false');
                 localStorage.setItem('ModelResolver.civitaiCandidateLimit',  `${civitaiCandidateLimit}`);
                 Object.entries(sourceEnabled).forEach(([key, val]) => {
                     localStorage.setItem(key, val ? 'true' : 'false');

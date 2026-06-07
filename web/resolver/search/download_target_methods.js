@@ -200,6 +200,10 @@ export const downloadTargetMethods = {
         return this.downloadSubfolders.get((category || '').toLowerCase()) || [];
     },
 
+    isAutoFillSubfolderEnabled() {
+        return localStorage.getItem('ModelResolver.autoFillSubfolder') !== 'false';
+    },
+
     getDownloadTargetKey(missing = {}) {
         return this.getMissingModelKey?.(missing)
             || `${missing.node_id}:${missing.widget_index}:${missing.subgraph_id || ''}:${missing.is_top_level !== false ? 'T' : 'F'}`;
@@ -288,6 +292,7 @@ export const downloadTargetMethods = {
     },
 
     async applySuggestedCivitaiSubfolder(missing, categoryEl, subfolderEl) {
+        if (!this.isAutoFillSubfolderEnabled()) return;
         if (!categoryEl || !subfolderEl || subfolderEl.value.trim()) return;
         const saved = this.getSavedDownloadTargetSelection(missing);
         if (saved?.subfolderTouched) return;
@@ -589,6 +594,7 @@ export const downloadTargetMethods = {
             hf_use_comfy_org_fallback: localStorage.getItem('ModelResolver.hfUseComfyOrgFallback') !== 'false',
             hf_use_brave_fallback: localStorage.getItem('ModelResolver.hfUseBraveFallback') !== 'false',
             auto_fill_base_model: localStorage.getItem('ModelResolver.autoFillBaseModel') !== 'false',
+            auto_fill_subfolder: localStorage.getItem('ModelResolver.autoFillSubfolder') !== 'false',
             civitai_candidate_limit,
             search_source_enabled
         };
@@ -631,6 +637,8 @@ export const downloadTargetMethods = {
                 localStorage.setItem('ModelResolver.hfUseBraveFallback',     data.hf_use_brave_fallback ? 'true' : 'false');
             if (data.auto_fill_base_model !== undefined)
                 localStorage.setItem('ModelResolver.autoFillBaseModel',      data.auto_fill_base_model ? 'true' : 'false');
+            if (data.auto_fill_subfolder !== undefined)
+                localStorage.setItem('ModelResolver.autoFillSubfolder',      data.auto_fill_subfolder ? 'true' : 'false');
             if (data.civitai_candidate_limit !== undefined)
                 localStorage.setItem('ModelResolver.civitaiCandidateLimit',  `${data.civitai_candidate_limit}`);
 
