@@ -1330,6 +1330,8 @@ def _extract_model_images(version_info: Dict[str, Any]) -> List[Dict[str, Any]]:
 
         # Get metadata from image info (may be nested in 'meta' object)
         meta = img.get("meta", {})
+        if not isinstance(meta, dict):
+            meta = {}
 
         img_info = {
             "url": img_url,
@@ -1338,9 +1340,20 @@ def _extract_model_images(version_info: Dict[str, Any]) -> List[Dict[str, Any]]:
             "steps": img.get("steps") or meta.get("steps"),
             "cfg": img.get("cfg") or meta.get("cfg"),
             "sampler": img.get("sampler") or meta.get("sampler"),
-            "model": img.get("model") or meta.get("model"),
+            "model": img.get("model") or meta.get("model") or meta.get("Model"),
             "positive": img.get("positive") or meta.get("prompt"),
-            "negative": img.get("negative") or meta.get("negative_prompt"),
+            "negative": (
+                img.get("negative")
+                or meta.get("negative_prompt")
+                or meta.get("negativePrompt")
+                or meta.get("Negative prompt")
+            ),
+            "clip_skip": img.get("clipSkip") or meta.get("Clip skip") or meta.get("clipSkip"),
+            "width": img.get("width") or meta.get("width"),
+            "height": img.get("height") or meta.get("height"),
+            "tags": img.get("tags") or meta.get("tags") or [],
+            "resources": img.get("resources") or meta.get("resources") or [],
+            "metadata": meta,
         }
 
         # Only add if we have at least a URL
@@ -1431,7 +1444,19 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
                     "steps": img_meta.get("steps"),
                     "cfg": img_meta.get("cfg"),
                     "sampler": img_meta.get("sampler"),
+                    "model": img_meta.get("model") or img_meta.get("Model"),
                     "positive": img_meta.get("prompt"),
+                    "negative": (
+                        img_meta.get("negative_prompt")
+                        or img_meta.get("negativePrompt")
+                        or img_meta.get("Negative prompt")
+                    ),
+                    "clip_skip": img_meta.get("Clip skip") or img_meta.get("clipSkip"),
+                    "width": img.get("width") or img_meta.get("width"),
+                    "height": img.get("height") or img_meta.get("height"),
+                    "tags": img.get("tags") or img_meta.get("tags") or [],
+                    "resources": img.get("resources") or img_meta.get("resources") or [],
+                    "metadata": img_meta,
                 }
             )
 

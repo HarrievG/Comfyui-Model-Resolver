@@ -756,14 +756,16 @@ export const modelInfoMethods = {
     updateInfoDialogImages(dialog, images) {
         const imagesContainer = dialog.querySelector('.mr-info-images');
         if (!imagesContainer) return;
-        if (!images.length) {
+        if (!Array.isArray(images) || !images.length) {
+            dialog._infoImages = [];
             imagesContainer.innerHTML = '';
             return;
         }
 
         const visibleImages = images.slice(0, 8).filter(img => img?.url);
+        dialog._infoImages = visibleImages;
 
-        const renderImageCard = (img) => {
+        const renderImageCard = (img, index) => {
             const captionParts = [];
             if (img.civitaiUrl) {
                 captionParts.push(`<a href="${this.escapeHtml(img.civitaiUrl)}" target="_blank" rel="noopener noreferrer" class="mr-info-image-link">civitai</a>`);
@@ -779,7 +781,10 @@ export const modelInfoMethods = {
             return `
                 <div class="mr-info-image-item">
                     <figure>
+                        <button type="button" class="mr-info-image-preview-btn" data-image-index="${index}" aria-label="Preview example image ${index + 1}">
                         <img src="${this.escapeHtml(img.url)}" alt="Example" loading="lazy" />
+                        <span class="mr-info-image-preview-label">${getSvgIcon('eye')} Preview</span>
+                        </button>
                         <figcaption>${captionParts.join('')}</figcaption>
                     </figure>
                 </div>
@@ -790,6 +795,264 @@ export const modelInfoMethods = {
         imagesHtml += visibleImages.map(renderImageCard).join('');
         imagesHtml += '</div>';
         imagesContainer.innerHTML = imagesHtml;
+
+        imagesContainer.querySelectorAll('.mr-info-image-preview-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const index = parseInt(button.dataset.imageIndex || '0', 10);
+                this.openInfoImagePreview(visibleImages, Number.isNaN(index) ? 0 : index);
+            });
+        });
+    },
+
+    getInfoImagePromptTags(image = {}) {
+        const prompt = String(image.positive || '').trim();
+        const explicitTags = Array.isArray(image.tags)
+            ? image.tags.map(tag => String(tag || '').trim()).filter(Boolean)
+            : [];
+
+        const promptTags = prompt
+            ? prompt
+                .split(/[,;\n]/)
+                .map(tag => tag.trim())
+                .filter(tag => tag && tag.length <= 64)
+            : [];
+
+        return [...new Set([...explicitTags, ...promptTags])].slice(0, 24);
+    },
+
+    getInfoImageMetadataRows(image = {}) {
+        const size = image.width && image.height ? `${image.width} x ${image.height}` : '';
+        const rows = [
+            ['Seed', image.seed],
+            ['Steps', image.steps],
+            ['CFG', image.cfg],
+            ['Sampler', image.sampler],
+            ['Clip skip', image.clip_skip],
+            ['Size', size],
+            ['Model', image.model]
+        ];
+
+        return rows.filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '');
+    },
+
+    getInfoImageResources(image = {}) {
+        const resources = Array.isArray(image.resources) ? image.resources : [];
+        return resources
+            .filter(resource => resource && typeof resource === 'object')
+            .map(resource => ({
+                name: resource.name || resource.modelName || resource.model || resource.hash || 'Resource',
+                type: resource.type || resource.modelType || resource.resourceType || '',
+                weight: resource.weight || resource.strength || resource.value || ''
+            }))
+            .filter(resource => resource.name);
+    },
+
+    renderInfoImagePreviewPrompt(label, value, copyKey) {
+        const text = String(value || '').trim();
+        if (!text) return '';
+
+        return `
+            <section class="mr-image-preview-card">
+                <div class="mr-image-preview-card-head">
+                    <h4>${this.escapeHtml(label)}</h4>
+                    <button type="button" class="mr-image-preview-copy" data-copy-key="${copyKey}">
+                        ${getSvgIcon('copy')} Copy
+                    </button>
+                </div>
+                <p>${this.escapeHtml(text)}</p>
+            </section>
+        `;
+    },
+
+    renderInfoImagePreviewContent(preview) {
+        const images = Array.isArray(preview?._images) ? preview._images : [];
+        const index = Math.max(0, Math.min(images.length - 1, preview?._imageIndex || 0));
+        const image = images[index] || {};
+        const tags = this.getInfoImagePromptTags(image);
+        const metadataRows = this.getInfoImageMetadataRows(image);
+        const resources = this.getInfoImageResources(image);
+        const hasPrevious = images.length > 1;
+        const positionText = images.length > 1 ? `${index + 1} / ${images.length}` : '1 image';
+
+        const tagsHtml = tags.length
+            ? `<div class="mr-image-preview-tags">${tags.map(tag => `<span>${this.escapeHtml(tag)}</span>`).join('')}</div>`
+            : '<div class="mr-image-preview-empty">No prompt tags available.</div>';
+
+        const metadataHtml = metadataRows.length
+            ? metadataRows.map(([label, value]) => `
+                <div class="mr-image-preview-data-row">
+                    <span>${this.escapeHtml(label)}</span>
+                    <strong>${this.escapeHtml(value)}</strong>
+                </div>
+            `).join('')
+            : '<div class="mr-image-preview-empty">No generation metadata available.</div>';
+        const resourcesHtml = resources.length
+            ? resources.map(resource => `
+                <div class="mr-image-preview-resource">
+                    <strong>${this.escapeHtml(resource.name)}</strong>
+                    <span>${this.escapeHtml([resource.type, resource.weight].filter(Boolean).join(' / '))}</span>
+                </div>
+            `).join('')
+            : '';
+
+        return `
+            <div class="mr-image-preview-shell" role="dialog" aria-modal="true" aria-label="Image preview">
+                <div class="mr-image-preview-topbar">
+                    <button type="button" class="mr-image-preview-icon-btn" data-action="close" aria-label="Close preview">${getSvgIcon('x')}</button>
+                    <div class="mr-image-preview-counter">${this.escapeHtml(positionText)}</div>
+                    <div class="mr-image-preview-actions">
+                        ${image.civitaiUrl ? `<a class="mr-image-preview-action" href="${this.escapeHtml(image.civitaiUrl)}" target="_blank" rel="noopener noreferrer">${getSvgIcon('externalLink')} Open CivitAI</a>` : ''}
+                    </div>
+                </div>
+                <main class="mr-image-preview-main">
+                    <section class="mr-image-preview-stage">
+                        ${hasPrevious ? `<button type="button" class="mr-image-preview-nav is-left" data-action="previous" aria-label="Previous image">&lsaquo;</button>` : ''}
+                        <img src="${this.escapeHtml(image.url || '')}" alt="Preview image">
+                        ${hasPrevious ? `<button type="button" class="mr-image-preview-nav is-right" data-action="next" aria-label="Next image">&rsaquo;</button>` : ''}
+                    </section>
+                    <aside class="mr-image-preview-panel">
+                        <section class="mr-image-preview-card">
+                            <div class="mr-image-preview-card-head">
+                                <h4>Tags</h4>
+                            </div>
+                            ${tagsHtml}
+                        </section>
+                        <section class="mr-image-preview-card">
+                            <div class="mr-image-preview-card-head">
+                                <h4>Generation data</h4>
+                                ${(image.positive || image.negative) ? `<button type="button" class="mr-image-preview-copy" data-copy-key="all">${getSvgIcon('copy')} Copy all</button>` : ''}
+                            </div>
+                            <div class="mr-image-preview-data">
+                                ${metadataHtml}
+                            </div>
+                        </section>
+                        ${resources.length ? `
+                            <section class="mr-image-preview-card">
+                                <div class="mr-image-preview-card-head">
+                                    <h4>Resources used</h4>
+                                </div>
+                                <div class="mr-image-preview-resources">${resourcesHtml}</div>
+                            </section>
+                        ` : ''}
+                        ${this.renderInfoImagePreviewPrompt('Prompt', image.positive, 'positive')}
+                        ${this.renderInfoImagePreviewPrompt('Negative prompt', image.negative, 'negative')}
+                    </aside>
+                </main>
+            </div>
+        `;
+    },
+
+    openInfoImagePreview(images, startIndex = 0) {
+        const imageList = (Array.isArray(images) ? images : []).filter(img => img?.url);
+        if (!imageList.length) return;
+
+        this.closeInfoImagePreview();
+
+        const preview = document.createElement('div');
+        preview.className = 'mr-image-preview-backdrop';
+        preview._images = imageList;
+        preview._imageIndex = Math.max(0, Math.min(imageList.length - 1, startIndex));
+        preview._onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                this.closeInfoImagePreview(preview);
+            } else if (event.key === 'ArrowLeft') {
+                this.showInfoImagePreviewAt(preview, preview._imageIndex - 1);
+            } else if (event.key === 'ArrowRight') {
+                this.showInfoImagePreviewAt(preview, preview._imageIndex + 1);
+            }
+        };
+
+        preview.addEventListener('click', async (event) => {
+            if (event.target === preview) {
+                this.closeInfoImagePreview(preview);
+                return;
+            }
+
+            const actionEl = event.target.closest('[data-action]');
+            if (actionEl && preview.contains(actionEl)) {
+                const action = actionEl.dataset.action;
+                if (action === 'close') {
+                    this.closeInfoImagePreview(preview);
+                } else if (action === 'previous') {
+                    this.showInfoImagePreviewAt(preview, preview._imageIndex - 1);
+                } else if (action === 'next') {
+                    this.showInfoImagePreviewAt(preview, preview._imageIndex + 1);
+                }
+                return;
+            }
+
+            const copyBtn = event.target.closest('.mr-image-preview-copy');
+            if (copyBtn && preview.contains(copyBtn)) {
+                await this.copyInfoImagePreviewText(preview, copyBtn);
+            }
+        });
+
+        document.body.appendChild(preview);
+        document.addEventListener('keydown', preview._onKeyDown);
+        this.updateInfoImagePreview(preview);
+    },
+
+    showInfoImagePreviewAt(preview, index) {
+        const images = Array.isArray(preview?._images) ? preview._images : [];
+        if (!preview || !images.length) return;
+
+        preview._imageIndex = (index + images.length) % images.length;
+        this.updateInfoImagePreview(preview);
+    },
+
+    updateInfoImagePreview(preview) {
+        if (!preview) return;
+        preview.innerHTML = this.renderInfoImagePreviewContent(preview);
+        this.bindTooltips(preview);
+    },
+
+    async copyInfoImagePreviewText(preview, button) {
+        const images = Array.isArray(preview?._images) ? preview._images : [];
+        const image = images[preview?._imageIndex || 0] || {};
+        const key = button?.dataset?.copyKey || '';
+        const text = key === 'positive'
+            ? image.positive
+            : key === 'negative'
+                ? image.negative
+                : [
+                    image.positive ? `Prompt: ${image.positive}` : '',
+                    image.negative ? `Negative prompt: ${image.negative}` : '',
+                    image.seed ? `Seed: ${image.seed}` : '',
+                    image.steps ? `Steps: ${image.steps}` : '',
+                    image.cfg ? `CFG: ${image.cfg}` : '',
+                    image.sampler ? `Sampler: ${image.sampler}` : '',
+                    image.model ? `Model: ${image.model}` : ''
+                ].filter(Boolean).join('\n');
+
+        if (!text) return;
+
+        try {
+            await navigator.clipboard.writeText(String(text));
+            button.classList.add('is-copied');
+            button.innerHTML = `${getSvgIcon('copy')} Copied`;
+        } catch (error) {
+            console.error('Model Resolver: Failed to copy image metadata:', error);
+            button.innerHTML = `${getSvgIcon('copy')} Failed`;
+        }
+
+        setTimeout(() => {
+            if (button.isConnected) {
+                button.classList.remove('is-copied');
+                button.innerHTML = `${getSvgIcon('copy')} Copy${key === 'all' ? ' all' : ''}`;
+            }
+        }, 1200);
+    },
+
+    closeInfoImagePreview(preview = null) {
+        const target = preview || document.querySelector('.mr-image-preview-backdrop');
+        if (!target) return;
+
+        if (target._onKeyDown) {
+            document.removeEventListener('keydown', target._onKeyDown);
+            target._onKeyDown = null;
+        }
+
+        target.remove();
     },
 
     /**
@@ -815,6 +1078,7 @@ export const modelInfoMethods = {
             dialog._infoDialogResizeSaveTimer = null;
         }
         this.saveInfoDialogSize(dialog);
+        this.closeInfoImagePreview();
 
         if (dialog && dialog.parentNode) {
             dialog.parentNode.removeChild(dialog);
