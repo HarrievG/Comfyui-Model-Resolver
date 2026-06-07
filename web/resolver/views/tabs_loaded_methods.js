@@ -38,6 +38,12 @@ export const tabsLoadedMethods = {
 
         this.activeTab = nextTab;
         this.persistActiveTab(this.activeTab);
+        if (this.activeTab !== 'missing') {
+            this._analysisProgressToken = null;
+        }
+        if (this.activeTab !== 'loaded') {
+            this._loadedModelsLoadToken = null;
+        }
         this.hideTooltip();
         this.animateTabContentTransition();
         this.updateTabButtonStates();
@@ -67,10 +73,20 @@ export const tabsLoadedMethods = {
     async loadLoadedModels(workflow = null, { force = false } = {}) {
         if (!this.contentElement) return;
 
+        const loadToken = `loaded-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        this._loadedModelsLoadToken = loadToken;
+        const shouldRenderLoadedModels = () => (
+            this.activeTab === 'loaded' &&
+            this._loadedModelsLoadToken === loadToken &&
+            this.contentElement
+        );
+
         try {
             workflow = workflow || this.getCurrentWorkflow();
             if (!workflow) {
-                this.contentElement.innerHTML = '<p>No workflow loaded. Please load a workflow first.</p>';
+                if (shouldRenderLoadedModels()) {
+                    this.contentElement.innerHTML = '<p>No workflow loaded. Please load a workflow first.</p>';
+                }
                 return;
             }
             this.syncWorkflowScopedQueue(workflow);
@@ -82,11 +98,15 @@ export const tabsLoadedMethods = {
                 this.cachedLoadedModelsSignature === workflowSignature &&
                 this.cachedLoadedModelsData
             ) {
-                this.displayLoadedModels(this.contentElement, this.cachedLoadedModelsData);
+                if (shouldRenderLoadedModels()) {
+                    this.displayLoadedModels(this.contentElement, this.cachedLoadedModelsData);
+                }
                 return;
             }
 
-            this.contentElement.innerHTML = '<p>Loading loaded models...</p>';
+            if (shouldRenderLoadedModels()) {
+                this.contentElement.innerHTML = '<p>Loading loaded models...</p>';
+            }
 
             const response = await api.fetchApi('/model_resolver/loaded', {
                 method: 'POST',
@@ -99,14 +119,18 @@ export const tabsLoadedMethods = {
             }
 
             const data = await response.json();
-            this.cachedLoadedModelsSignature = workflowSignature;
-            this.cachedLoadedModelsData = data;
-            this.saveLoadedModelsCacheForActiveWorkflow();
-            this.displayLoadedModels(this.contentElement, data);
+            if (this._loadedModelsLoadToken === loadToken) {
+                this.cachedLoadedModelsSignature = workflowSignature;
+                this.cachedLoadedModelsData = data;
+                this.saveLoadedModelsCacheForActiveWorkflow();
+            }
+            if (shouldRenderLoadedModels()) {
+                this.displayLoadedModels(this.contentElement, data);
+            }
 
         } catch (error) {
             console.error('Model Resolver: Error loading loaded models:', error);
-            if (this.contentElement) {
+            if (shouldRenderLoadedModels()) {
                 this.contentElement.innerHTML = `<p class="mr-error-text">Error: ${error.message}</p>`;
             }
         }

@@ -306,6 +306,9 @@ export const workflowStateMethods = {
         this.cachedAnalysisData = null;
         this.cachedLoadedModelsSignature = null;
         this.cachedLoadedModelsData = null;
+        this._analysisProgressToken = null;
+        this._workflowDataLoadToken = null;
+        this._loadedModelsLoadToken = null;
         for (const [missingSearchKey, state] of this.searchResultCache.entries()) {
             if (!this.hasBackgroundSearchJob?.(key, missingSearchKey, state.activeSearchRunId)) {
                 state.activeSearchRunId = null;

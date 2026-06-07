@@ -162,10 +162,18 @@ export const renderFormatMethods = {
         while (this._analysisProgressToken === token) {
             try {
                 const response = await api.fetchApi(`/model_resolver/analyze-progress/${analysisId}`);
-                if (response.ok && this.contentElement && this._analysisProgressToken === token) {
+                if (
+                    response.ok &&
+                    this.contentElement &&
+                    this._analysisProgressToken === token &&
+                    this.activeTab === 'missing'
+                ) {
                     const progress = await response.json();
                     this.contentElement.innerHTML = this.renderAnalysisProgress(progress);
                     if (progress.status === 'completed' || progress.status === 'error') {
+                        if (this._analysisProgressToken === token) {
+                            this._analysisProgressToken = null;
+                        }
                         return;
                     }
                 }

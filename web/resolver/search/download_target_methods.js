@@ -704,6 +704,8 @@ export const downloadTargetMethods = {
         this.downloadSubfolders.clear();
         this.downloadTargetSelections?.clear();
         this._analysisProgressToken = null;
+        this._workflowDataLoadToken = null;
+        this._loadedModelsLoadToken = null;
 
         await this.ensureCapabilitiesLoaded();
         await this.ensureBaseModelsLoaded();

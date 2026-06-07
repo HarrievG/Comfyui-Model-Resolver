@@ -685,7 +685,6 @@ export const missingBrowserMethods = {
 
         // Skip rendering if active tab is not "missing"
         if (this.activeTab !== 'missing') {
-            container.innerHTML = '';
             return;
         }
 

@@ -116,6 +116,14 @@ export const lifecycleGraphMethods = {
     async loadWorkflowData(workflow = null, { force = false } = {}) {
         if (!this.contentElement) return;
 
+        const loadToken = `missing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        this._workflowDataLoadToken = loadToken;
+        const shouldRenderMissingModels = () => (
+            this.activeTab === 'missing' &&
+            this._workflowDataLoadToken === loadToken &&
+            this.contentElement
+        );
+
         // Show loading state
         try {
             // Use provided workflow, or get current workflow from ComfyUI
@@ -124,8 +132,12 @@ export const lifecycleGraphMethods = {
             }
 
             if (!workflow) {
-                this._analysisProgressToken = null;
-                this.contentElement.innerHTML = '<p>No workflow loaded. Please load a workflow first.</p>';
+                if (this._workflowDataLoadToken === loadToken) {
+                    this._analysisProgressToken = null;
+                }
+                if (shouldRenderMissingModels()) {
+                    this.contentElement.innerHTML = '<p>No workflow loaded. Please load a workflow first.</p>';
+                }
                 return;
             }
             this.syncWorkflowScopedQueue(workflow);
@@ -140,19 +152,23 @@ export const lifecycleGraphMethods = {
                 this.cachedWorkflowSignature === workflowSignature &&
                 this.cachedAnalysisData
             ) {
-                this.displayMissingModels(this.contentElement, this.cachedAnalysisData);
-                this.reconnectActiveDownloads();
+                if (shouldRenderMissingModels()) {
+                    this.displayMissingModels(this.contentElement, this.cachedAnalysisData);
+                    this.reconnectActiveDownloads();
+                }
                 return;
             }
 
             const analysisId = `an-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
             this._analysisProgressToken = analysisId;
-            this.contentElement.innerHTML = this.renderAnalysisProgress({
-                status: 'starting',
-                message: 'Starting analysis...',
-                current: 0,
-                total: 0
-            });
+            if (shouldRenderMissingModels()) {
+                this.contentElement.innerHTML = this.renderAnalysisProgress({
+                    status: 'starting',
+                    message: 'Starting analysis...',
+                    current: 0,
+                    total: 0
+                });
+            }
 
             // Call analyze endpoint
             const progressPromise = this.pollAnalysisProgress(analysisId, analysisId);
@@ -161,7 +177,9 @@ export const lifecycleGraphMethods = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow, analysis_id: analysisId })
             });
-            this._analysisProgressToken = null;
+            if (this._analysisProgressToken === analysisId) {
+                this._analysisProgressToken = null;
+            }
             await progressPromise;
 
             if (!response.ok) {
@@ -169,18 +187,24 @@ export const lifecycleGraphMethods = {
             }
 
             const data = await response.json();
-            this.cachedWorkflowSignature = workflowSignature;
-            this.cachedAnalysisData = data;
-            this.saveAnalysisCacheForActiveWorkflow();
-            this.displayMissingModels(this.contentElement, data);
+            if (this._workflowDataLoadToken === loadToken) {
+                this.cachedWorkflowSignature = workflowSignature;
+                this.cachedAnalysisData = data;
+                this.saveAnalysisCacheForActiveWorkflow();
+            }
+            if (shouldRenderMissingModels()) {
+                this.displayMissingModels(this.contentElement, data);
 
-            // Reconnect any active downloads to their new progress divs
-            this.reconnectActiveDownloads();
+                // Reconnect any active downloads to their new progress divs
+                this.reconnectActiveDownloads();
+            }
 
         } catch (error) {
-            this._analysisProgressToken = null;
+            if (this._workflowDataLoadToken === loadToken) {
+                this._analysisProgressToken = null;
+            }
             console.error('Model Resolver: Error loading workflow data:', error);
-            if (this.contentElement) {
+            if (shouldRenderMissingModels()) {
                 this.contentElement.innerHTML = `<p class="mr-error-text">Error: ${error.message}</p>`;
             }
         }
