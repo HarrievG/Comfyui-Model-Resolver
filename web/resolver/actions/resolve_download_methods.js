@@ -1419,7 +1419,7 @@ export const resolveDownloadMethods = {
         const rowKeys = new Set();
         const addRow = (row) => {
             if (!row) return;
-            const rowKey = row.downloadUrl || row.openUrl || `${row.sourceKey}:${row.model}:${row.filename}`;
+            const rowKey = `${row.sourceKey}:${row.downloadUrl || row.openUrl || `${row.model}:${row.filename}`}`;
             if (rowKeys.has(rowKey)) return;
             rowKeys.add(rowKey);
             rows.push(row);
@@ -1525,7 +1525,7 @@ export const resolveDownloadMethods = {
             });
         }
 
-        if (loraManagerArchiveResult && loraManagerArchiveResult.url) {
+        if (loraManagerArchiveResult && loraManagerArchiveResult.download_url) {
             const archiveFilename = loraManagerArchiveResult.filename || missing.original_path?.split('/').pop()?.split('\\').pop() || '';
             const archiveName = loraManagerArchiveResult.name || archiveFilename;
             addRow({
@@ -1540,7 +1540,7 @@ export const resolveDownloadMethods = {
                 downloadUrl: loraManagerArchiveResult.download_url || '',
                 downloadFilename: archiveFilename,
                 category: missing.category,
-                openUrl: loraManagerArchiveResult.url,
+                openUrl: loraManagerArchiveResult.url || this.getModelCardUrl(loraManagerArchiveResult.download_url),
                 searchedAt: this.getSearchResultTimestamp(loraManagerArchiveResult)
             });
         }
