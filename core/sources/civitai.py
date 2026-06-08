@@ -1189,7 +1189,7 @@ def resolve_urn(
 
         _urn_cache[cache_key] = result
         log_info(
-            f"Resolved URN model {model_id}@{version_id} → {result['expected_filename']}"
+            f"CivitAI resolved urn={model_id}@{version_id} file={result['expected_filename']}"
         )
         return result
 

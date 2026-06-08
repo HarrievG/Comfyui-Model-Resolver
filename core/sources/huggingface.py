@@ -695,7 +695,7 @@ def search_huggingface_for_file(
     )
     cache_key = f"hf_{filename}_exact{exact_only}_{token_key}_{brave_key}_{methods_key}"
     if cache_key in _search_cache:
-        log_debug(f"HuggingFace search cache hit for {filename} (exact_only={exact_only})")
+        log_debug(f"HuggingFace cache hit file={filename} exact={exact_only}")
         return _search_cache[cache_key]
 
     try:
@@ -703,9 +703,7 @@ def search_huggingface_for_file(
         if token:
             headers["Authorization"] = f"Bearer {token}"
 
-        log_info(
-            f"HuggingFace search start: filename={filename}, exact_only={exact_only}"
-        )
+        log_info(f"HuggingFace start file={filename} exact={exact_only}")
 
         repos_to_check = []
         seen_repos = set()
@@ -717,14 +715,12 @@ def search_huggingface_for_file(
                 response = requests.get(search_url, headers=headers, timeout=10)
                 if response.status_code != 200:
                     log_warn(
-                        f"HuggingFace search returned {response.status_code} for query={search_query}"
+                        f"HuggingFace API status={response.status_code} query={search_query}"
                     )
                     continue
 
                 repos = response.json()
-                log_info(
-                    f"HuggingFace search API returned {len(repos)} repos for query={search_query}"
-                )
+                log_info(f"HuggingFace API query={search_query} repos={len(repos)}")
 
                 for repo in repos:
                     repo_id = repo.get("id", "")
@@ -733,19 +729,19 @@ def search_huggingface_for_file(
                         repos_to_check.append(repo_id)
 
         for repo_id in repos_to_check:
-            log_debug(f"HuggingFace checking repo {repo_id} for filename={filename}")
+            log_debug(f"HuggingFace check repo={repo_id} file={filename}")
             files = _get_repo_tree(repo_id, headers=headers)
             if not files:
                 continue
 
-            log_debug(f"HuggingFace repo {repo_id} returned {len(files)} tree items")
+            log_debug(f"HuggingFace tree repo={repo_id} files={len(files)}")
             result = _find_matching_file_in_repo(
                 repo_id, files, filename, exact_only=exact_only
             )
             if result:
                 _search_cache[cache_key] = result
                 log_info(
-                    f"Found {result['match_type']} HuggingFace match for {filename}: {repo_id}/{result['path']}"
+                    f"HuggingFace found match={result['match_type']} file={filename} repo={repo_id} path={result['path']}"
                 )
                 return result
 
@@ -766,19 +762,17 @@ def search_huggingface_for_file(
                     if result:
                         _search_cache[cache_key] = result
                         log_info(
-                            f"Found {result['match_type']} HuggingFace author index match for {filename}: {result['repo_id']}/{result['path']}"
+                            f"HuggingFace found source=author_index match={result['match_type']} file={filename} repo={result['repo_id']} path={result['path']}"
                         )
                         return result
 
                     log_debug(
-                        f"HuggingFace author index no match for author={author}, filename={filename}, repos={index.get('repo_count', 0)}, files={index.get('file_count', 0)}"
+                        f"HuggingFace author_index miss author={author} file={filename} repos={index.get('repo_count', 0)} files={index.get('file_count', 0)}"
                     )
                     continue
 
                 repos = _get_repos_by_author(author, headers=headers)
-                log_info(
-                    f"HuggingFace author fallback returned {len(repos)} repos for author={author}"
-                )
+                log_info(f"HuggingFace author_fallback author={author} repos={len(repos)}")
                 for repo_id in repos:
                     if repo_id not in seen_repos:
                         seen_repos.add(repo_id)
@@ -787,7 +781,7 @@ def search_huggingface_for_file(
 
         for repo_id in author_fallback_repos:
             log_debug(
-                f"HuggingFace author fallback checking repo {repo_id} for filename={filename}"
+                f"HuggingFace author_fallback check repo={repo_id} file={filename}"
             )
             files = _get_repo_tree(repo_id, headers=headers)
             if not files:
@@ -799,7 +793,7 @@ def search_huggingface_for_file(
             if result:
                 _search_cache[cache_key] = result
                 log_info(
-                    f"Found {result['match_type']} HuggingFace author fallback match for {filename}: {repo_id}/{result['path']}"
+                    f"HuggingFace found source=author_fallback match={result['match_type']} file={filename} repo={repo_id} path={result['path']}"
                 )
                 return result
 
@@ -808,9 +802,7 @@ def search_huggingface_for_file(
             if use_brave_fallback
             else []
         )
-        log_info(
-            f"Brave fallback returned {len(brave_candidates)} candidates for filename={filename}"
-        )
+        log_info(f"HuggingFace brave_fallback file={filename} candidates={len(brave_candidates)}")
 
         for candidate in brave_candidates:
             repo_id = candidate.get("repo", "")
@@ -826,14 +818,14 @@ def search_huggingface_for_file(
             if result and result.get("filename", "").lower() == filename.lower():
                 _search_cache[cache_key] = result
                 log_info(
-                    f"Found exact Brave fallback match for {filename}: {repo_id}/{result['path']}"
+                    f"HuggingFace found source=brave_fallback match=exact file={filename} repo={repo_id} path={result['path']}"
                 )
                 return result
 
         # Not found
         _search_cache[cache_key] = None
         log_info(
-            f"HuggingFace search no result: filename={filename}, repos_checked={len(repos_to_check)}, author_fallback_repos={author_fallback_repo_count}, brave_candidates={len(brave_candidates)}"
+            f"HuggingFace miss file={filename} repos={len(repos_to_check)} author_repos={author_fallback_repo_count} brave={len(brave_candidates)}"
         )
         return None
 

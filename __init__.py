@@ -9,6 +9,7 @@
 import asyncio
 from .core.log_system.log_funcs import (
     create_module_logger,
+    log_debug,
     log_info,
     log_error,
     log_exception,
@@ -933,36 +934,95 @@ class ModelResolverExtension:
                 async def search_sources(request):
                     """Search for model download sources."""
                     try:
-                        def summarize_result(source_name, result, extra=None):
-                            if isinstance(result, dict):
-                                summary = {
-                                    "source": source_name,
-                                    "name": result.get("name"),
-                                    "filename": result.get("filename"),
-                                    "match_type": result.get("match_type"),
-                                    "repo_id": result.get("repo_id"),
-                                    "model_id": result.get("model_id"),
-                                    "version_id": result.get("version_id"),
-                                    "url": result.get("url"),
-                                    "download_url": result.get("download_url"),
-                                    "size": result.get("size"),
-                                }
-                            else:
-                                summary = {"source": source_name, "result": result}
+                        def format_log_value(value):
+                            if value is None or value == "":
+                                return None
+                            if isinstance(value, bool):
+                                return "yes" if value else "no"
+                            if isinstance(value, (list, tuple, set)):
+                                return ",".join(str(item) for item in value)
 
-                            if extra:
-                                summary.update(extra)
+                            text = str(value)
+                            if any(char.isspace() for char in text):
+                                return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+                            return text
 
-                            return summary
+                        def format_log_size(value):
+                            if value is None or value == "":
+                                return None
+                            if isinstance(value, str):
+                                return value
+                            try:
+                                size = float(value)
+                            except (TypeError, ValueError):
+                                return str(value)
+
+                            units = ("B", "KB", "MB", "GB", "TB")
+                            unit_index = 0
+                            while size >= 1024 and unit_index < len(units) - 1:
+                                size /= 1024
+                                unit_index += 1
+                            return f"{size:.1f}{units[unit_index]}"
+
+                        def format_log_fields(**fields):
+                            parts = []
+                            for key, value in fields.items():
+                                formatted = format_log_value(value)
+                                if formatted is not None:
+                                    parts.append(f"{key}={formatted}")
+                            return " ".join(parts)
+
+                        def normalize_result_extra(extra):
+                            if not extra:
+                                return {}
+                            normalized = dict(extra)
+                            model_id = normalized.pop("model_id", None)
+                            version_id = normalized.pop("version_id", None)
+                            if model_id or version_id:
+                                normalized["ids"] = (
+                                    f"{model_id}@{version_id}"
+                                    if model_id and version_id
+                                    else model_id or version_id
+                                )
+                            if "files_count" in normalized:
+                                normalized["files"] = normalized.pop("files_count")
+                            return normalized
+
+                        def format_result_details(result, extra=None):
+                            if isinstance(result, list):
+                                return format_log_fields(count=len(result))
+                            if not isinstance(result, dict):
+                                fields = {"result": "none" if result is None else result}
+                                fields.update(normalize_result_extra(extra))
+                                return format_log_fields(**fields)
+
+                            model_id = result.get("model_id")
+                            version_id = result.get("version_id")
+                            ids = (
+                                f"{model_id}@{version_id}"
+                                if model_id and version_id
+                                else model_id or version_id
+                            )
+                            fields = {
+                                "name": result.get("name"),
+                                "file": result.get("filename") or result.get("path"),
+                                "match": result.get("match_type"),
+                                "repo": result.get("repo_id") or result.get("repo"),
+                                "ids": ids,
+                                "size": format_log_size(result.get("size")),
+                                "files": result.get("files_count"),
+                            }
+                            fields.update(normalize_result_extra(extra))
+                            return format_log_fields(**fields)
 
                         def log_search_result(source_name, result, extra=None):
-                            details = summarize_result(source_name, result, extra)
+                            details = format_result_details(result, extra)
                             if result and (
                                 not isinstance(result, list) or len(result) > 0
                             ):
-                                log_info(f"Search source [{source_name}] FOUND: {details}")
+                                log_info(f"Search [{source_name}] found {details}")
                             else:
-                                log_info(f"Search source [{source_name}] no result: {details}")
+                                log_info(f"Search [{source_name}] miss {details}")
 
                         data = await request.json()
                         filename = data.get("filename", "")
@@ -1101,12 +1161,26 @@ class ModelResolverExtension:
                                 clear_civarchive_search_cache()
                             if search_lora_manager_archive_source:
                                 clear_lora_manager_archive_search_cache()
-                            log_info(
-                                f"Force search enabled: cleared cache for sources={sorted(normalized_sources)}"
+                            log_debug(
+                                "Force search enabled: cleared cache "
+                                + format_log_fields(sources=sorted(normalized_sources))
                             )
 
                         log_info(
-                            f"Search request: filename={filename}, category={category}, is_urn={is_urn}, model_id={data.get('model_id')}, version_id={data.get('version_id')}, sources={sorted(normalized_sources)}, base_model_context={repr(base_model_context)}, force_search={force_search}, civitai_candidate_limit={civitai_candidate_limit}, civarchive_candidate_limit={civarchive_candidate_limit}"
+                            f"Search [{','.join(sorted(normalized_sources))}] request "
+                            + format_log_fields(
+                                file=filename,
+                                cat=category,
+                                urn=is_urn,
+                                ids=(
+                                    f"{data.get('model_id')}@{data.get('version_id')}"
+                                    if data.get("model_id") and data.get("version_id")
+                                    else data.get("model_id")
+                                    or data.get("version_id")
+                                ),
+                                base=base_model_context,
+                                force=force_search,
+                            )
                         )
 
                         results = {
@@ -1206,7 +1280,8 @@ class ModelResolverExtension:
                             source_found = False
 
                             log_info(
-                                f"Search source [local] start: filename={filename}, category={category}"
+                                "Search [local] start "
+                                + format_log_fields(file=filename, cat=category)
                             )
                             popular_info = get_popular_model_url(filename)
                             log_search_result("popular", popular_info)
@@ -1250,7 +1325,10 @@ class ModelResolverExtension:
                             return source_results, source_found
 
                         def search_huggingface_source_task():
-                            log_info(f"Search source [huggingface] start: filename={filename}")
+                            log_info(
+                                "Search [huggingface] start "
+                                + format_log_fields(file=filename)
+                            )
                             hf_result = search_huggingface_for_file(
                                 filename,
                                 token=hf_token or None,
@@ -1268,7 +1346,12 @@ class ModelResolverExtension:
                             source_found = False
 
                             log_info(
-                                f"Search source [civitai] start: filename={filename}, category={category}, is_urn={is_urn}"
+                                "Search [civitai] start "
+                                + format_log_fields(
+                                    file=filename,
+                                    cat=category,
+                                    urn=is_urn,
+                                )
                             )
                             # For URNs, use direct model_id/version_id to get download URL
                             if is_urn:
@@ -1336,7 +1419,7 @@ class ModelResolverExtension:
                                 elif category:
                                     # Fallback to search if no IDs
                                     log_info(
-                                        f"URN: No model_id/version_id, falling back to CivitAI search"
+                                        "Search [civitai] URN ids missing; falling back"
                                     )
                                     civitai_results = search_civitai(
                                         filename,
@@ -1387,7 +1470,12 @@ class ModelResolverExtension:
                             source_found = False
 
                             log_info(
-                                f"Search source [civarchive] start: filename={filename}, category={category}, is_urn={is_urn}"
+                                "Search [civarchive] start "
+                                + format_log_fields(
+                                    file=filename,
+                                    cat=category,
+                                    urn=is_urn,
+                                )
                             )
                             try:
                                 if is_urn:
@@ -1441,7 +1529,8 @@ class ModelResolverExtension:
 
                         def search_lora_manager_archive_source_task():
                             log_info(
-                                f"Search source [lora_manager_archive] start: filename={filename}, category={category}"
+                                "Search [lora_manager_archive] start "
+                                + format_log_fields(file=filename, cat=category)
                             )
                             lora_manager_archive_result = (
                                 search_lora_manager_archive_for_file(
@@ -1488,8 +1577,9 @@ class ModelResolverExtension:
                             )
 
                         if len(search_tasks) > 1:
-                            log_info(
-                                f"Search sources running asynchronously: count={len(search_tasks)}"
+                            log_debug(
+                                "Search sources async "
+                                + format_log_fields(count=len(search_tasks))
                             )
 
                         for source_results, source_found in await asyncio.gather(
@@ -1505,7 +1595,10 @@ class ModelResolverExtension:
                                 results["found"] = True
 
                         log_info(
-                            f"Search summary: found={results['found']}, searched_sources={results['searched_sources']}"
+                            f"Search [{','.join(results['searched_sources'])}] done "
+                            + format_log_fields(
+                                found=results["found"],
+                            )
                         )
                         stamp_search_results(results)
                         return web.json_response(results)

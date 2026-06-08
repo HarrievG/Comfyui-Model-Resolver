@@ -584,7 +584,7 @@ def search_lora_manager_archive(
         if not candidate_rows:
             elapsed = time.perf_counter() - started_at
             log_info(
-                f"LoRA Manager archive search: query={normalized_query}, type={normalized_type or 'all'}, results=0, candidates=0, elapsed={elapsed:.3f}s"
+                f"LoRA Manager archive query={normalized_query} type={normalized_type or 'all'} results=0 candidates=0 elapsed={elapsed:.3f}s"
             )
             _search_cache[cache_key] = []
             return []
@@ -645,7 +645,7 @@ def search_lora_manager_archive(
         _search_cache[cache_key] = list(results)
         elapsed = time.perf_counter() - started_at
         log_info(
-            f"LoRA Manager archive search: query={normalized_query}, type={normalized_type or 'all'}, results={len(results)}, candidates={len(candidate_rows)}, elapsed={elapsed:.3f}s"
+            f"LoRA Manager archive query={normalized_query} type={normalized_type or 'all'} results={len(results)} candidates={len(candidate_rows)} elapsed={elapsed:.3f}s"
         )
         return results
     except Exception as e:
