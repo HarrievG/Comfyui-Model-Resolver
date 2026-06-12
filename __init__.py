@@ -1963,12 +1963,10 @@ class ModelResolverExtension:
                                 if base_dir
                                 else ""
                             )
-                            label = (
-                                f"{rel_path} ({base_label})" if base_label else rel_path
-                            )
                             subfolders[key] = {
                                 "value": rel_path,
-                                "label": label,
+                                "label": rel_path,
+                                "base_label": base_label,
                                 "base_directory": base_dir,
                             }
 
@@ -2024,9 +2022,31 @@ class ModelResolverExtension:
                                     )
                                     add_subfolder(rel_path, base_dir)
 
+                        value_counts = {}
+                        for item in subfolders.values():
+                            value_key = item.get("value", "").lower()
+                            value_counts[value_key] = value_counts.get(value_key, 0) + 1
+
+                        response_items = []
+                        for item in subfolders.values():
+                            value = item.get("value", "")
+                            base_label = item.get("base_label", "")
+                            label = (
+                                f"{value} ({base_label})"
+                                if base_label and value_counts.get(value.lower(), 0) > 1
+                                else value
+                            )
+                            response_items.append(
+                                {
+                                    "value": value,
+                                    "label": label,
+                                    "base_directory": item.get("base_directory", ""),
+                                }
+                            )
+
                         return web.json_response(
                             sorted(
-                                subfolders.values(),
+                                response_items,
                                 key=lambda item: (
                                     item.get("value", "").lower(),
                                     item.get("base_directory", "").lower(),
