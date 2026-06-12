@@ -440,43 +440,14 @@ export const lifecycleGraphMethods = {
         if (!this.contentElement) return;
 
         for (const [downloadId, info] of Object.entries(this.activeDownloads)) {
-            const { missing } = info;
-            if (!missing) continue;
-
-            // Find the new progress div by ID
-            const progressId = `download-progress-${missing.node_id}-${missing.widget_index}`;
-            const newProgressDiv = this.contentElement.querySelector(`#${progressId}`);
-            const newDownloadBtn = this.contentElement.querySelector(`#download-${missing.node_id}-${missing.widget_index}`);
-
-            if (newProgressDiv) {
-                // Update the reference
-                info.progressDiv = newProgressDiv;
-                info.downloadBtn = newDownloadBtn;
-
-                // Show that download is in progress
-                newProgressDiv.classList.remove('mr-is-hidden');
-                newProgressDiv.classList.add('mr-is-visible');
-                newProgressDiv.innerHTML = this.renderProgressWithAction({
-                    percent: 0,
-                    leftText: '<span class="mr-info-accent-text">Downloading...</span>',
-                    rightText: '',
-                    actionClass: 'cancel-download-btn mr-btn mr-btn-danger mr-btn-sm',
-                    actionText: 'Cancel',
-                    actionDataAttr: `data-download-id="${downloadId}"`
-                });
-
-                // Attach cancel handler
-                const cancelBtn = newProgressDiv.querySelector('.cancel-download-btn');
-                if (cancelBtn) {
-                    cancelBtn.addEventListener('click', () => this.cancelDownload(downloadId));
-                }
-
-                // Update download button if exists
-                if (newDownloadBtn) {
-                    newDownloadBtn.disabled = true;
-                    newDownloadBtn.textContent = 'Downloading...';
-                }
-            }
+            if (!info?.missing) continue;
+            const snapshot = this.rememberDownloadUiState?.(
+                downloadId,
+                info,
+                info.lastProgress || { status: info.lastStatus || 'starting', progress: 0 },
+                { isActive: true }
+            );
+            this.renderDownloadSnapshot?.(downloadId, snapshot);
         }
     },
 

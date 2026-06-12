@@ -1347,13 +1347,16 @@ export const searchPanelMethods = {
         const containerClass = contextMenuData
             ? 'mr-progress-container mr-download-folder-context'
             : 'mr-progress-container';
+        const actionHtml = actionClass || actionText
+            ? `<button class="${actionClass}"${actionAttr}>${actionText}</button>`
+            : '';
         return `
             <div class="${containerClass}"${contextMenuAttrs}>
                 <div class="mr-progress-row">
                     <div class="mr-progress-bar mr-progress-bar-grow">
                         <div class="mr-progress-fill" style="width: ${safePercent}%;"></div>
                     </div>
-                    <button class="${actionClass}"${actionAttr}>${actionText}</button>
+                    ${actionHtml}
                 </div>
                 <div class="mr-progress-text">
                     <span>${leftText}</span>

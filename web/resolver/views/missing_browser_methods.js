@@ -645,6 +645,8 @@ export const missingBrowserMethods = {
             searchResultsDiv.classList.add('mr-is-visible');
             this.displaySearchResults(missing, state, searchResultsDiv);
         }
+
+        this.restoreDownloadProgressForMissing?.(missing);
     },
 
     /**
