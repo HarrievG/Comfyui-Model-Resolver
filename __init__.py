@@ -594,7 +594,9 @@ class ModelResolverExtension:
                             pass
 
                     # Analyze workflow to get all model references
-                    all_model_refs = analyze_workflow_models(workflow_json)
+                    all_model_refs = analyze_workflow_models(
+                        workflow_json, available_models=available_models
+                    )
 
                     # Also extract from node.properties.models
                     nodes = list(workflow_json.get("nodes", []))

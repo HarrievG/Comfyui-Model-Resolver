@@ -168,8 +168,104 @@ def is_model_filename(value: Any) -> bool:
     return bool(URN_REGEX.match(value.strip()))
 
 
+def _normalize_model_path_for_lookup(value: str) -> str:
+    """Normalize separators for comparison while preserving letter case."""
+    if not isinstance(value, str):
+        return ""
+
+    normalized = os.path.normpath(value.strip())
+    if normalized == ".":
+        return ""
+
+    return normalized.replace("\\", "/").strip("/")
+
+
+def _resolve_from_available_models(
+    filename: str,
+    categories: Optional[List[str]],
+    available_models: Optional[List[Dict[str, Any]]],
+) -> Optional[tuple[str, str]]:
+    """
+    Resolve using scanner data with case-sensitive relative path matching.
+
+    Windows accepts case-mismatched paths in os.path.exists(), but ComfyUI workflow
+    values need to match the actual folder/file casing to be safely reusable.
+    """
+    if not available_models:
+        return None
+
+    requested_key = _normalize_model_path_for_lookup(filename)
+    if not requested_key:
+        return None
+
+    requested_is_absolute = os.path.isabs(filename)
+    if requested_is_absolute:
+        requested_key = _normalize_model_path_for_lookup(os.path.abspath(filename))
+
+    if categories is None:
+        category_order = []
+        seen_categories = set()
+        for model in available_models:
+            category = model.get("category")
+            if category and category not in seen_categories:
+                seen_categories.add(category)
+                category_order.append(category)
+    else:
+        category_order = categories
+
+    if not category_order:
+        return None
+
+    for category in category_order:
+        for model in available_models:
+            if model.get("category") != category:
+                continue
+
+            if requested_is_absolute:
+                model_path = model.get("path") or ""
+            else:
+                model_path = model.get("relative_path") or model.get("filename") or ""
+
+            if _normalize_model_path_for_lookup(model_path) != requested_key:
+                continue
+
+            full_path = model.get("path")
+            if full_path and os.path.exists(full_path):
+                return (category, full_path)
+
+    return None
+
+
+def _category_has_exact_filename(category: str, filename: str) -> Optional[bool]:
+    """
+    Check ComfyUI's filename list for an exact-case relative path match.
+
+    Returns None when the filename list is unavailable, allowing callers to fall
+    back to the older filesystem existence path.
+    """
+    if os.path.isabs(filename):
+        return None
+
+    requested_key = _normalize_model_path_for_lookup(filename)
+    if not requested_key:
+        return False
+
+    try:
+        available_filenames = folder_paths.get_filename_list(category) or []
+    except Exception:
+        return None
+
+    return any(
+        _normalize_model_path_for_lookup(available_filename) == requested_key
+        for available_filename in available_filenames
+        if isinstance(available_filename, str)
+    )
+
+
 def try_resolve_model_path(
-    value: str, categories: List[str] = None
+    value: str,
+    categories: List[str] = None,
+    available_models: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[tuple[str, str]]:
     """
     Try to resolve a model path using folder_paths.
@@ -177,6 +273,7 @@ def try_resolve_model_path(
     Args:
         value: The model filename/path to resolve
         categories: Optional list of categories to try (if None, tries all)
+        available_models: Optional scanner results used for exact-case matching
 
     Returns:
         Tuple of (category, full_path) if found, None otherwise
@@ -187,6 +284,17 @@ def try_resolve_model_path(
     # Remove any path separators that might indicate an absolute path prefix
     # Workflows should store relative paths, but handle both cases
     filename = value.strip()
+
+    if categories is not None:
+        skip_categories = {"custom_nodes", "configs"}
+        categories = [c for c in categories if c not in skip_categories]
+
+    resolved = _resolve_from_available_models(filename, categories, available_models)
+    if resolved:
+        return resolved
+
+    if available_models is not None:
+        return None
 
     # Ensure folder_paths is available
     global folder_paths
@@ -209,6 +317,10 @@ def try_resolve_model_path(
 
     for category in categories:
         try:
+            exact_filename = _category_has_exact_filename(category, filename)
+            if exact_filename is False:
+                continue
+
             full_path = folder_paths.get_full_path(category, filename)
             if full_path and os.path.exists(full_path):
                 return (category, full_path)
@@ -384,7 +496,11 @@ def get_node_model_info(
                         [nested_category_hint] if nested_category_hint else None
                     )
 
-                    resolved = try_resolve_model_path(value_str, nested_categories)
+                    resolved = try_resolve_model_path(
+                        value_str,
+                        nested_categories,
+                        available_models=available_models,
+                    )
                     if resolved:
                         category, full_path = resolved
                         exists = os.path.exists(full_path)
@@ -458,7 +574,11 @@ def get_node_model_info(
             continue
 
         # Existing logic for local filenames
-        resolved = try_resolve_model_path(value_str, categories_to_try_for_widget)
+        resolved = try_resolve_model_path(
+            value_str,
+            categories_to_try_for_widget,
+            available_models=available_models,
+        )
 
         if resolved:
             category, full_path = resolved
