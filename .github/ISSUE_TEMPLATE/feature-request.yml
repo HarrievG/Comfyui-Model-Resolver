@@ -8,7 +8,7 @@ body:
     attributes:
       label: Before submitting
       options:
-        - label: I am using the latest version of ComfyUI Model Resolver.
+        - label: I am using the latest version of [ComfyUI Model Resolver](https://github.com/Azornes/Comfyui-Model-Resolver/releases).
           required: true
         - label: I checked the README and existing issues for a similar feature request.
           required: true

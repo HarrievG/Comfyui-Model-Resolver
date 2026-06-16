@@ -8,11 +8,11 @@ body:
     attributes:
       label: Prerequisites
       options:
-        - label: I am running the latest version of ComfyUI.
+        - label: I am running the latest version of [ComfyUI](https://github.com/Comfy-Org/ComfyUI/releases).
           required: true
-        - label: I am running the latest version of ComfyUI frontend.
+        - label: I am running the latest version of [ComfyUI frontend](https://github.com/Comfy-Org/ComfyUI_frontend/releases).
           required: true
-        - label: I am running the latest version of ComfyUI Model Resolver.
+        - label: I am running the latest version of [ComfyUI Model Resolver](https://github.com/Azornes/Comfyui-Model-Resolver/releases).
           required: true
         - label: I searched existing issues and did not find a duplicate.
           required: true
