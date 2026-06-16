@@ -1,7 +1,11 @@
 ﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
+import { createModuleLogger } from "../../log_system/log_funcs.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
+
+const log = createModuleLogger('workflow_state_methods');
+
 export const workflowStateMethods = {
     getWorkflowSignature(workflow) {
         if (!workflow) return null;
@@ -564,7 +568,7 @@ export const workflowStateMethods = {
             return;
         }
 
-        console.log('Model Resolver: active workflow changed, refreshing current tab', {
+        log.debug('Model Resolver: active workflow changed, refreshing current tab', {
             reason,
             route: currentRoute,
             tab: this.activeTab

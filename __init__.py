@@ -15,6 +15,8 @@ from .core.log_system.log_funcs import (
     log_exception,
     log_warn,
 )
+from .core.log_system.config import LOG_LEVEL as BACKEND_DEFAULT_LOG_LEVEL
+from .core.log_system.logger import LogLevel, logger as backend_log_controller
 
 # Web directory for JavaScript interface
 WEB_DIRECTORY = "./web"
@@ -2091,13 +2093,42 @@ class ModelResolverExtension:
                     self.logger.warning(f"Model Resolver: could not read settings file: {exc}")
                 return {}
 
-            def _save_settings(payload: dict) -> None:
+            def _bool_setting(value, default: bool = True) -> bool:
+                if value is None:
+                    return default
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, str):
+                    normalized = value.strip().lower()
+                    if normalized in {"1", "true", "yes", "on"}:
+                        return True
+                    if normalized in {"0", "false", "no", "off"}:
+                        return False
+                return bool(value)
+
+            def _log_level_setting(value, default: str = BACKEND_DEFAULT_LOG_LEVEL) -> LogLevel:
+                normalized = str(value or default or "INFO").strip().upper()
+                if hasattr(LogLevel, normalized):
+                    return getattr(LogLevel, normalized)
+                fallback = str(default or "INFO").strip().upper()
+                return getattr(LogLevel, fallback, LogLevel.INFO)
+
+            def _apply_backend_logging_settings(settings: dict) -> None:
+                enabled = _bool_setting(settings.get("backend_logs_enabled"), True)
+                level = _log_level_setting(settings.get("backend_log_level"))
+                backend_log_controller.set_enabled(enabled)
+                backend_log_controller.set_global_level(level)
+
+            def _save_settings(payload: dict) -> dict:
                 # Merge with existing settings so we never lose keys not sent
                 # by the current request.
                 current = _load_settings()
                 current.update({k: v for k, v in payload.items() if k})
                 with open(_SETTINGS_FILE, "w", encoding="utf-8") as f:
                     _json.dump(current, f, indent=2, ensure_ascii=False)
+                return current
+
+            _apply_backend_logging_settings(_load_settings())
 
             @routes.get("/model_resolver/settings")
             async def get_settings_route(request):
@@ -2116,7 +2147,8 @@ class ModelResolverExtension:
                     payload = await request.json()
                     if not isinstance(payload, dict):
                         return web.json_response({"error": "Expected JSON object"}, status=400)
-                    await asyncio.to_thread(_save_settings, payload)
+                    settings = await asyncio.to_thread(_save_settings, payload)
+                    _apply_backend_logging_settings(settings)
                     return web.json_response({"success": True})
                 except Exception as e:
                     self.logger.error(f"Model Resolver settings POST error: {e}", exc_info=True)

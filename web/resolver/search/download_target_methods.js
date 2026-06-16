@@ -1,6 +1,8 @@
 import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
+import { LOG_LEVEL as DEFAULT_FRONTEND_LOG_LEVEL } from "../../log_system/config.js";
+import { logger as frontendLogger } from "../../log_system/logger.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
 export const downloadTargetMethods = {
     /**
@@ -860,6 +862,10 @@ export const downloadTargetMethods = {
             ? Math.min(20, Math.max(1, civitaiCandidateLimitRaw))
             : 5;
         const search_source_enabled = this.getSearchSourceEnabledMap();
+        const storedFrontendLogsEnabled = localStorage.getItem('ModelResolver.frontendLogsEnabled');
+        const storedBackendLogsEnabled = localStorage.getItem('ModelResolver.backendLogsEnabled');
+        const storedFrontendLogLevel = localStorage.getItem('ModelResolver.frontendLogLevel');
+        const storedBackendLogLevel = localStorage.getItem('ModelResolver.backendLogLevel');
 
         return {
             civitai_key: localStorage.getItem('ModelResolver.civitaiApiKey') || '',
@@ -873,9 +879,22 @@ export const downloadTargetMethods = {
             hf_use_brave_fallback: localStorage.getItem('ModelResolver.hfUseBraveFallback') !== 'false',
             auto_fill_base_model: localStorage.getItem('ModelResolver.autoFillBaseModel') !== 'false',
             auto_fill_subfolder: localStorage.getItem('ModelResolver.autoFillSubfolder') !== 'false',
+            frontend_logs_enabled: storedFrontendLogsEnabled === null
+                ? frontendLogger.enabled !== false
+                : storedFrontendLogsEnabled !== 'false',
+            backend_logs_enabled: storedBackendLogsEnabled === null
+                ? true
+                : storedBackendLogsEnabled !== 'false',
+            frontend_log_level: storedFrontendLogLevel || DEFAULT_FRONTEND_LOG_LEVEL,
+            backend_log_level: storedBackendLogLevel || 'DEBUG',
             civitai_candidate_limit,
             search_source_enabled
         };
+    },
+
+    applyFrontendLoggingPreference(enabled = true, levelName = 'DEBUG') {
+        frontendLogger.setEnabled(Boolean(enabled));
+        frontendLogger.setGlobalAndModuleLevel(frontendLogger.normalizeLevel(levelName));
     },
 
     /**
@@ -886,9 +905,17 @@ export const downloadTargetMethods = {
     async loadSettingsFromServer() {
         try {
             const resp = await api.fetchApi('/model_resolver/settings');
-            if (!resp.ok) return;
+            if (!resp.ok) {
+                const tokens = this.getStoredTokens();
+                this.applyFrontendLoggingPreference(tokens.frontend_logs_enabled, tokens.frontend_log_level);
+                return;
+            }
             const data = await resp.json();
-            if (!data || typeof data !== 'object') return;
+            if (!data || typeof data !== 'object') {
+                const tokens = this.getStoredTokens();
+                this.applyFrontendLoggingPreference(tokens.frontend_logs_enabled, tokens.frontend_log_level);
+                return;
+            }
 
             // Helper: write to localStorage only when the value from server is
             // non-empty, so we don't overwrite a key the user already has locally.
@@ -919,6 +946,14 @@ export const downloadTargetMethods = {
                 localStorage.setItem('ModelResolver.autoFillSubfolder',      data.auto_fill_subfolder ? 'true' : 'false');
             if (data.civitai_candidate_limit !== undefined)
                 localStorage.setItem('ModelResolver.civitaiCandidateLimit',  `${data.civitai_candidate_limit}`);
+            if (data.frontend_logs_enabled !== undefined)
+                localStorage.setItem('ModelResolver.frontendLogsEnabled',    data.frontend_logs_enabled ? 'true' : 'false');
+            if (data.backend_logs_enabled !== undefined)
+                localStorage.setItem('ModelResolver.backendLogsEnabled',     data.backend_logs_enabled ? 'true' : 'false');
+            if (data.frontend_log_level !== undefined)
+                localStorage.setItem('ModelResolver.frontendLogLevel',       String(data.frontend_log_level || 'DEBUG').toUpperCase());
+            if (data.backend_log_level !== undefined)
+                localStorage.setItem('ModelResolver.backendLogLevel',        String(data.backend_log_level || 'DEBUG').toUpperCase());
 
             // Source-enabled flags stored as a nested object
             if (data.search_source_enabled && typeof data.search_source_enabled === 'object') {
@@ -926,8 +961,12 @@ export const downloadTargetMethods = {
                     if (key) localStorage.setItem(key, val ? 'true' : 'false');
                 });
             }
+            const tokens = this.getStoredTokens();
+            this.applyFrontendLoggingPreference(tokens.frontend_logs_enabled, tokens.frontend_log_level);
         } catch (err) {
             console.warn('Model Resolver: could not load settings from server, using localStorage only.', err);
+            const tokens = this.getStoredTokens();
+            this.applyFrontendLoggingPreference(tokens.frontend_logs_enabled, tokens.frontend_log_level);
         }
     },
 

@@ -13,7 +13,7 @@ logger - Central logging system
 - Ability to export logs
 */
 
-import { DEFAULT_LOGGER_NAME, LOG_MODULE_NAME, USE_COLORS } from './config.js';
+import { DEFAULT_LOGGER_NAME, LOG_LEVEL, LOG_MODULE_NAME, USE_COLORS } from './config.js';
 
 function padStart(str, targetLength, padString) {
     targetLength = targetLength >> 0;
@@ -53,7 +53,8 @@ export const LogLevel = {
     NONE: 4
 };
 const DEFAULT_CONFIG = {
-    globalLevel: LogLevel.INFO,
+    enabled: true,
+    globalLevel: LogLevel[LOG_LEVEL] ?? LogLevel.INFO,
     moduleSettings: {},
     useColors: USE_COLORS,
     saveToStorage: false,
@@ -90,6 +91,7 @@ class Logger {
         this.logs = [];
         this.enabled = true;
         this.loadConfig();
+        this.enabled = this.config.enabled !== false;
         this.loadLogs();
     }
     /**
@@ -98,6 +100,17 @@ class Logger {
      */
     configure(config) {
         this.config = { ...this.config, ...config };
+        if (Object.prototype.hasOwnProperty.call(config, 'enabled')) {
+            this.enabled = config.enabled !== false;
+        }
+        this.config.globalLevel = this.normalizeLevel(this.config.globalLevel, DEFAULT_CONFIG.globalLevel);
+        if (!this.config.moduleSettings || typeof this.config.moduleSettings !== 'object') {
+            this.config.moduleSettings = {};
+        } else {
+            Object.entries(this.config.moduleSettings).forEach(([module, level]) => {
+                this.config.moduleSettings[module] = this.normalizeLevel(level, this.config.globalLevel);
+            });
+        }
         this.saveConfig();
         return this;
     }
@@ -106,7 +119,9 @@ class Logger {
      * @param {boolean} enabled - Whether the logger should be enabled
      */
     setEnabled(enabled) {
-        this.enabled = enabled;
+        this.enabled = Boolean(enabled);
+        this.config.enabled = this.enabled;
+        this.saveConfig();
         return this;
     }
     /**
@@ -114,7 +129,32 @@ class Logger {
      * @param {LogLevels} level - Logging level
      */
     setGlobalLevel(level) {
-        this.config.globalLevel = level;
+        this.config.globalLevel = this.normalizeLevel(level, DEFAULT_CONFIG.globalLevel);
+        this.saveConfig();
+        return this;
+    }
+    normalizeLevel(level, fallback = this.config.globalLevel) {
+        if (typeof level === 'number' && Object.values(LogLevel).includes(level)) {
+            return level;
+        }
+        if (typeof level === 'string') {
+            const normalized = level.trim().toUpperCase();
+            if (Object.prototype.hasOwnProperty.call(LogLevel, normalized)) {
+                return LogLevel[normalized];
+            }
+        }
+        return fallback;
+    }
+    getLevelName(level = this.config.globalLevel) {
+        const normalizedLevel = this.normalizeLevel(level, this.config.globalLevel);
+        return Object.entries(LogLevel).find(([, value]) => value === normalizedLevel)?.[0] || 'INFO';
+    }
+    setGlobalAndModuleLevel(level) {
+        const normalizedLevel = this.normalizeLevel(level, this.config.globalLevel);
+        this.config.globalLevel = normalizedLevel;
+        Object.keys(this.config.moduleSettings || {}).forEach((module) => {
+            this.config.moduleSettings[module] = normalizedLevel;
+        });
         this.saveConfig();
         return this;
     }
@@ -124,7 +164,7 @@ class Logger {
      * @param {LogLevels} level - Logging level
      */
     setModuleLevel(module, level) {
-        this.config.moduleSettings[module] = level;
+        this.config.moduleSettings[module] = this.normalizeLevel(level, this.config.globalLevel);
         this.saveConfig();
         return this;
     }
@@ -597,6 +637,7 @@ class Logger {
                 const storedConfig = localStorage.getItem(LOGGER_CONFIG_KEY);
                 if (storedConfig) {
                     this.config = { ...this.config, ...JSON.parse(storedConfig) };
+                    this.configure(this.config);
                 }
             }
             catch (e) {

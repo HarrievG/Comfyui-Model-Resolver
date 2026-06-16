@@ -1,8 +1,23 @@
 ﻿import { app } from "../../../../scripts/app.js";
 import { api } from "../../../../scripts/api.js";
 import { $el } from "../../../../scripts/ui.js";
+import { createModuleLogger } from "../log_system/log_funcs.js";
+import { logger as frontendLogger } from "../log_system/logger.js";
 import { loadStylesWhenNeeded } from "../utils/css_loader.js";
 import { ResolverManagerDialog } from "./resolver_dialog.js";
+
+const log = createModuleLogger('model_resolver');
+
+function applyStoredFrontendLoggingPreference() {
+    const stored = localStorage.getItem('ModelResolver.frontendLogsEnabled');
+    if (stored !== null) {
+        frontendLogger.setEnabled(stored !== 'false');
+    }
+    const storedLevel = localStorage.getItem('ModelResolver.frontendLogLevel');
+    if (storedLevel) {
+        frontendLogger.setGlobalAndModuleLevel(frontendLogger.normalizeLevel(storedLevel));
+    }
+}
 
 // Main extension class
 export class ModelResolver {
@@ -19,6 +34,7 @@ export class ModelResolver {
     }
 
     setup = async () => {
+        applyStoredFrontendLoggingPreference();
         loadStylesWhenNeeded();
 
         // Remove any existing button
@@ -176,7 +192,7 @@ export class ModelResolver {
             app.menu?.settingsGroup.element.before(this.buttonGroup.element);
         } catch (e) {
             // Fallback for older ComfyUI versions without the new button system
-            console.log('Model Resolver: New button system not available, using floating button fallback.');
+            log.debug('Model Resolver: New button system not available, using floating button fallback.');
             this.createFloatingButton();
         }
     }
@@ -188,7 +204,7 @@ export class ModelResolver {
         // Watch for ComfyUI's Missing Models popup and inject our button
         this.setupMissingModelsPopupObserver();
 
-        console.log('Model Resolver: Missing models popup button injection enabled');
+        log.debug('Model Resolver: Missing models popup button injection enabled');
     }
 
     setupActiveWorkflowChangeListeners() {
@@ -405,7 +421,7 @@ export class ModelResolver {
                 }
             }
             
-            console.log('Model Resolver: Injected buttons into Missing Models popup');
+            log.debug('Model Resolver: Injected buttons into Missing Models popup');
         };
 
         // Small delay to ensure popup is fully rendered
@@ -450,7 +466,7 @@ export class ModelResolver {
      * Mark resolved model items in the popup as linked (green) and hide download buttons
      */
     removeResolvedFromPopup(dialog, resolvedFilenames) {
-        console.log('Model Resolver: Looking for resolved filenames:', resolvedFilenames);
+        log.debug('Model Resolver: Looking for resolved filenames:', resolvedFilenames);
         
         // Strategy: For each filename, find text nodes containing it, 
         // then find the nearest Download button and mark that row
@@ -477,7 +493,7 @@ export class ModelResolver {
                                         !btn.id?.includes('model-resolver'));
                         
                         if (downloadBtn) {
-                            console.log('Model Resolver: Found entry for', filename);
+                            log.debug('Model Resolver: Found entry for', filename);
                             this.markEntryAsResolved(parent, downloadBtn);
                             break;
                         }
@@ -501,7 +517,7 @@ export class ModelResolver {
         if (container.dataset.resolved === 'true') return;
         container.dataset.resolved = 'true';
         
-        console.log('Model Resolver: Marking entry as resolved', container);
+        log.debug('Model Resolver: Marking entry as resolved', container);
         
         // Add green background/styling to the container
         container.classList.add('mr-resolved-entry');
@@ -574,11 +590,11 @@ export class ModelResolver {
                     widget.callback(resolvedPath, app.graph, node, null, null);
                 }
                 
-                console.log(`Model Resolver: Updated node ${nodeId} widget ${widgetIndex} to ${resolvedPath}`);
+                log.debug(`Model Resolver: Updated node ${nodeId} widget ${widgetIndex} to ${resolvedPath}`);
             } else if (node.widgets_values) {
                 // Fallback: update widgets_values array directly
                 node.widgets_values[widgetIndex] = resolvedPath;
-                console.log(`Model Resolver: Updated node ${nodeId} widgets_values[${widgetIndex}] to ${resolvedPath}`);
+                log.debug(`Model Resolver: Updated node ${nodeId} widgets_values[${widgetIndex}] to ${resolvedPath}`);
             }
 
             // Mark node as dirty to trigger redraw
@@ -658,7 +674,7 @@ export class ModelResolver {
             
             // Auto-open dialog if there are missing models
             if (data.total_missing > 0) {
-                console.log(`Model Resolver: Found ${data.total_missing} missing model(s), opening dialog...`);
+                log.debug(`Model Resolver: Found ${data.total_missing} missing model(s), opening dialog...`);
                 this.openResolverManager();
             }
 

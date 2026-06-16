@@ -1,7 +1,7 @@
 """
 @author: Azornes
 @title: AzLogs
-@version: 1.5.2
+@version: 1.5.6
 @description: Logging Initializator
 """
 # ruff: noqa: T201

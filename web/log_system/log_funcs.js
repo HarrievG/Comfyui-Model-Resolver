@@ -1,7 +1,7 @@
 /**
 author: Azornes
 title: AzLogs
-version: 1.5.5
+version: 1.5.6
 description: Logging Initializator
 
 Features:
@@ -17,7 +17,10 @@ import { LOG_LEVEL } from './config.js';
  * @returns {Logger} Object with logging methods
  */
 export function createModuleLogger(moduleName) {
-    logger.setModuleLevel(moduleName, LogLevel[LOG_LEVEL]);
+    logger.config.moduleSettings = logger.config.moduleSettings || {};
+    if (logger.config.moduleSettings[moduleName] === undefined) {
+        logger.setModuleLevel(moduleName, logger.normalizeLevel(logger.config.globalLevel, LogLevel[LOG_LEVEL]));
+    }
     return {
         debug: (...args) => logger.debug(moduleName, ...args),
         info: (...args) => logger.info(moduleName, ...args),

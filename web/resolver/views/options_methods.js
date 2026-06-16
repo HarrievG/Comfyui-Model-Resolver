@@ -31,6 +31,17 @@ export const optionsMethods = {
                 `;
             })
             .join('');
+        const logLevelValues = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'NONE'];
+        const normalizeLogLevel = (value) => {
+            const normalized = String(value || '').trim().toUpperCase();
+            return logLevelValues.includes(normalized) ? normalized : 'DEBUG';
+        };
+        const renderLogLevelOptions = (selectedValue) => {
+            const selected = normalizeLogLevel(selectedValue);
+            return logLevelValues
+                .map(level => `<option value="${level}" ${level === selected ? 'selected' : ''}>${level}</option>`)
+                .join('');
+        };
         this.contentElement.innerHTML = `
             <div class="mr-options-wrap">
                 <div class="mr-options-shell">
@@ -375,6 +386,48 @@ export const optionsMethods = {
                             </div>
                             <div class="mr-options-grid">
                                 <div class="mr-options-panel">
+                                    <div class="mr-options-toggle-list">
+                                        <label class="mr-options-toggle-row">
+                                            <div class="mr-options-toggle-copy">
+                                                <span class="mr-options-toggle-title">Frontend logs <span class="mr-tooltip-badge" data-tooltip="When enabled, Model Resolver writes frontend diagnostic logs to the browser console.">?</span></span>
+                                            </div>
+                                            <span class="mr-options-toggle-control">
+                                                <input id="mr-options-frontend-logs-enabled" class="mr-options-switch-input" type="checkbox" ${tokens.frontend_logs_enabled ? 'checked' : ''}>
+                                                <span class="mr-options-switch"></span>
+                                            </span>
+                                        </label>
+                                        <div class="mr-options-dependent-block">
+                                            <div class="mr-options-number-row">
+                                                <div class="mr-options-number-copy">
+                                                    <span class="mr-options-label">Frontend log level <span class="mr-tooltip-badge" data-tooltip="Minimum frontend log level shown in the browser console. NONE hides all frontend logger output.">?</span></span>
+                                                </div>
+                                                <select id="mr-options-frontend-log-level" class="mr-options-input">
+                                                    ${renderLogLevelOptions(tokens.frontend_log_level)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <label class="mr-options-toggle-row">
+                                            <div class="mr-options-toggle-copy">
+                                                <span class="mr-options-toggle-title">Backend logs <span class="mr-tooltip-badge" data-tooltip="When enabled, Model Resolver writes backend logs to the ComfyUI console and plugin log file.">?</span></span>
+                                            </div>
+                                            <span class="mr-options-toggle-control">
+                                                <input id="mr-options-backend-logs-enabled" class="mr-options-switch-input" type="checkbox" ${tokens.backend_logs_enabled ? 'checked' : ''}>
+                                                <span class="mr-options-switch"></span>
+                                            </span>
+                                        </label>
+                                        <div class="mr-options-dependent-block">
+                                            <div class="mr-options-number-row">
+                                                <div class="mr-options-number-copy">
+                                                    <span class="mr-options-label">Backend log level <span class="mr-tooltip-badge" data-tooltip="Minimum backend log level written by Model Resolver. NONE hides all backend logger output.">?</span></span>
+                                                </div>
+                                                <select id="mr-options-backend-log-level" class="mr-options-input">
+                                                    ${renderLogLevelOptions(tokens.backend_log_level)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mr-options-panel">
                                     <div class="mr-options-stack">
                                         <div class="mr-options-db-message">
                                             Clears only Model Resolver's temporary memory: remembered workflow analysis, search results, provider lookups, source status, folder lists, and subfolder suggestions. It does not delete downloaded models, metadata files, saved options, or API keys.
@@ -412,6 +465,10 @@ export const optionsMethods = {
         const hfUseBraveFallbackInput = this.contentElement.querySelector('#mr-options-hf-use-brave-fallback');
         const autoFillBaseModelInput = this.contentElement.querySelector('#mr-options-auto-fill-base-model');
         const autoFillSubfolderInput = this.contentElement.querySelector('#mr-options-auto-fill-subfolder');
+        const frontendLogsEnabledInput = this.contentElement.querySelector('#mr-options-frontend-logs-enabled');
+        const backendLogsEnabledInput = this.contentElement.querySelector('#mr-options-backend-logs-enabled');
+        const frontendLogLevelInput = this.contentElement.querySelector('#mr-options-frontend-log-level');
+        const backendLogLevelInput = this.contentElement.querySelector('#mr-options-backend-log-level');
         const hfTokenCheckBtn = this.contentElement.querySelector('#mr-options-hf-token-check');
         const hfTokenCheckStatus = this.contentElement.querySelector('#mr-options-hf-token-check-status');
         const braveKeyCheckBtn = this.contentElement.querySelector('#mr-options-brave-key-check');
@@ -453,6 +510,10 @@ export const optionsMethods = {
             hfUseBraveFallbackInput,
             autoFillBaseModelInput,
             autoFillSubfolderInput,
+            frontendLogsEnabledInput,
+            backendLogsEnabledInput,
+            frontendLogLevelInput,
+            backendLogLevelInput,
             ...sourceEnabledInputs,
         ].filter(Boolean);
 
@@ -836,7 +897,7 @@ export const optionsMethods = {
         setVisibleSection('mr-options-section-sources');
 
         trackedInputs.forEach((input) => {
-            const eventName = input.type === 'checkbox' ? 'change' : 'input';
+            const eventName = input.type === 'checkbox' || input.tagName === 'SELECT' ? 'change' : 'input';
             input.addEventListener(eventName, () => {
                 setStatus('You have unsaved changes.', 'is-dirty');
             });
@@ -982,6 +1043,10 @@ export const optionsMethods = {
                     hf_use_brave_fallback:        Boolean(hfUseBraveFallbackInput?.checked),
                     auto_fill_base_model:          Boolean(autoFillBaseModelInput?.checked),
                     auto_fill_subfolder:           Boolean(autoFillSubfolderInput?.checked),
+                    frontend_logs_enabled:         Boolean(frontendLogsEnabledInput?.checked),
+                    backend_logs_enabled:          Boolean(backendLogsEnabledInput?.checked),
+                    frontend_log_level:            normalizeLogLevel(frontendLogLevelInput?.value || tokens.frontend_log_level),
+                    backend_log_level:             normalizeLogLevel(backendLogLevelInput?.value || tokens.backend_log_level),
                     brave_search_api_key:         braveInput?.value || '',
                     search_source_enabled:        sourceEnabled,
                 };
@@ -998,11 +1063,16 @@ export const optionsMethods = {
                 localStorage.setItem('ModelResolver.hfUseBraveFallback',     newSettings.hf_use_brave_fallback ? 'true' : 'false');
                 localStorage.setItem('ModelResolver.autoFillBaseModel',      newSettings.auto_fill_base_model ? 'true' : 'false');
                 localStorage.setItem('ModelResolver.autoFillSubfolder',      newSettings.auto_fill_subfolder ? 'true' : 'false');
+                localStorage.setItem('ModelResolver.frontendLogsEnabled',    newSettings.frontend_logs_enabled ? 'true' : 'false');
+                localStorage.setItem('ModelResolver.backendLogsEnabled',     newSettings.backend_logs_enabled ? 'true' : 'false');
+                localStorage.setItem('ModelResolver.frontendLogLevel',       newSettings.frontend_log_level);
+                localStorage.setItem('ModelResolver.backendLogLevel',        newSettings.backend_log_level);
                 localStorage.setItem('ModelResolver.civitaiCandidateLimit',  `${civitaiCandidateLimit}`);
                 Object.entries(sourceEnabled).forEach(([key, val]) => {
                     localStorage.setItem(key, val ? 'true' : 'false');
                 });
                 if (civitaiLimitInput) civitaiLimitInput.value = `${civitaiCandidateLimit}`;
+                this.applyFrontendLoggingPreference(newSettings.frontend_logs_enabled, newSettings.frontend_log_level);
 
                 // 2. Persist to server (survives new browsers / profiles)
                 try {

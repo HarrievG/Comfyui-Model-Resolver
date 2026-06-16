@@ -1,13 +1,17 @@
 ﻿import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
+import { createModuleLogger } from "../../log_system/log_funcs.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
+
+const log = createModuleLogger('resolve_download_methods');
+
 export const resolveDownloadMethods = {
     /**
      * Resolve a model - resolves ALL nodes that reference this model
      */
     async resolveModel(missing, resolvedModel) {
-        console.log('resolveModel called:', missing?.original_path, '->', resolvedModel?.filename);
+        log.debug('resolveModel called:', missing?.original_path, '->', resolvedModel?.filename);
 
         if (!resolvedModel) {
             this.showNotification('No resolved model selected', 'error');
@@ -23,7 +27,7 @@ export const resolveDownloadMethods = {
 
             // Resolve ALL nodes that need this model (all_node_refs contains deduplicated refs)
             const nodeRefs = missing.all_node_refs || [missing];
-            console.log('nodeRefs count:', nodeRefs?.length, 'is_lora_v2:', nodeRefs?.[0]?.is_lora_v2);
+            log.debug('nodeRefs count:', nodeRefs?.length, 'is_lora_v2:', nodeRefs?.[0]?.is_lora_v2);
 
             const resolutions = nodeRefs.map(ref => ({
                 node_id: ref.node_id,
@@ -51,7 +55,7 @@ export const resolveDownloadMethods = {
             }
 
             const data = await response.json();
-            console.log('Resolve response: success=', data.success, ' missing count:', data.workflow?.nodes?.length);
+            log.debug('Resolve response: success=', data.success, ' missing count:', data.workflow?.nodes?.length);
 
             if (data.success) {
                 // Update workflow in ComfyUI
@@ -1366,7 +1370,7 @@ export const resolveDownloadMethods = {
                 };
 
                 try {
-                    console.log('Model Resolver: Search request:', JSON.stringify(searchData));
+                    log.debug('Model Resolver: Search request:', JSON.stringify(searchData));
 
                     const response = await api.fetchApi('/model_resolver/search', {
                         method: 'POST',
@@ -1379,7 +1383,7 @@ export const resolveDownloadMethods = {
                     }
 
                     const data = await response.json();
-                    console.log('Model Resolver: Search response:', JSON.stringify(data));
+                    log.debug('Model Resolver: Search response:', JSON.stringify(data));
 
                     if (!this.isBackgroundSearchRunActive(workflowKey, missingSearchKey, searchRunId)) {
                         return { source, stale: true };
@@ -1511,9 +1515,9 @@ export const resolveDownloadMethods = {
      * Resolve URN asynchronously - fetch CivitAI info and update UI
      */
     async resolveUrnAsync(modelId, versionId, loadingElementId, modelUrl) {
-        console.log('resolveUrnAsync called:', modelId, versionId);
+        log.debug('resolveUrnAsync called:', modelId, versionId);
         if (!modelId || !versionId) {
-            console.log('resolveUrnAsync: missing modelId or versionId');
+            log.debug('resolveUrnAsync: missing modelId or versionId');
             return;
         }
 
@@ -1537,7 +1541,7 @@ export const resolveDownloadMethods = {
                     version_id: versionId,
                     civitai_candidate_limit: tokens.civitai_candidate_limit
                 };
-                console.log('resolveUrnAsync payload:', JSON.stringify(payload));
+                log.debug('resolveUrnAsync payload:', JSON.stringify(payload));
 
                 const response = await api.fetchApi('/model_resolver/search', {
                     method: 'POST',
@@ -1545,7 +1549,7 @@ export const resolveDownloadMethods = {
                     body: JSON.stringify(payload)
                 });
 
-                console.log('resolveUrnAsync response status:', response.status);
+                log.debug('resolveUrnAsync response status:', response.status);
                 if (!response.ok) {
                     throw new Error(`URN resolve failed: ${response.status}`);
                 }
