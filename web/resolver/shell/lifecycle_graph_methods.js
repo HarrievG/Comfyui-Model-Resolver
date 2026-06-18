@@ -238,30 +238,44 @@ export const lifecycleGraphMethods = {
     /**
      * Locate and focus a node in the ComfyUI canvas
      */
-    locateNodeInGraph(nodeId) {
+    locateNodeInGraph(nodeId, options = {}) {
         try {
             if (!app?.graph) {
                 this.showNotification('Cannot locate node - graph not available', 'error');
                 return;
             }
 
-            // Find the node in the graph
-            const node = app.graph.getNodeById(nodeId);
-            if (!node) {
-                this.showNotification(`Node #${nodeId} not found in graph`, 'error');
+            const locateOptions = typeof options === 'string'
+                ? { subgraphId: options }
+                : (options || {});
+            const target = this.findLocateTarget(nodeId, locateOptions);
+            if (!target?.node) {
+                const subgraphText = locateOptions.subgraphId ? ` in subgraph ${locateOptions.subgraphId}` : '';
+                this.showNotification(`Node #${nodeId}${subgraphText} not found in graph`, 'error');
                 return;
             }
 
+            this.activateGraphForLocate(target);
+
+            const node = target.node;
+            const graph = target.graph || node.graph || app.canvas?.graph || app.graph;
             let locatedWithAnimation = false;
 
             // Focus on the node in the canvas with animated panning when possible
             if (app.canvas?.ds && app.canvas?.canvas) {
-                locatedWithAnimation = this.animateCanvasToNode(node);
+                locatedWithAnimation = this.animateCanvasToNode(node, graph);
             }
 
-            if (!locatedWithAnimation && app.graph._nodes && app.graph._nodes.get(nodeId)) {
+            let canvasNode = null;
+            if (!locatedWithAnimation && graph?._nodes && typeof graph._nodes.get === 'function') {
+                const numericNodeId = Number(nodeId);
+                canvasNode = graph._nodes.get(nodeId)
+                    || graph._nodes.get(String(nodeId))
+                    || (!Number.isNaN(numericNodeId) ? graph._nodes.get(numericNodeId) : null);
+            }
+
+            if (!locatedWithAnimation && canvasNode) {
                 // Alternative method for older versions
-                const canvasNode = app.graph._nodes.get(nodeId);
                 if (canvasNode && canvasNode.setSelected && canvasNode.graph) {
                     canvasNode.setSelected(true);
                     // Scroll to node
@@ -277,23 +291,251 @@ export const lifecycleGraphMethods = {
 
             // Also try to flash/select the node
             // Deselect all nodes first
-            if (app.graph && app.graph.nodes) {
-                app.graph.nodes.forEach(n => {
+            if (graph?.nodes) {
+                graph.nodes.forEach(n => {
                     if (n.selected) n.selected = false;
                 });
             }
 
             // Select and highlight our node
             node.selected = true;
+            graph?.setDirtyCanvas?.(true, true);
+            app.canvas?.setDirty?.(true, true);
 
-            this.showNotification(`Focused on Node #${nodeId} (${node.type})`, 'info');
+            const graphLabel = target.subgraphId || graph?.id || '';
+            const scopeText = graphLabel && graph !== app.graph ? ` in subgraph ${target.subgraphName || graphLabel}` : '';
+            this.showNotification(`Focused on Node #${nodeId} (${node.type})${scopeText}`, 'info');
         } catch (e) {
             console.error('Model Resolver: Error locating node:', e);
             this.showNotification('Error locating node: ' + e.message, 'error');
         }
     },
 
-    animateCanvasToNode(node) {
+    findLocateTarget(nodeId, options = {}) {
+        const rootGraph = app?.graph;
+        if (!rootGraph) return null;
+
+        const isTopLevel = options.isTopLevel !== false;
+        const subgraphId = String(options.subgraphId || '').trim();
+
+        if (isTopLevel) {
+            const rootNode = this.getGraphNodeById(rootGraph, nodeId);
+            if (rootNode) {
+                return { node: rootNode, graph: rootGraph, path: [], subgraphId: '', subgraphName: '' };
+            }
+        }
+
+        if (subgraphId) {
+            const graphMatch = this.findSubgraphById(rootGraph, subgraphId);
+            const graphNode = graphMatch?.graph ? this.getGraphNodeById(graphMatch.graph, nodeId) : null;
+            if (graphNode) {
+                return {
+                    node: graphNode,
+                    graph: graphMatch.graph,
+                    path: graphMatch.path,
+                    subgraphId,
+                    subgraphName: graphMatch.name || ''
+                };
+            }
+        }
+
+        return this.findNodeInGraphTree(rootGraph, nodeId, {
+            preferSubgraphId: subgraphId,
+            includeRoot: true
+        });
+    },
+
+    getGraphNodeById(graph, nodeId) {
+        if (!graph) return null;
+        const idText = String(nodeId);
+        const numericId = Number(nodeId);
+
+        if (typeof graph.getNodeById === 'function') {
+            const direct = graph.getNodeById(nodeId);
+            if (direct) return direct;
+            if (!Number.isNaN(numericId)) {
+                const numeric = graph.getNodeById(numericId);
+                if (numeric) return numeric;
+            }
+        }
+
+        if (graph._nodes && typeof graph._nodes.get === 'function') {
+            const direct = graph._nodes.get(nodeId) || graph._nodes.get(idText);
+            if (direct) return direct;
+            if (!Number.isNaN(numericId)) {
+                const numeric = graph._nodes.get(numericId);
+                if (numeric) return numeric;
+            }
+        }
+
+        return (graph.nodes || []).find(node => String(node?.id) === idText) || null;
+    },
+
+    getGraphId(graph) {
+        return graph?.id || graph?._id || graph?.config?.id || '';
+    },
+
+    getSubgraphDisplayName(graph, ownerNode = null) {
+        return graph?.name || graph?.title || ownerNode?.title || ownerNode?.type || this.getGraphId(graph);
+    },
+
+    findSubgraphById(rootGraph, subgraphId) {
+        const targetId = String(subgraphId || '').trim();
+        if (!rootGraph || !targetId) return null;
+
+        const visited = new Set();
+        const walk = (graph, path = []) => {
+            if (!graph || visited.has(graph)) return null;
+            visited.add(graph);
+
+            if (String(this.getGraphId(graph)) === targetId) {
+                const lastStep = path[path.length - 1] || null;
+                return {
+                    graph,
+                    path,
+                    name: this.getSubgraphDisplayName(graph, lastStep?.node)
+                };
+            }
+
+            for (const node of graph.nodes || []) {
+                if (!node?.subgraph) continue;
+                const result = walk(node.subgraph, [
+                    ...path,
+                    { parentGraph: graph, node, graph: node.subgraph }
+                ]);
+                if (result) return result;
+            }
+            return null;
+        };
+
+        return walk(rootGraph, []);
+    },
+
+    findNodeInGraphTree(rootGraph, nodeId, options = {}) {
+        if (!rootGraph) return null;
+        const preferSubgraphId = String(options.preferSubgraphId || '').trim();
+        const visited = new Set();
+        let fallback = null;
+
+        const walk = (graph, path = []) => {
+            if (!graph || visited.has(graph)) return null;
+            visited.add(graph);
+
+            const graphId = String(this.getGraphId(graph) || '');
+            const node = options.includeRoot !== false || path.length
+                ? this.getGraphNodeById(graph, nodeId)
+                : null;
+            if (node) {
+                const target = {
+                    node,
+                    graph,
+                    path,
+                    subgraphId: graphId,
+                    subgraphName: this.getSubgraphDisplayName(graph, path[path.length - 1]?.node)
+                };
+                if (!preferSubgraphId || graphId === preferSubgraphId) return target;
+                fallback = fallback || target;
+            }
+
+            for (const childNode of graph.nodes || []) {
+                if (!childNode?.subgraph) continue;
+                const result = walk(childNode.subgraph, [
+                    ...path,
+                    { parentGraph: graph, node: childNode, graph: childNode.subgraph }
+                ]);
+                if (result) return result;
+            }
+
+            return null;
+        };
+
+        return walk(rootGraph, []) || fallback;
+    },
+
+    activateGraphForLocate(target) {
+        const canvas = app?.canvas;
+        if (!canvas || !target?.graph) return false;
+
+        const path = Array.isArray(target.path) ? target.path : [];
+        for (const step of path) {
+            if (step.parentGraph && canvas.graph !== step.parentGraph) {
+                this.setActiveCanvasGraph(step.parentGraph);
+            }
+
+            if (step.node?.subgraph && canvas.graph !== step.node.subgraph) {
+                const opened = this.openSubgraphNodeForLocate(step.node);
+                if (!opened || canvas.graph !== step.node.subgraph) {
+                    this.setActiveCanvasGraph(step.node.subgraph);
+                }
+            }
+        }
+
+        if (canvas.graph !== target.graph) {
+            this.setActiveCanvasGraph(target.graph);
+        }
+
+        return canvas.graph === target.graph;
+    },
+
+    openSubgraphNodeForLocate(node) {
+        const canvas = app?.canvas;
+        if (!canvas || !node?.subgraph) return false;
+
+        const attempts = [
+            [canvas, 'openSubgraph', [node]],
+            [canvas, 'openSubgraph', [node.subgraph, node]],
+            [canvas, 'enterSubgraph', [node]],
+            [canvas, 'openSubgraphNode', [node]],
+            [canvas, 'showSubgraph', [node]],
+            [node, 'openSubgraph', []],
+            [node, 'enterSubgraph', []],
+            [node, 'showSubgraph', []],
+            [node, 'onOpenSubgraph', [canvas]]
+        ];
+
+        for (const [target, method, args] of attempts) {
+            if (typeof target?.[method] !== 'function') continue;
+            try {
+                target[method](...args);
+                if (canvas.graph === node.subgraph) return true;
+            } catch (error) {
+                console.debug?.(`Model Resolver: ${method} failed while opening subgraph`, error);
+            }
+        }
+
+        return false;
+    },
+
+    setActiveCanvasGraph(graph) {
+        const canvas = app?.canvas;
+        if (!canvas || !graph) return false;
+
+        const methods = ['setGraph', 'switchToGraph', 'changeGraph', 'showGraph'];
+        for (const method of methods) {
+            if (typeof canvas[method] !== 'function') continue;
+            try {
+                canvas[method](graph);
+                break;
+            } catch (error) {
+                console.debug?.(`Model Resolver: canvas.${method} failed while switching graph`, error);
+            }
+        }
+
+        if (canvas.graph !== graph) {
+            try {
+                canvas.graph = graph;
+            } catch (error) {
+                console.debug?.('Model Resolver: assigning canvas.graph failed', error);
+            }
+        }
+
+        graph.setDirtyCanvas?.(true, true);
+        canvas.setDirty?.(true, true);
+        app.graph?.setDirtyCanvas?.(true, true);
+        return canvas.graph === graph;
+    },
+
+    animateCanvasToNode(node, graph = null) {
         const canvas = app?.canvas;
         const ds = canvas?.ds;
         const htmlCanvas = canvas?.canvas;
@@ -350,6 +592,7 @@ export const lifecycleGraphMethods = {
             ds.offset[0] = startOffset.x + ((targetOffset.x - startOffset.x) * eased);
             ds.offset[1] = startOffset.y + ((targetOffset.y - startOffset.y) * eased);
             canvas.setDirty?.(true, true);
+            graph?.setDirtyCanvas?.(true, true);
             app.graph?.setDirtyCanvas?.(true, true);
 
             if (progress < 1) {

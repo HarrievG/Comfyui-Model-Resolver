@@ -7,19 +7,38 @@ export const missingBrowserMethods = {
         return missing.original_path?.split('/').pop()?.split('\\').pop() || missing.name || 'Missing model';
     },
 
+    getMissingLocateTarget(missing = {}) {
+        const hasLocateNode = missing.locate_node_id !== undefined
+            && missing.locate_node_id !== null
+            && missing.locate_node_id !== '';
+        const nodeId = hasLocateNode ? missing.locate_node_id : missing.node_id;
+        return {
+            nodeId: nodeId ?? '',
+            nodeType: hasLocateNode ? (missing.locate_node_type || missing.node_type || '') : (missing.node_type || ''),
+            nodeTitle: hasLocateNode ? (missing.locate_node_title || '') : (missing.node_title || ''),
+            subgraphId: hasLocateNode ? (missing.locate_subgraph_id || '') : (missing.subgraph_id || ''),
+            subgraphName: hasLocateNode ? (missing.locate_subgraph_name || missing.subgraph_name || '') : (missing.subgraph_name || ''),
+            isTopLevel: hasLocateNode ? missing.locate_is_top_level !== false : missing.is_top_level !== false
+        };
+    },
+
     getMissingNodeDisplay(missing = {}) {
-        const isSubgraphNode = missing.node_type && missing.node_type.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+        const locateTarget = this.getMissingLocateTarget(missing);
+        const isSubgraphNode = locateTarget.nodeType && locateTarget.nodeType.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
         let nodeLabel;
-        if (missing.subgraph_name) {
-            nodeLabel = missing.subgraph_name;
+        if (locateTarget.subgraphName) {
+            nodeLabel = locateTarget.subgraphName;
         } else if (isSubgraphNode) {
             nodeLabel = 'Subgraph';
         } else {
-            nodeLabel = missing.node_type || 'Node';
+            nodeLabel = locateTarget.nodeType || 'Node';
         }
 
-        const nodeId = missing.node_id ?? '';
-        const customNodeTitle = String(missing.node_title || '').trim();
+        const nodeId = locateTarget.nodeId ?? '';
+        const promotedDetail = missing.locate_via_promoted_widget
+            ? (missing.node_title || missing.node_type || '')
+            : (missing.promoted_inner_node_title || missing.promoted_inner_node_type || '');
+        const customNodeTitle = String(promotedDetail || locateTarget.nodeTitle || missing.node_title || '').trim();
         const hasCustomNodeTitle = customNodeTitle && customNodeTitle !== nodeLabel;
         const text = hasCustomNodeTitle
             ? `${nodeLabel} #${nodeId} · ${customNodeTitle}`
@@ -28,7 +47,13 @@ export const missingBrowserMethods = {
         return {
             label: nodeLabel,
             text,
-            canLocate: missing.is_top_level !== false && nodeId !== ''
+            canLocate: nodeId !== '',
+            locateTarget,
+            locateTooltip: missing.locate_via_promoted_widget
+                ? 'Center this subgraph node in the ComfyUI graph.'
+                : locateTarget.isTopLevel === false
+                ? 'Open this subgraph and center the node in the ComfyUI graph.'
+                : 'Center this node in the ComfyUI graph.'
         };
     },
 
@@ -262,9 +287,10 @@ export const missingBrowserMethods = {
             const typeLabel = missing.category ? this.getCategoryDisplayName(missing.category) : 'unknown';
             const typeColorClass = this.getModelTypeColorClass(missing.category || typeLabel);
             const nodeDisplay = this.getMissingNodeDisplay(missing);
-            const nodeId = missing.node_id ?? '';
+            const locateTarget = nodeDisplay.locateTarget || this.getMissingLocateTarget(missing);
+            const nodeId = locateTarget.nodeId ?? '';
             const rowNodeHtml = nodeDisplay.canLocate
-                ? `<button type="button" class="mr-node-chip is-locatable mr-missing-row-node mr-missing-row-locate" data-node-id="${this.escapeHtml(String(nodeId))}" data-tooltip="Center this node in the ComfyUI graph." aria-label="Center ${this.escapeHtml(nodeDisplay.text)} in the ComfyUI graph">${this.getLocateIconHtml()}<span class="mr-missing-row-node-label">${this.escapeHtml(nodeDisplay.text)}</span></button>`
+                ? `<button type="button" class="mr-node-chip is-locatable mr-missing-row-node mr-missing-row-locate" data-node-id="${this.escapeHtml(String(nodeId))}" data-subgraph-id="${this.escapeHtml(String(locateTarget.subgraphId || ''))}" data-is-top-level="${locateTarget.isTopLevel ? 'true' : 'false'}" data-tooltip="${this.escapeHtml(nodeDisplay.locateTooltip)}" aria-label="Center ${this.escapeHtml(nodeDisplay.text)} in the ComfyUI graph">${this.getLocateIconHtml()}<span class="mr-missing-row-node-label">${this.escapeHtml(nodeDisplay.text)}</span></button>`
                 : `<span class="mr-missing-row-node">${this.escapeHtml(nodeDisplay.text)}</span>`;
 
             html += `
@@ -385,7 +411,10 @@ export const missingBrowserMethods = {
                 event.stopPropagation();
                 const rawNodeId = button.dataset.nodeId;
                 const numericNodeId = Number(rawNodeId);
-                this.locateNodeInGraph(Number.isNaN(numericNodeId) ? rawNodeId : numericNodeId);
+                this.locateNodeInGraph(Number.isNaN(numericNodeId) ? rawNodeId : numericNodeId, {
+                    subgraphId: button.dataset.subgraphId || '',
+                    isTopLevel: button.dataset.isTopLevel !== 'false'
+                });
             });
         });
 
@@ -555,9 +584,13 @@ export const missingBrowserMethods = {
 
         const locateId = `locate-${missing.node_id}-${missing.widget_index}`;
         const locateBtn = container.querySelector(`#${locateId}`);
-        if (locateBtn && missing.is_top_level !== false) {
+        const locateTarget = this.getMissingLocateTarget(missing);
+        if (locateBtn && locateTarget.nodeId !== undefined && locateTarget.nodeId !== null && locateTarget.nodeId !== '') {
             locateBtn.addEventListener('click', () => {
-                this.locateNodeInGraph(missing.node_id);
+                this.locateNodeInGraph(locateTarget.nodeId, {
+                    subgraphId: locateTarget.subgraphId || '',
+                    isTopLevel: locateTarget.isTopLevel
+                });
             });
         }
 
@@ -854,15 +887,15 @@ export const missingBrowserMethods = {
         }
         html += `</div>`;
         const locateId = `locate-${missing.node_id}-${missing.widget_index}`;
-        const nodeChipClasses = missing.is_top_level !== false ? 'mr-node-chip is-locatable' : 'mr-node-chip';
-        const nodeChipTitle = missing.is_top_level !== false ? 'Center this node in the ComfyUI graph.' : '';
+        const nodeChipClasses = nodeDisplay.canLocate ? 'mr-node-chip is-locatable' : 'mr-node-chip';
+        const nodeChipTitle = nodeDisplay.canLocate ? nodeDisplay.locateTooltip : '';
 
         html += `<div class="mr-card-subtitle">`;
         if (missing.category) {
             html += `<span class="mr-category-chip ${this.getModelTypeColorClass(missing.category)}" data-tooltip="${this.escapeHtml(missing.category)}">${this.getCategoryDisplayName(missing.category)}</span>`;
         }
         html += `<span id="${locateId}" class="${nodeChipClasses}"${nodeChipTitle ? ` data-tooltip="${this.escapeHtml(nodeChipTitle)}"` : ''}>`;
-        if (missing.is_top_level !== false) {
+        if (nodeDisplay.canLocate) {
             html += this.getLocateIconHtml();
         }
         html += `${nodeChipText}</span>`;
