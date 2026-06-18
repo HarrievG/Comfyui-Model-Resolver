@@ -31,6 +31,20 @@ CIVITAI_DOWNLOAD_URL_PREFIXES = (
 
 DEFAULT_CIVARCHIVE_CANDIDATE_LIMIT = 10
 MAX_CIVARCHIVE_CANDIDATE_LIMIT = 30
+MODEL_TITLE_MATCH_THRESHOLD = 82.0
+
+MODEL_FILE_EXTENSIONS = {
+    ".ckpt",
+    ".pt",
+    ".pt2",
+    ".bin",
+    ".pth",
+    ".safetensors",
+    ".pkl",
+    ".sft",
+    ".onnx",
+    ".gguf",
+}
 
 _search_cache: Dict[str, Any] = {}
 
@@ -919,6 +933,273 @@ def _calculate_confidence(
     return round(best * 100, 1)
 
 
+def _strip_known_model_extension(filename: str) -> str:
+    """Strip only known model extensions, preserving names like v4.0."""
+    if not isinstance(filename, str):
+        return ""
+
+    lowered = filename.lower()
+    for ext in MODEL_FILE_EXTENSIONS:
+        if lowered.endswith(ext):
+            return filename[: -len(ext)]
+    return filename
+
+
+def _has_known_model_extension(filename: str) -> bool:
+    return _strip_known_model_extension(filename) != filename
+
+
+def _normalize_model_title(value: str) -> str:
+    value = _strip_known_model_extension(str(value or "")).lower()
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def _calculate_model_title_confidence(query: str, model_name: str) -> float:
+    query_norm = _normalize_model_title(query)
+    model_norm = _normalize_model_title(model_name)
+    if not query_norm or not model_norm:
+        return 0.0
+
+    if query_norm == model_norm:
+        return 100.0
+
+    return round(
+        max(
+            calculate_similarity_with_normalization(query_norm, model_norm),
+            calculate_similarity_with_normalization(
+                query_norm.replace(" ", ""), model_norm.replace(" ", "")
+            ),
+        )
+        * 100,
+        1,
+    )
+
+
+def _version_sort_key(version: Dict[str, Any]) -> tuple:
+    timestamp = (
+        version.get("published_at")
+        or version.get("publishedAt")
+        or version.get("updated_at")
+        or version.get("updatedAt")
+        or version.get("created_at")
+        or version.get("createdAt")
+        or ""
+    )
+    try:
+        version_id = int(version.get("id") or 0)
+    except (TypeError, ValueError):
+        version_id = 0
+    return (str(timestamp), version_id)
+
+
+def _collect_normalized_download_urls(file_info: Dict[str, Any]) -> List[str]:
+    urls: List[str] = []
+    raw_urls = file_info.get("download_urls") or []
+    if not isinstance(raw_urls, list):
+        raw_urls = [raw_urls]
+
+    for raw_url in raw_urls:
+        url = _normalize_download_url(raw_url)
+        if url and url not in urls:
+            urls.append(url)
+
+    for key in ("download_url", "downloadUrl"):
+        url = _normalize_download_url(file_info.get(key))
+        if url and url not in urls:
+            urls.append(url)
+
+    return urls
+
+
+def _select_primary_model_file(files: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    valid_files = [
+        file_info
+        for file_info in files
+        if isinstance(file_info, dict)
+        and (file_info.get("name") or file_info.get("filename"))
+        and _collect_normalized_download_urls(file_info)
+    ]
+    if not valid_files:
+        return None
+
+    for file_info in valid_files:
+        if file_info.get("primary") and str(file_info.get("type", "")).lower() == "model":
+            return file_info
+
+    for file_info in valid_files:
+        if file_info.get("primary"):
+            return file_info
+
+    for file_info in valid_files:
+        if str(file_info.get("type", "")).lower() == "model":
+            return file_info
+
+    return valid_files[0]
+
+
+def _build_result_from_normalized_version(
+    model_details: Dict[str, Any],
+    version: Dict[str, Any],
+    file_info: Dict[str, Any],
+    match_type: str,
+) -> Optional[Dict[str, Any]]:
+    download_urls = _collect_normalized_download_urls(file_info)
+    if not download_urls:
+        return None
+
+    model_id = _coerce_int(model_details.get("model_id") or file_info.get("model_id"))
+    version_id = _coerce_int(version.get("id") or file_info.get("version_id"))
+    filename = file_info.get("name") or file_info.get("filename") or ""
+    url = version.get("url") or (
+        f"{CIVARCHIVE_BASE_URL}/models/{model_id}?modelVersionId={version_id}"
+        if model_id and version_id
+        else model_details.get("url", "")
+    )
+
+    tags = model_details.get("tags") or []
+    if not isinstance(tags, list):
+        tags = [tags] if tags else []
+
+    size = file_info.get("size")
+    if size is None:
+        size = _extract_file_size_bytes(file_info)
+
+    return {
+        "source": "civarchive",
+        "model_id": model_id,
+        "version_id": version_id,
+        "name": model_details.get("name") or "",
+        "version_name": version.get("name") or "",
+        "type": model_details.get("type") or file_info.get("type"),
+        "filename": filename,
+        "url": url,
+        "download_url": download_urls[0],
+        "download_urls": download_urls,
+        "size": size,
+        "base_model": version.get("base_model")
+        or version.get("baseModel")
+        or version.get("baseModelType"),
+        "tags": tags,
+        "trained_words": version.get("trained_words") or [],
+        "images": version.get("images") or [],
+        "creator": model_details.get("creator") or {},
+        "platform": model_details.get("platform"),
+        "is_deleted": False,
+        "match_type": match_type,
+    }
+
+
+def _hydrate_civarchive_version_with_files(
+    model_id: int, version: Dict[str, Any]
+) -> Dict[str, Any]:
+    if _select_primary_model_file(version.get("files") or []):
+        return version
+
+    version_id = _coerce_int(version.get("id"))
+    if not model_id or not version_id:
+        return version
+
+    details = get_civarchive_model_details(model_id, version_id)
+    if not details:
+        return version
+
+    selected = details.get("selected_version")
+    if isinstance(selected, dict) and _coerce_int(selected.get("id")) == version_id:
+        return selected
+
+    for candidate in details.get("versions") or []:
+        if isinstance(candidate, dict) and _coerce_int(candidate.get("id")) == version_id:
+            return candidate
+
+    return version
+
+
+def _find_model_title_match_in_model_details(
+    model_id: int,
+    model_details: Dict[str, Any],
+    title_query: str,
+    base_model_context: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """For extensionless workflow values, resolve by CivArchive model page title."""
+    model_name = model_details.get("name", "")
+    title_confidence = _calculate_model_title_confidence(title_query, model_name)
+    if title_confidence < MODEL_TITLE_MATCH_THRESHOLD:
+        log_debug(
+            f"CivArchive title candidate rejected: model_id={model_id}, query={title_query}, model_name={model_name}, confidence={title_confidence}"
+        )
+        return None
+
+    versions = [
+        version
+        for version in (model_details.get("versions") or [])
+        if isinstance(version, dict)
+    ]
+    selected_version = model_details.get("selected_version")
+    if isinstance(selected_version, dict):
+        selected_id = _coerce_int(selected_version.get("id"))
+        if not any(_coerce_int(version.get("id")) == selected_id for version in versions):
+            versions.append(selected_version)
+
+    if not versions:
+        return None
+
+    versions = sorted(versions, key=_version_sort_key, reverse=True)
+    rejected_by_base_model = False
+
+    for version in versions:
+        hydrated_version = _hydrate_civarchive_version_with_files(model_id, version)
+        if base_model_context and not _base_model_matches(
+            hydrated_version.get("base_model"), base_model_context
+        ):
+            rejected_by_base_model = True
+            continue
+
+        file_info = _select_primary_model_file(hydrated_version.get("files") or [])
+        if not file_info:
+            continue
+
+        result = _build_result_from_normalized_version(
+            model_details=model_details,
+            version=hydrated_version,
+            file_info=file_info,
+            match_type="model_title",
+        )
+        if not result:
+            continue
+
+        result["confidence"] = title_confidence
+        result["title_confidence"] = title_confidence
+        log_info(
+            f"CivArchive model-title match: query={title_query}, model_id={model_id}, model_name={model_name}, version_id={result.get('version_id')}, filename={result.get('filename')}, confidence={title_confidence}, base={result.get('base_model')}"
+        )
+        return result
+
+    if rejected_by_base_model:
+        log_debug(
+            f"CivArchive title candidate rejected by base model: model_id={model_id}, base={base_model_context}"
+        )
+
+    return None
+
+
+def _resolve_civarchive_model_title_match(
+    model_id: int,
+    title_query: str,
+    base_model_context: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    details = get_civarchive_model_details(model_id)
+    if not details:
+        return None
+
+    return _find_model_title_match_in_model_details(
+        model_id=model_id,
+        model_details=details,
+        title_query=title_query,
+        base_model_context=base_model_context,
+    )
+
+
 def _normalize_base_model(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
 
@@ -1116,6 +1397,8 @@ def _resolve_search_candidate(
     candidate: Dict[str, Any],
     query: str,
     exact_only: bool = False,
+    base_model_context: Optional[str] = None,
+    allow_model_title_match: bool = False,
 ) -> Optional[Dict[str, Any]]:
     parsed = parse_civarchive_url(candidate.get("url", ""))
     if not parsed:
@@ -1128,6 +1411,15 @@ def _resolve_search_candidate(
             exact_only=exact_only,
         )
     elif parsed.get("model_id"):
+        if allow_model_title_match:
+            result = _resolve_civarchive_model_title_match(
+                parsed["model_id"],
+                title_query=query,
+                base_model_context=base_model_context,
+            )
+            if result:
+                return result
+
         result = resolve_civarchive_model_version(
             parsed["model_id"],
             parsed.get("version_id"),
@@ -1248,6 +1540,9 @@ def search_civarchive_for_file(
     best_confidence = 0.0
     best_rank = -9999.0
     seen = set()
+    allow_model_title_match = not exact_only and not _has_known_model_extension(
+        os.path.basename(normalized_filename)
+    )
 
     try:
         for search_query in _build_search_queries(normalized_filename):
@@ -1262,21 +1557,33 @@ def search_civarchive_for_file(
                     candidate,
                     normalized_filename,
                     exact_only=exact_only,
+                    base_model_context=base_model_context,
+                    allow_model_title_match=allow_model_title_match,
                 )
                 if not resolved:
                     continue
 
-                confidence = _calculate_confidence(
-                    normalized_filename,
-                    resolved.get("name", ""),
-                    resolved.get("version_name", ""),
-                    resolved.get("filename", ""),
-                )
-                if exact_only and confidence < 100.0:
-                    continue
+                if resolved.get("match_type") == "model_title":
+                    confidence = float(
+                        resolved.get("title_confidence")
+                        or resolved.get("confidence")
+                        or _calculate_model_title_confidence(
+                            normalized_filename,
+                            resolved.get("name", ""),
+                        )
+                    )
+                else:
+                    confidence = _calculate_confidence(
+                        normalized_filename,
+                        resolved.get("name", ""),
+                        resolved.get("version_name", ""),
+                        resolved.get("filename", ""),
+                    )
+                    if exact_only and confidence < 100.0:
+                        continue
 
-                resolved["confidence"] = confidence
-                resolved["match_type"] = "exact" if confidence == 100.0 else "similar"
+                    resolved["confidence"] = confidence
+                    resolved["match_type"] = "exact" if confidence == 100.0 else "similar"
                 base_model_matches = _base_model_matches(
                     resolved.get("base_model"), base_model_context
                 )

@@ -29,6 +29,20 @@ _urn_cache: Dict[tuple[int, int], Dict[str, Any]] = {}
 _hash_cache: Dict[str, Dict[str, Any]] = {}
 DEFAULT_CIVITAI_CANDIDATE_LIMIT = 5
 MAX_CIVITAI_CANDIDATE_LIMIT = 20
+MODEL_TITLE_MATCH_THRESHOLD = 82.0
+
+MODEL_FILE_EXTENSIONS = {
+    ".ckpt",
+    ".pt",
+    ".pt2",
+    ".bin",
+    ".pth",
+    ".safetensors",
+    ".pkl",
+    ".sft",
+    ".onnx",
+    ".gguf",
+}
 
 CIVITAI_TYPE_MAP = {
     "checkpoint": "Checkpoint",
@@ -259,6 +273,146 @@ def _calculate_filename_confidence(target_filename: str, candidate_filename: str
         os.path.splitext(target_filename)[0], os.path.splitext(candidate_filename)[0]
     )
     return round(max(similarity, similarity_no_ext) * 100, 1)
+
+
+def _strip_known_model_extension(filename: str) -> str:
+    """Strip only known model extensions, preserving names like v4.0."""
+    if not isinstance(filename, str):
+        return ""
+
+    lowered = filename.lower()
+    for ext in MODEL_FILE_EXTENSIONS:
+        if lowered.endswith(ext):
+            return filename[: -len(ext)]
+    return filename
+
+
+def _has_known_model_extension(filename: str) -> bool:
+    return _strip_known_model_extension(filename) != filename
+
+
+def _normalize_model_title(value: str) -> str:
+    value = _strip_known_model_extension(str(value or "")).lower()
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def _calculate_model_title_confidence(query: str, model_name: str) -> float:
+    query_norm = _normalize_model_title(query)
+    model_norm = _normalize_model_title(model_name)
+    if not query_norm or not model_norm:
+        return 0.0
+
+    if query_norm == model_norm:
+        return 100.0
+
+    return round(
+        max(
+            calculate_similarity_with_normalization(query_norm, model_norm),
+            calculate_similarity_with_normalization(
+                query_norm.replace(" ", ""), model_norm.replace(" ", "")
+            ),
+        )
+        * 100,
+        1,
+    )
+
+
+def _version_sort_key(version: Dict[str, Any]) -> tuple:
+    timestamp = (
+        version.get("publishedAt")
+        or version.get("updatedAt")
+        or version.get("createdAt")
+        or ""
+    )
+    try:
+        version_id = int(version.get("id") or 0)
+    except (TypeError, ValueError):
+        version_id = 0
+    return (str(timestamp), version_id)
+
+
+def _select_primary_model_file(files: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    valid_files = [f for f in files if isinstance(f, dict) and f.get("name")]
+    if not valid_files:
+        return None
+
+    for file_info in valid_files:
+        if file_info.get("primary") and file_info.get("type") == "Model":
+            return file_info
+
+    for file_info in valid_files:
+        if file_info.get("primary"):
+            return file_info
+
+    for file_info in valid_files:
+        if file_info.get("type") == "Model":
+            return file_info
+
+    return valid_files[0]
+
+
+def _find_model_title_match_in_model(
+    model_id: int,
+    model_data: Dict[str, Any],
+    title_query: str,
+    api_key: Optional[str] = None,
+    base_model_context: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """For extensionless workflow values, resolve by CivitAI model page title."""
+    model_name = model_data.get("name", "")
+    title_confidence = _calculate_model_title_confidence(title_query, model_name)
+    if title_confidence < MODEL_TITLE_MATCH_THRESHOLD:
+        log_debug(
+            f"CivitAI title candidate rejected: model_id={model_id}, query={title_query}, model_name={model_name}, confidence={title_confidence}"
+        )
+        return None
+
+    versions = [
+        version
+        for version in (model_data.get("modelVersions") or [])
+        if isinstance(version, dict)
+    ]
+    if not versions:
+        return None
+
+    if base_model_context:
+        versions = [
+            version
+            for version in versions
+            if _base_model_matches(version.get("baseModel"), base_model_context)
+        ]
+        if not versions:
+            log_debug(
+                f"CivitAI title candidate rejected by base model: model_id={model_id}, base={base_model_context}"
+            )
+            return None
+
+    versions = sorted(versions, key=_version_sort_key, reverse=True)
+
+    for version in versions:
+        file_info = _select_primary_model_file(version.get("files") or [])
+        if not file_info:
+            continue
+
+        result = _build_civitai_result_from_version(
+            model_id=model_id,
+            model_name=model_name,
+            model_type=model_data.get("type", ""),
+            version=version,
+            file_info=file_info,
+            tags=model_data.get("tags", []),
+            match_type="model_title",
+        )
+        result["confidence"] = title_confidence
+        result["title_confidence"] = title_confidence
+        result["version_name"] = version.get("name", "")
+        log_info(
+            f"CivitAI model-title match: query={title_query}, model_id={model_id}, model_name={model_name}, version_id={result.get('version_id')}, filename={result.get('filename')}, confidence={title_confidence}, base={result.get('base_model')}"
+        )
+        return result
+
+    return None
 
 
 def _normalize_base_model(value: str) -> str:
@@ -538,6 +692,9 @@ def _find_civitai_file_in_model(
     """Load one CivitAI model and search all its versions for the requested file."""
     filename_lower = filename.lower()
     filename_base = os.path.splitext(filename_lower)[0]
+    allow_model_title_match = not exact_only and not _has_known_model_extension(
+        os.path.basename(filename)
+    )
 
     def build_result_from_resolved_version(
         resolved: Dict[str, Any], version_id: int
@@ -607,6 +764,18 @@ def _find_civitai_file_in_model(
 
     data = response.json()
     versions = data.get("modelVersions", [])
+
+    if allow_model_title_match:
+        title_match = _find_model_title_match_in_model(
+            model_id=model_id,
+            model_data=data,
+            title_query=filename,
+            api_key=api_key,
+            base_model_context=base_model_context,
+        )
+        if title_match:
+            return title_match
+
     if preferred_version_id is not None:
         preferred = [v for v in versions if v.get("id") == preferred_version_id]
         others = [v for v in versions if v.get("id") != preferred_version_id]

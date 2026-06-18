@@ -31,9 +31,15 @@ export const workflowStateMethods = {
             'clip_name1',
             'clip_name2',
             'control_net_name',
+            'cnet',
             'model_name',
             'unet_name',
-            'upscale_model_name'
+            'gguf_name',
+            'upscale_model_name',
+            'style_model_name',
+            'hypernetwork_name',
+            'clip_name3',
+            'clip_name4'
         ]);
         const modelMetadataKeys = new Set([
             'name',
@@ -53,14 +59,56 @@ export const workflowStateMethods = {
             'on'
         ]);
         const loraStrengthNodeTypes = new Set(['LoraLoader', 'LoraLoaderModelOnly']);
+        const modelWidgetIndicesByNodeType = {
+            CheckpointLoaderSimple: [0],
+            CheckpointLoader: [1],
+            unCLIPCheckpointLoader: [0],
+            ImageOnlyCheckpointLoader: [0],
+            VAELoader: [0],
+            VAELoaderKJ: [0],
+            LoraLoader: [0],
+            LoraLoaderModelOnly: [0],
+            UNETLoader: [0],
+            LoaderGGUF: [0],
+            LoaderGGUFAdvanced: [0],
+            UnetLoaderGGUF: [0],
+            UnetLoaderGGUFAdvanced: [0],
+            LatentUpscaleModelLoader: [0],
+            CLIPLoader: [0],
+            DualCLIPLoader: [0, 1],
+            CLIPLoaderGGUF: [0],
+            ClipLoaderGGUF: [0],
+            DualCLIPLoaderGGUF: [0, 1],
+            DualClipLoaderGGUF: [0, 1],
+            TripleCLIPLoaderGGUF: [0, 1, 2],
+            TripleClipLoaderGGUF: [0, 1, 2],
+            QuadrupleCLIPLoaderGGUF: [0, 1, 2, 3],
+            QuadrupleClipLoaderGGUF: [0, 1, 2, 3],
+            ControlNetLoader: [0],
+            DiffControlNetLoader: [0],
+            ControlNetLoaderAdvanced: [0],
+            CLIPVisionLoader: [0],
+            StyleModelLoader: [0],
+            UpscaleModelLoader: [0],
+            HypernetworkLoader: [0],
+            EmbeddingLoader: [0],
+            LTXVAudioVAELoader: [0],
+            LowVRAMAudioVAELoader: [0],
+            LTXVGemmaCLIPModelLoader: [0],
+            LTXAVTextEncoderLoader: [0, 1]
+        };
 
         const normalizeKey = (key = '') => String(key).replace(/[-\s]/g, '_').toLowerCase();
-        const isRelevantString = (value = '', key = '') => {
+        const isModelWidgetIndex = (nodeType = '', index = -1) => (
+            modelWidgetIndicesByNodeType[nodeType] || []
+        ).includes(index);
+        const isRelevantString = (value = '', key = '', isModelWidget = false) => {
             const text = String(value).trim();
             if (!text) return false;
 
             const normalizedKey = normalizeKey(key);
-            return modelReferenceKeys.has(normalizedKey)
+            return isModelWidget
+                || modelReferenceKeys.has(normalizedKey)
                 || modelMetadataKeys.has(normalizedKey)
                 || modelExtensionPattern.test(text)
                 || urnPattern.test(text)
@@ -68,12 +116,12 @@ export const workflowStateMethods = {
                 || loraTokenPattern.test(text);
         };
         const isRelevantScalarKey = (key = '') => ['strength', 'active', 'on', 'model_id', 'modelid', 'version_id', 'versionid'].includes(normalizeKey(key));
-        const normalizeRelevantValue = (value, key = '') => {
+        const normalizeRelevantValue = (value, key = '', isModelWidget = false) => {
             if (value == null) return null;
 
             if (typeof value === 'string') {
                 const text = value.trim();
-                return isRelevantString(text, key) ? text : null;
+                return isRelevantString(text, key, isModelWidget) ? text : null;
             }
 
             if (typeof value === 'number' || typeof value === 'boolean') {
@@ -105,7 +153,10 @@ export const workflowStateMethods = {
                     const items = Array.isArray(node[key]) ? node[key] : [];
                     const item = items[index];
                     if (!item || typeof item !== 'object') continue;
-                    const name = item.name || item.widget || item.label;
+                    const widgetName = item.widget && typeof item.widget === 'object'
+                        ? item.widget.name
+                        : item.widget;
+                    const name = item.name || widgetName || item.label;
                     if (name) return name;
                 }
                 return '';
@@ -113,7 +164,8 @@ export const workflowStateMethods = {
             return widgetsValues
                 .map((value, index) => {
                     const key = widgetValueKey(index);
-                    let normalized = normalizeRelevantValue(value, key);
+                    const isModelWidget = isModelWidgetIndex(nodeType, index);
+                    let normalized = normalizeRelevantValue(value, key, isModelWidget);
 
                     if (
                         normalized === null

@@ -30,6 +30,38 @@ URL_PATTERN = re.compile(r'(https?://(?:huggingface\.co|civitai\.com)[^\s"\'<>\)
 MODEL_EXTENSIONS = (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".onnx", ".gguf")
 
 
+def strip_known_model_extension(filename: str) -> str:
+    """Strip only known model extensions, preserving names like v4.0."""
+    if not isinstance(filename, str):
+        return ""
+
+    lowered = filename.lower()
+    for ext in MODEL_EXTENSIONS:
+        if lowered.endswith(ext):
+            return filename[: -len(ext)]
+    return filename
+
+
+def get_workflow_url_info_for_filename(
+    workflow_urls: Dict[str, Dict[str, Any]], filename: str
+) -> Optional[Dict[str, Any]]:
+    if filename in workflow_urls:
+        return workflow_urls[filename]
+
+    filename_stem = strip_known_model_extension(os.path.basename(filename)).lower()
+    if not filename_stem:
+        return None
+
+    for workflow_filename, url_info in workflow_urls.items():
+        workflow_stem = strip_known_model_extension(
+            os.path.basename(workflow_filename)
+        ).lower()
+        if workflow_stem == filename_stem:
+            return url_info
+
+    return None
+
+
 def normalize_workflow_download_url(url: str) -> str:
     """Convert workflow file-page URLs into direct download URLs when possible."""
     if not isinstance(url, str) or not url:
@@ -400,8 +432,8 @@ def analyze_and_find_matches(
         original_path = missing.get("original_path", "")
         filename = os.path.basename(original_path)
 
-        if filename in workflow_urls:
-            url_info = workflow_urls[filename]
+        url_info = get_workflow_url_info_for_filename(workflow_urls, filename)
+        if url_info:
             missing["workflow_url"] = url_info.get("url", "")
             missing["workflow_model_url"] = url_info.get("model_url", "")
             missing["workflow_directory"] = url_info.get("directory", "")

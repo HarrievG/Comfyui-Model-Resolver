@@ -1063,6 +1063,9 @@ export const searchPanelMethods = {
         if (matchType === 'exact') {
             return { label: 'Exact', className: 'strong' };
         }
+        if (matchType === 'model_title') {
+            return { label: 'Title', className: 'strong' };
+        }
 
         const confidence = Number(result.confidence);
         if (Number.isFinite(confidence) && confidence > 0) {

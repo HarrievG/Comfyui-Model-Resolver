@@ -61,6 +61,7 @@ NODE_TYPE_TO_CATEGORY_HINTS = {
     "CheckpointLoaderSimple": "checkpoints",
     "CheckpointLoader": "checkpoints",
     "unCLIPCheckpointLoader": "checkpoints",
+    "ImageOnlyCheckpointLoader": "checkpoints",
     "VAELoader": "vae",
     "VAELoaderKJ": "vae",
     "LoraLoader": "loras",
@@ -71,11 +72,25 @@ NODE_TYPE_TO_CATEGORY_HINTS = {
     "Power Lora Loader (rgthree)": "loras",  # rgthree's Power Lora Loader
     "UNETLoader": "diffusion_models",
     "LoaderGGUF": "diffusion_models",
+    "LoaderGGUFAdvanced": "diffusion_models",
+    "UnetLoaderGGUF": "diffusion_models",
+    "UnetLoaderGGUFAdvanced": "diffusion_models",
     "LatentUpscaleModelLoader": "latent_upscale_models",
+    "CLIPLoader": "text_encoders",
     "DualCLIPLoader": "text_encoders",
+    "CLIPLoaderGGUF": "text_encoders",
+    "ClipLoaderGGUF": "text_encoders",
+    "DualCLIPLoaderGGUF": "text_encoders",
+    "DualClipLoaderGGUF": "text_encoders",
+    "TripleCLIPLoaderGGUF": "text_encoders",
+    "TripleClipLoaderGGUF": "text_encoders",
+    "QuadrupleCLIPLoaderGGUF": "text_encoders",
+    "QuadrupleClipLoaderGGUF": "text_encoders",
     "ControlNetLoader": "controlnet",
+    "DiffControlNetLoader": "controlnet",
     "ControlNetLoaderAdvanced": "controlnet",
     "CLIPVisionLoader": "clip_vision",
+    "StyleModelLoader": "style_models",
     "UpscaleModelLoader": "upscale_models",
     "HypernetworkLoader": "hypernetworks",
     "EmbeddingLoader": "embeddings",
@@ -83,6 +98,66 @@ NODE_TYPE_TO_CATEGORY_HINTS = {
     "LTXVAudioVAELoader": "checkpoints",
     "LowVRAMAudioVAELoader": "checkpoints",
     "LTXVGemmaCLIPModelLoader": "text_encoders",
+    "LTXAVTextEncoderLoader": "text_encoders",
+}
+
+# Workflow widget_values do not always include file extensions. ComfyUI still
+# validates these combo widgets against folder_paths by exact value at queue time.
+NODE_TYPE_MODEL_WIDGET_CATEGORIES = {
+    "CheckpointLoaderSimple": {0: "checkpoints"},
+    "CheckpointLoader": {1: "checkpoints"},
+    "unCLIPCheckpointLoader": {0: "checkpoints"},
+    "ImageOnlyCheckpointLoader": {0: "checkpoints"},
+    "VAELoader": {0: "vae"},
+    "VAELoaderKJ": {0: "vae"},
+    "LoraLoader": {0: "loras"},
+    "LoraLoaderModelOnly": {0: "loras"},
+    "UNETLoader": {0: "diffusion_models"},
+    "LoaderGGUF": {0: "diffusion_models"},
+    "LoaderGGUFAdvanced": {0: "diffusion_models"},
+    "UnetLoaderGGUF": {0: "diffusion_models"},
+    "UnetLoaderGGUFAdvanced": {0: "diffusion_models"},
+    "LatentUpscaleModelLoader": {0: "latent_upscale_models"},
+    "CLIPLoader": {0: "text_encoders"},
+    "DualCLIPLoader": {0: "text_encoders", 1: "text_encoders"},
+    "CLIPLoaderGGUF": {0: "text_encoders"},
+    "ClipLoaderGGUF": {0: "text_encoders"},
+    "DualCLIPLoaderGGUF": {0: "text_encoders", 1: "text_encoders"},
+    "DualClipLoaderGGUF": {0: "text_encoders", 1: "text_encoders"},
+    "TripleCLIPLoaderGGUF": {
+        0: "text_encoders",
+        1: "text_encoders",
+        2: "text_encoders",
+    },
+    "TripleClipLoaderGGUF": {
+        0: "text_encoders",
+        1: "text_encoders",
+        2: "text_encoders",
+    },
+    "QuadrupleCLIPLoaderGGUF": {
+        0: "text_encoders",
+        1: "text_encoders",
+        2: "text_encoders",
+        3: "text_encoders",
+    },
+    "QuadrupleClipLoaderGGUF": {
+        0: "text_encoders",
+        1: "text_encoders",
+        2: "text_encoders",
+        3: "text_encoders",
+    },
+    "ControlNetLoader": {0: "controlnet"},
+    "DiffControlNetLoader": {0: "controlnet"},
+    "ControlNetLoaderAdvanced": {0: "controlnet"},
+    "CLIPVisionLoader": {0: "clip_vision"},
+    "StyleModelLoader": {0: "style_models"},
+    "UpscaleModelLoader": {0: "upscale_models"},
+    "HypernetworkLoader": {0: "hypernetworks"},
+    "EmbeddingLoader": {0: "embeddings"},
+    "LTXVAudioVAELoader": {0: "checkpoints"},
+    "LowVRAMAudioVAELoader": {0: "checkpoints"},
+    "LTXVGemmaCLIPModelLoader": {0: "text_encoders"},
+    "LTXAVTextEncoderLoader": {0: "text_encoders", 1: "checkpoints"},
 }
 
 # Model category hints by widget/input name. Workflow JSON does not always preserve
@@ -97,10 +172,15 @@ MODEL_WIDGET_NAME_TO_CATEGORY = {
     "clip_name": "text_encoders",
     "clip_name1": "text_encoders",
     "clip_name2": "text_encoders",
+    "clip_name3": "text_encoders",
+    "clip_name4": "text_encoders",
     "clip_vision_name": "clip_vision",
     "lora_name": "loras",
     "control_net_name": "controlnet",
+    "cnet": "controlnet",
+    "style_model_name": "style_models",
     "upscale_model_name": "upscale_models",
+    "hypernetwork_name": "hypernetworks",
 }
 
 # Keys within dict-type widget values that contain model file references.
@@ -115,7 +195,33 @@ NESTED_MODEL_KEYS = {
     "clip_name": "text_encoders",
     "clip_name1": "text_encoders",
     "clip_name2": "text_encoders",
+    "clip_name3": "text_encoders",
+    "clip_name4": "text_encoders",
     "control_net_name": "controlnet",
+    "cnet": "controlnet",
+    "model_name": "diffusion_models",
+    "unet_name": "diffusion_models",
+    "gguf_name": "diffusion_models",
+}
+
+MODEL_WIDGET_PLACEHOLDERS = {
+    "",
+    "none",
+    "[none]",
+    "null",
+    "undefined",
+    "default",
+    "auto",
+    "baked vae",
+    "included",
+    "(use same)",
+    "select the lora to add to the text",
+    "pixel_space",
+    "taesd",
+    "taesdxl",
+    "taesd3",
+    "taef1",
+    "taef2",
 }
 
 
@@ -134,11 +240,17 @@ def get_widget_category_hint(node: Dict[str, Any], widget_index: int) -> Optiona
         if isinstance(items, list) and widget_index < len(items):
             item = items[widget_index]
             if isinstance(item, dict):
-                candidates.extend(
-                    str(item.get(name, "")).strip()
-                    for name in ("name", "widget", "label")
-                    if item.get(name)
-                )
+                for name in ("name", "label"):
+                    if item.get(name):
+                        candidates.append(str(item.get(name, "")).strip())
+
+                widget = item.get("widget")
+                if isinstance(widget, dict):
+                    widget_name = widget.get("name")
+                    if widget_name:
+                        candidates.append(str(widget_name).strip())
+                elif widget:
+                    candidates.append(str(widget).strip())
 
     for candidate in candidates:
         category = MODEL_WIDGET_NAME_TO_CATEGORY.get(candidate)
@@ -146,6 +258,31 @@ def get_widget_category_hint(node: Dict[str, Any], widget_index: int) -> Optiona
             return category
 
     return None
+
+
+def get_node_model_widget_category_hint(
+    node_type: str, widget_index: int
+) -> Optional[str]:
+    """Return the model category for known model selector widget indices."""
+    return NODE_TYPE_MODEL_WIDGET_CATEGORIES.get(node_type, {}).get(widget_index)
+
+
+def is_placeholder_model_value(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+
+    return value.strip().lower() in MODEL_WIDGET_PLACEHOLDERS
+
+
+def should_scan_as_model_reference(value: Any, declared_model_widget: bool) -> bool:
+    """Detect model references, including extensionless known model widgets."""
+    if is_model_filename(value):
+        return True
+
+    if not declared_model_widget or not isinstance(value, str):
+        return False
+
+    return bool(value.strip()) and not is_placeholder_model_value(value)
 
 
 def is_model_filename(value: Any) -> bool:
@@ -475,12 +612,16 @@ def get_node_model_info(
     # For each widget value, check if it looks like a model file or URN
     for idx, value in enumerate(widgets_values):
         widget_category_hint = get_widget_category_hint(node, idx)
-        effective_category_hint = category_hint or widget_category_hint
+        indexed_category_hint = get_node_model_widget_category_hint(node_type, idx)
+        model_widget_category_hint = widget_category_hint or indexed_category_hint
+        effective_category_hint = model_widget_category_hint or category_hint
         categories_to_try_for_widget = (
             [effective_category_hint] if effective_category_hint else None
         )
 
-        if not is_model_filename(value):
+        if not should_scan_as_model_reference(
+            value, declared_model_widget=bool(model_widget_category_hint)
+        ):
             # Check for dict-type widget values containing model references (e.g. Power Lora Loader)
             # Some nodes store model info as objects like {"on": true, "lora": "name.safetensors", "strength": 1.0}
             if isinstance(value, dict):
@@ -489,7 +630,9 @@ def get_node_model_info(
                     if (
                         not nested_value
                         or not isinstance(nested_value, str)
-                        or not is_model_filename(nested_value)
+                        or not should_scan_as_model_reference(
+                            nested_value, declared_model_widget=True
+                        )
                     ):
                         continue
 
