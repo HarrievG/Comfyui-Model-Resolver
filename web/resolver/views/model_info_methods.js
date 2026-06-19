@@ -31,7 +31,7 @@ export const modelInfoMethods = {
         const isDownloadHistoryContext = model?.context_scope === 'download_history';
         const isFolderOnlyContext = isDownloadFolderContext || isDownloadRootContext;
         const isSourceModelContext = !isDownloadTableContext && !isFolderOnlyContext && !isDownloadQueueContext && !isDownloadHistoryContext;
-        const hasLocalPath = Boolean(model?.folder_path || model?.download_directory || model?.directory || model?.path || model?.resolved_path);
+        const hasLocalPath = Boolean(model?.open_path || model?.folder_path || model?.download_directory || model?.directory || model?.path || model?.resolved_path);
         const showOpenFolder = !isDownloadTableContext && hasLocalPath;
         const showSwitchWorkflow = (isDownloadQueueContext || isDownloadHistoryContext) && Boolean(this.canSwitchToDownloadWorkflow?.(model));
         this.setContextMenuItemVisible('showInfo', isSourceModelContext);
@@ -135,7 +135,7 @@ export const modelInfoMethods = {
     },
 
     async openContainingFolder(model) {
-        const path = model?.folder_path || model?.download_directory || model?.directory || model?.path || model?.resolved_path || '';
+        const path = model?.open_path || model?.folder_path || model?.download_directory || model?.directory || model?.path || model?.resolved_path || '';
         if (!path) {
             this.showNotification('No local file path available', 'error');
             return;

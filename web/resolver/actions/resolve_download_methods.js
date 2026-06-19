@@ -473,6 +473,7 @@ export const resolveDownloadMethods = {
             name: progress?.filename || info?.filename || 'Download',
             path: targetPath,
             resolved_path: targetPath,
+            open_path: filePath || directory,
             folder_path: directory || targetPath,
             download_directory: directory || '',
             download_path: filePath || '',

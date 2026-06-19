@@ -1041,16 +1041,19 @@ export const queueMethods = {
     },
 
     getDownloadHistoryFolderContext(entry = {}) {
-        const targetPath = entry.directory || entry.path || '';
+        const filePath = entry.path || '';
+        const directory = entry.directory || '';
+        const targetPath = filePath || directory;
         const context = {
             context_scope: 'download_history',
             open_folder_label: targetPath ? 'Open Download Folder' : '',
             name: entry.filename || 'Download',
             path: targetPath,
             resolved_path: targetPath,
-            folder_path: entry.directory || targetPath,
-            download_directory: entry.directory || '',
-            download_path: entry.path || '',
+            open_path: filePath || directory,
+            folder_path: directory || targetPath,
+            download_directory: directory,
+            download_path: filePath,
             category: entry.category || '',
             workflow_id: entry.workflowId || entry.workflow_id || (this.isLikelyWorkflowId?.(entry.workflowLabel) ? entry.workflowLabel : ''),
             workflow_label: entry.workflowLabel || '',
