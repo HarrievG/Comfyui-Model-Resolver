@@ -673,6 +673,7 @@ export const resolveDownloadMethods = {
             baseDirectory: info.baseDirectory || '',
             sourceUrl: info.sourceUrl || '',
             workflowKey: info.workflowKey || '',
+            workflowId: info.workflowId || '',
             workflowRouteKey: info.workflowRouteKey || '',
             workflowLabel: info.workflowLabel || this.getWorkflowLabelFromRouteKey?.(info.workflowRouteKey || '') || '',
             workflowSignature: info.workflowSignature || '',
@@ -1088,6 +1089,7 @@ export const resolveDownloadMethods = {
         const workflowKey = this.getWorkflowScopedQueueKey?.() || '';
         const workflowRouteKey = workflowContext.workflowRouteKey || this.getActiveWorkflowRouteKey?.() || this.activeWorkflowRouteKey || '';
         const workflowLabel = workflowContext.workflowLabel || this.getActiveWorkflowDownloadLabel?.() || 'Current workflow';
+        const workflowId = workflowContext.workflowId || this.getActiveWorkflowId?.() || '';
         const workflowSignature = workflowContext.workflowSignature || this.activeWorkflowSignature || '';
         const workflowTabId = workflowContext.workflowTabId || '';
         const workflowTabName = workflowContext.workflowTabName || '';
@@ -1104,6 +1106,7 @@ export const resolveDownloadMethods = {
                 baseDirectory,
                 sourceUrl: source.url,
                 workflowKey,
+                workflowId,
                 workflowRouteKey,
                 workflowLabel,
                 workflowSignature,
@@ -1182,6 +1185,7 @@ export const resolveDownloadMethods = {
                 baseDirectory,
                 sourceUrl: source.url,
                 workflowKey,
+                workflowId,
                 workflowRouteKey,
                 workflowLabel,
                 workflowSignature,
@@ -1221,6 +1225,7 @@ export const resolveDownloadMethods = {
                 baseDirectory,
                 sourceUrl: source.url,
                 workflowKey,
+                workflowId,
                 workflowRouteKey,
                 workflowLabel,
                 workflowSignature,
@@ -2245,6 +2250,7 @@ export const resolveDownloadMethods = {
         const workflowKey = this.getWorkflowScopedQueueKey?.() || '';
         const workflowRouteKey = workflowContext.workflowRouteKey || this.getActiveWorkflowRouteKey?.() || this.activeWorkflowRouteKey || '';
         const workflowLabel = workflowContext.workflowLabel || this.getActiveWorkflowDownloadLabel?.() || 'Current workflow';
+        const workflowId = workflowContext.workflowId || this.getActiveWorkflowId?.() || '';
         const workflowSignature = workflowContext.workflowSignature || this.activeWorkflowSignature || '';
         const workflowTabId = workflowContext.workflowTabId || '';
         const workflowTabName = workflowContext.workflowTabName || '';
@@ -2283,6 +2289,7 @@ export const resolveDownloadMethods = {
                 baseDirectory: targetSelection.baseDirectory || '',
                 sourceUrl: url,
                 workflowKey,
+                workflowId,
                 workflowRouteKey,
                 workflowLabel,
                 workflowSignature,
@@ -2356,6 +2363,7 @@ export const resolveDownloadMethods = {
                 baseDirectory: targetSelection.baseDirectory || '',
                 sourceUrl: url,
                 workflowKey,
+                workflowId,
                 workflowRouteKey,
                 workflowLabel,
                 workflowSignature,
@@ -2395,6 +2403,7 @@ export const resolveDownloadMethods = {
                 baseDirectory: targetSelection.baseDirectory || '',
                 sourceUrl: url,
                 workflowKey,
+                workflowId,
                 workflowRouteKey,
                 workflowLabel,
                 workflowSignature,
