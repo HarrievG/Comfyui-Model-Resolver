@@ -6,6 +6,7 @@ Handles downloading models from various sources with progress tracking.
 
 import os
 import json
+import hashlib
 import threading
 import time
 import requests
@@ -302,6 +303,78 @@ def _find_metadata_file_info(
         if first_file:
             return first_file
     return {}
+
+
+def _normalize_sha256(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    for prefix in ("sha256:", "sha256="):
+        if text.startswith(prefix):
+            text = text[len(prefix):].strip()
+            break
+    if len(text) == 64 and all(char in "0123456789abcdef" for char in text):
+        return text
+    return ""
+
+
+def _extract_expected_sha256(metadata: Optional[Dict[str, Any]]) -> str:
+    source = metadata if isinstance(metadata, dict) else {}
+    details = _as_dict(source.get("civitai_details") or source.get("details"))
+    selected_version = _as_dict(
+        source.get("selected_version") or details.get("selected_version")
+    )
+    path_metadata = _as_dict(source.get("path_metadata"))
+    filename = _first_present(
+        source.get("filename"),
+        path_metadata.get("filename"),
+    )
+    file_info = _find_metadata_file_info(source, selected_version, str(filename))
+    hashes = _as_dict(_first_present(file_info.get("hashes"), source.get("hashes")))
+    return _normalize_sha256(
+        _first_present(
+            source.get("sha256"),
+            source.get("hash"),
+            file_info.get("sha256"),
+            file_info.get("hash"),
+            hashes.get("SHA256"),
+            hashes.get("sha256"),
+        )
+    )
+
+
+def read_completed_metadata_sha256(file_path: str) -> str:
+    """Read a trusted SHA256 from a LoRA Manager-compatible sidecar if available."""
+    metadata_path = get_metadata_sidecar_path(file_path)
+    if not os.path.exists(metadata_path):
+        return ""
+
+    try:
+        with open(metadata_path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except Exception as e:
+        log_warn(f"Could not read metadata sidecar for SHA256 check: {metadata_path} ({e})")
+        return ""
+
+    if not isinstance(payload, dict):
+        return ""
+
+    hash_status = str(payload.get("hash_status") or "completed").strip().lower()
+    if hash_status != "completed":
+        log_debug(
+            f"Skipping metadata SHA256 for {metadata_path}: hash_status={hash_status}"
+        )
+        return ""
+
+    return _normalize_sha256(payload.get("sha256") or payload.get("hash"))
+
+
+def calculate_file_sha256(file_path: str) -> str:
+    """Calculate SHA256 for an existing local file."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(CHUNK_SIZE), b""):
+            if chunk:
+                sha256_hash.update(chunk)
+    return sha256_hash.hexdigest()
 
 
 def build_lora_manager_metadata(
@@ -1004,6 +1077,98 @@ def download_model(
 
     # Check if file already exists
     if os.path.exists(dest_path):
+        expected_sha256 = _extract_expected_sha256(metadata)
+        if expected_sha256:
+            metadata_sha256 = read_completed_metadata_sha256(dest_path)
+            sha256_source = "metadata"
+            existing_sha256 = metadata_sha256
+            if metadata_sha256:
+                if metadata_sha256 == expected_sha256:
+                    log_info(f"File exists, metadata SHA256 matches: {dest_path}")
+                else:
+                    log_info(
+                        "File exists, metadata SHA256 differs from source; "
+                        f"verifying file content: {dest_path}"
+                    )
+                    existing_sha256 = ""
+
+            try:
+                if not existing_sha256:
+                    sha256_source = "file"
+                    log_info(f"File exists, verifying SHA256: {dest_path}")
+                    existing_sha256 = calculate_file_sha256(dest_path)
+            except Exception as e:
+                error_msg = (
+                    f"File already exists and its SHA256 could not be verified: {dest_path}"
+                )
+                log_warn(f"{error_msg} ({e})")
+                return {
+                    "success": False,
+                    "download_id": download_id,
+                    "error": error_msg,
+                    "path": dest_path,
+                }
+
+            if existing_sha256 == expected_sha256:
+                message = "This model is already downloaded and matches the source hash."
+                metadata_path = get_metadata_sidecar_path(dest_path)
+                if not os.path.exists(metadata_path):
+                    metadata_path = write_lora_manager_metadata(
+                        dest_path,
+                        metadata or {},
+                        category,
+                        url,
+                    ) or ""
+                size = os.path.getsize(dest_path)
+                with download_lock:
+                    if download_id in download_progress:
+                        download_progress[download_id].update(
+                            {
+                                "status": "completed",
+                                "progress": 100,
+                                "total_size": size,
+                                "downloaded": size,
+                                "speed": 0,
+                                "path": dest_path,
+                                "directory": os.path.dirname(dest_path),
+                                "error": None,
+                                "already_exists": True,
+                                "message": message,
+                                "sha256": existing_sha256,
+                                "expected_sha256": expected_sha256,
+                                "sha256_source": sha256_source,
+                            }
+                        )
+                        if metadata_path:
+                            download_progress[download_id]["metadata_path"] = metadata_path
+                log_info(f"{message} Path: {dest_path}")
+                return {
+                    "success": True,
+                    "download_id": download_id,
+                    "path": dest_path,
+                    "size": size,
+                    "already_exists": True,
+                    "message": message,
+                    "metadata_path": metadata_path,
+                    "sha256_source": sha256_source,
+                }
+
+            error_msg = (
+                "File already exists, but its SHA256 does not match the selected "
+                f"source: {dest_path}"
+            )
+            log_warn(
+                f"{error_msg} (existing={existing_sha256}, expected={expected_sha256})"
+            )
+            return {
+                "success": False,
+                "download_id": download_id,
+                "error": error_msg,
+                "path": dest_path,
+                "existing_sha256": existing_sha256,
+                "expected_sha256": expected_sha256,
+            }
+
         return {
             "success": False,
             "download_id": download_id,

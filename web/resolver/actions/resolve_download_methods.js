@@ -970,7 +970,7 @@ export const resolveDownloadMethods = {
         if (noneEl) noneEl.textContent = `${stats.none} no match`;
     },
 
-    async refreshAfterDownload(missing, downloadedFilename, { progressDiv = null, downloadBtn = null, category = '', downloadPath = '', downloadDirectory = '' } = {}) {
+    async refreshAfterDownload(missing, downloadedFilename, { progressDiv = null, downloadBtn = null, category = '', downloadPath = '', downloadDirectory = '', alreadyExists = false } = {}) {
         try {
             const matches = await this.refreshLocalMatchesForDownloadedMissing(missing, downloadedFilename, {
                 progressDiv,
@@ -985,8 +985,8 @@ export const resolveDownloadMethods = {
                     || (downloadedLower && matchFilename.toLowerCase() === downloadedLower);
             });
             const message = perfectMatch?.model
-                ? 'Download complete. Exact local match is ready.'
-                : 'Download complete. Local matches updated.';
+                ? (alreadyExists ? 'This model is already downloaded. Exact local match is ready.' : 'Download complete. Exact local match is ready.')
+                : (alreadyExists ? 'This model is already downloaded. Local matches updated.' : 'Download complete. Local matches updated.');
             const snapshot = this.rememberDownloadSnapshotForMissing(missing, {
                 downloadId: null,
                 category,
@@ -997,7 +997,8 @@ export const resolveDownloadMethods = {
                     status: 'completed',
                     filename: downloadedFilename,
                     path: downloadPath,
-                    directory: downloadDirectory
+                    directory: downloadDirectory,
+                    already_exists: alreadyExists
                 },
                 status: 'completed',
                 message,
@@ -1026,7 +1027,9 @@ export const resolveDownloadMethods = {
                     directory: downloadDirectory
                 },
                 status: 'refresh_error',
-                message: `Downloaded, but local re-check failed: ${error.message}`,
+                message: alreadyExists
+                    ? `Already downloaded, but local re-check failed: ${error.message}`
+                    : `Downloaded, but local re-check failed: ${error.message}`,
                 type: 'warning',
                 isActive: false
             });
@@ -1039,12 +1042,16 @@ export const resolveDownloadMethods = {
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = 'Link manually';
             }
-            this.showNotification('Downloaded, but local re-check failed: ' + error.message, 'warning', {
-                contextMenuModel: this.getDownloadFolderContext(
-                    { filename: downloadedFilename, path: downloadPath, directory: downloadDirectory },
-                    { category, downloadPath, downloadDirectory, filename: downloadedFilename }
-                )
-            });
+            this.showNotification(
+                `${alreadyExists ? 'Already downloaded' : 'Downloaded'}, but local re-check failed: ${error.message}`,
+                'warning',
+                {
+                    contextMenuModel: this.getDownloadFolderContext(
+                        { filename: downloadedFilename, path: downloadPath, directory: downloadDirectory },
+                        { category, downloadPath, downloadDirectory, filename: downloadedFilename }
+                    )
+                }
+            );
         }
     },
 
@@ -1228,9 +1235,12 @@ export const resolveDownloadMethods = {
                 setTimeout(() => this.pollDownloadProgress(downloadId), 1000);
 
             } else if (progress.status === 'completed') {
+                const alreadyExists = Boolean(progress.already_exists);
                 const completedSnapshot = this.rememberDownloadUiState(downloadId, info, progress, {
                     status: 'completed_checking',
-                    message: 'Download complete. Checking local matches...',
+                    message: alreadyExists
+                        ? (progress.message || 'This model is already downloaded. Checking local matches...')
+                        : 'Download complete. Checking local matches...',
                     type: 'success',
                     isActive: false
                 });
@@ -1238,7 +1248,9 @@ export const resolveDownloadMethods = {
                 delete this.activeDownloads[downloadId];
                 this.updateDownloadAllButtonState();
                 this.updateQueuePanel?.();
-                this.showNotification(`Downloaded: ${progress.filename}`, 'success', {
+                this.showNotification(alreadyExists
+                    ? `Already downloaded: ${progress.filename}`
+                    : `Downloaded: ${progress.filename}`, 'success', {
                     contextMenuModel: downloadFolderContext
                 });
 
@@ -1251,7 +1263,8 @@ export const resolveDownloadMethods = {
                         downloadBtn: currentElements.downloadBtn,
                         category,
                         downloadPath: progress.path || info.downloadPath || '',
-                        downloadDirectory: progress.directory || info.downloadDirectory || ''
+                        downloadDirectory: progress.directory || info.downloadDirectory || '',
+                        alreadyExists
                     });
                 }, 500);
 
