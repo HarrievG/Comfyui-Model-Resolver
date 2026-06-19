@@ -556,6 +556,13 @@ export const searchPanelMethods = {
         return !!(data.popular || data.model_list || data.huggingface || data.civitai || data.civarchive || data.lora_manager_archive);
     },
 
+    isAnyModelSearchResult(result) {
+        if (Array.isArray(result)) {
+            return result.some(item => this.isAnyModelSearchResult(item));
+        }
+        return Boolean(result && typeof result === 'object' && (result.any_model_match || result.base_model_fallback));
+    },
+
     hasSearchResultsForMissing(missing = {}) {
         if (missing?.download_source?.url) return true;
         const state = this.searchResultCache?.get(this.getMissingSearchKey(missing));

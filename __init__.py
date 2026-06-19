@@ -1337,6 +1337,21 @@ class ModelResolverExtension:
                                     )
                             return payload
 
+                        def mark_any_model_fallback(result):
+                            if isinstance(result, list):
+                                return [
+                                    mark_any_model_fallback(item)
+                                    for item in result
+                                ]
+                            if not isinstance(result, dict):
+                                return result
+
+                            marked = dict(result)
+                            marked["any_model_match"] = True
+                            marked["base_model_fallback"] = True
+                            marked["requested_base_model"] = base_model_context
+                            return marked
+
                         def search_local_sources():
                             source_results = {"popular": None, "model_list": None}
                             source_found = False
@@ -1521,6 +1536,32 @@ class ModelResolverExtension:
                                     use_html_fallback=civitai_use_html_fallback,
                                 )
                                 log_search_result("civitai", civitai_result)
+                                if not civitai_result and base_model_context:
+                                    log_info(
+                                        "Search [civitai] retry any model "
+                                        + format_log_fields(
+                                            file=filename,
+                                            cat=category,
+                                            base=base_model_context,
+                                        )
+                                    )
+                                    civitai_result = search_civitai_for_file(
+                                        filename,
+                                        model_type=category,
+                                        base_model_context=None,
+                                        session_token=civitai_session_token or None,
+                                        candidate_limit=civitai_candidate_limit,
+                                        use_trpc_search=civitai_use_trpc_search,
+                                        use_html_fallback=civitai_use_html_fallback,
+                                    )
+                                    log_search_result(
+                                        "civitai/any_model",
+                                        civitai_result,
+                                    )
+                                    if civitai_result:
+                                        civitai_result = mark_any_model_fallback(
+                                            civitai_result
+                                        )
                                 if civitai_result:
                                     source_results["civitai"] = civitai_result
                                     source_found = True
@@ -1577,6 +1618,29 @@ class ModelResolverExtension:
                                         limit=civarchive_candidate_limit,
                                     )
                                     log_search_result("civarchive", civarchive_result)
+                                    if not civarchive_result and base_model_context:
+                                        log_info(
+                                            "Search [civarchive] retry any model "
+                                            + format_log_fields(
+                                                file=filename,
+                                                cat=category,
+                                                base=base_model_context,
+                                            )
+                                        )
+                                        civarchive_result = search_civarchive_for_file(
+                                            filename,
+                                            model_type=category,
+                                            base_model_context=None,
+                                            limit=civarchive_candidate_limit,
+                                        )
+                                        log_search_result(
+                                            "civarchive/any_model",
+                                            civarchive_result,
+                                        )
+                                        if civarchive_result:
+                                            civarchive_result = mark_any_model_fallback(
+                                                civarchive_result
+                                            )
                                     if civarchive_result:
                                         source_results["civarchive"] = civarchive_result
                                         source_found = True
@@ -1605,6 +1669,32 @@ class ModelResolverExtension:
                                 "lora_manager_archive",
                                 lora_manager_archive_result,
                             )
+                            if not lora_manager_archive_result and base_model_context:
+                                log_info(
+                                    "Search [lora_manager_archive] retry any model "
+                                    + format_log_fields(
+                                        file=filename,
+                                        cat=category,
+                                        base=base_model_context,
+                                    )
+                                )
+                                lora_manager_archive_result = (
+                                    search_lora_manager_archive_for_file(
+                                        filename,
+                                        model_type=category,
+                                        base_model_context=None,
+                                    )
+                                )
+                                log_search_result(
+                                    "lora_manager_archive/any_model",
+                                    lora_manager_archive_result,
+                                )
+                                if lora_manager_archive_result:
+                                    lora_manager_archive_result = (
+                                        mark_any_model_fallback(
+                                            lora_manager_archive_result
+                                        )
+                                    )
                             return (
                                 {
                                     "lora_manager_archive": lora_manager_archive_result

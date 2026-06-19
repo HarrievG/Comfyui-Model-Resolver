@@ -1623,6 +1623,8 @@ export const resolveDownloadMethods = {
                         || null;
 
                     const found = this.hasSearchResults(data);
+                    const foundViaAnyModel = this.isAnyModelSearchResult?.(data[source]);
+                    const foundMessage = foundViaAnyModel ? 'Found (Any Model)' : 'Found';
                     anyFound = anyFound || found;
                     hadError = hadError || Boolean(sourceError);
                     state.results = this.mergeSearchResults(state.results, data, {
@@ -1635,7 +1637,7 @@ export const resolveDownloadMethods = {
                     this.setSourceProgress(state, source, {
                         status: sourceError ? 'error' : (found ? 'found' : 'none'),
                         percent: 100,
-                        message: sourceError ? 'Error' : (found ? 'Found' : 'No match'),
+                        message: sourceError ? 'Error' : (found ? foundMessage : 'No match'),
                         error: sourceError || null
                     }, missing, { workflowKey });
 
