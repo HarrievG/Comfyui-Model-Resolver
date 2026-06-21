@@ -89,7 +89,7 @@ export const searchPanelMethods = {
             .replace(/[^a-z0-9]+/g, '');
     },
 
-    resolveBaseModelAlias(value = '') {
+    resolveBaseModelAliasExact(value = '') {
         const token = this.normalizeBaseModelToken(value);
         if (!token) return '';
         for (const entry of this.getBaseModelAliases()) {
@@ -98,6 +98,15 @@ export const searchPanelMethods = {
                 return entry.value;
             }
         }
+        return '';
+    },
+
+    resolveBaseModelAlias(value = '') {
+        const token = this.normalizeBaseModelToken(value);
+        if (!token) return '';
+        const exact = this.resolveBaseModelAliasExact(value);
+        if (exact) return exact;
+
         for (const entry of this.getBaseModelAliases()) {
             const aliases = [entry.value, ...(entry.aliases || [])];
             if (aliases.some(alias => {
@@ -120,8 +129,8 @@ export const searchPanelMethods = {
             .filter(Boolean);
         const directoryParts = parts.filter(part => !/\.(safetensors|ckpt|pt|pth|bin|gguf|onnx)$/i.test(part));
 
-        for (const part of directoryParts.slice(0, 3)) {
-            const exact = this.resolveBaseModelAlias(part);
+        for (const part of directoryParts) {
+            const exact = this.resolveBaseModelAliasExact(part);
             if (exact) return exact;
         }
 
@@ -146,53 +155,106 @@ export const searchPanelMethods = {
     },
 
     getMissingAutoBaseModel(missing = {}) {
+        return this.getMissingAutoBaseModelInfo(missing).value;
+    },
+
+    getMissingAutoBaseModelInfo(missing = {}) {
         const searchSuggestion = this.getCachedSearchSuggestionData?.(missing) || {};
         const directCandidates = [
-            missing?.civitai_info?.base_model,
-            missing?.civitai_info?.baseModel,
-            missing?.civitai_search_result?.base_model,
-            missing?.civitai_search_result?.baseModel,
-            missing?.download_source?.base_model,
-            missing?.download_source?.baseModel
+            { value: missing?.civitai_info?.base_model, source: 'model metadata' },
+            { value: missing?.civitai_info?.baseModel, source: 'model metadata' },
+            { value: missing?.civitai_search_result?.base_model, source: 'search result metadata' },
+            { value: missing?.civitai_search_result?.baseModel, source: 'search result metadata' },
+            { value: missing?.download_source?.base_model, source: 'selected download source' },
+            { value: missing?.download_source?.baseModel, source: 'selected download source' }
         ];
 
-        for (const value of directCandidates) {
+        for (const { value, source } of directCandidates) {
             const canonical = this.resolveBaseModelAlias(value);
-            if (canonical) return canonical;
+            if (canonical) {
+                return {
+                    value: canonical,
+                    source,
+                    message: `Auto selected ${canonical} from ${source}.`
+                };
+            }
         }
 
         const savedTarget = this.getSavedDownloadTargetSelection?.(missing) || {};
         const pathCandidates = [
-            this.getMissingLocalBaseModel(missing, 70),
-            savedTarget.subfolder
+            { value: this.getMissingLocalBaseModel(missing, 70), source: 'best local match' },
+            { value: savedTarget.subfolder, source: 'selected subfolder' }
         ];
 
-        for (const value of pathCandidates) {
+        for (const { value, source } of pathCandidates) {
             const canonical = this.resolveBaseModelAliasFromPath(value)
-                || this.resolveBaseModelAlias(value);
-            if (canonical) return canonical;
+                || this.resolveBaseModelAliasExact(value);
+            if (canonical) {
+                return {
+                    value: canonical,
+                    source,
+                    message: `Auto selected ${canonical} from the ${source}.`
+                };
+            }
         }
 
         const cachedCandidates = [
-            searchSuggestion.base_model,
-            searchSuggestion.baseModel
+            { value: searchSuggestion.base_model, source: 'cached search result' },
+            { value: searchSuggestion.baseModel, source: 'cached search result' }
         ];
-        for (const value of cachedCandidates) {
+        for (const { value, source } of cachedCandidates) {
             const canonical = this.resolveBaseModelAlias(value);
-            if (canonical) return canonical;
+            if (canonical) {
+                return {
+                    value: canonical,
+                    source,
+                    message: `Auto selected ${canonical} from ${source} metadata.`
+                };
+            }
         }
 
         const fallbackPathCandidates = [
-            missing?.original_path,
-            missing?.name,
-            searchSuggestion.path
+            { value: missing?.original_path, source: 'missing model path' },
+            { value: missing?.name, source: 'missing model name' },
+            { value: searchSuggestion.path, source: 'cached search path' }
         ];
-        for (const value of fallbackPathCandidates) {
+        for (const { value, source } of fallbackPathCandidates) {
             const canonical = this.resolveBaseModelAliasFromPath(value);
-            if (canonical) return canonical;
+            if (canonical) {
+                return {
+                    value: canonical,
+                    source,
+                    message: `Auto selected ${canonical} from the ${source}.`
+                };
+            }
         }
 
-        return this.getDominantWorkflowBaseModel();
+        const workflowFallback = this.getDominantWorkflowBaseModel();
+        if (workflowFallback) {
+            return {
+                value: workflowFallback,
+                source: 'workflow fallback',
+                message: `This model was not recognized in the Base Models list, so Auto is using the workflow-wide fallback: ${workflowFallback}. If this looks wrong, open Options and update the local database / Base Models list.`
+            };
+        }
+
+        return {
+            value: '',
+            source: 'none',
+            message: 'Auto could not detect a base model for this entry. Open Options and update the local database / Base Models list, or choose a model manually.'
+        };
+    },
+
+    getSearchBaseModelTooltip(missing = {}) {
+        const state = this.getSearchState(missing);
+        const selected = state.selectedBaseModel || this.getDefaultSearchBaseModel();
+        if (selected === 'none') {
+            return 'Search will use Any model and will not filter by base model.';
+        }
+        if (selected && selected !== 'auto') {
+            return `Search model filter is manually set to ${selected}.`;
+        }
+        return this.getMissingAutoBaseModelInfo(missing).message;
     },
 
     getBaseModelAliases() {
@@ -989,6 +1051,16 @@ export const searchPanelMethods = {
     /**
      * Update source selector buttons and helper text for one card
      */
+    updateSearchBaseModelHelp(container, missing) {
+        if (!container || !missing) return;
+        const baseId = `search-base-select-${missing.node_id}-${missing.widget_index}`;
+        const labelEl = container.querySelector(`label[for="${baseId}"]`);
+        const helpEl = labelEl?.querySelector('.mr-search-model-help');
+        if (helpEl) {
+            helpEl.setAttribute('data-tooltip', this.getSearchBaseModelTooltip(missing));
+        }
+    },
+
     syncSearchSourceUi(missing, container) {
         if (!container) return;
 
@@ -1009,6 +1081,7 @@ export const searchPanelMethods = {
                 state.selectedBaseModel = this.getDefaultSearchBaseModel();
             }
             this.setDropdownValue(baseEl, state.selectedBaseModel, this.getSearchBaseModelLabel(state.selectedBaseModel, missing));
+            this.updateSearchBaseModelHelp(container, missing);
         }
     },
 
@@ -1071,6 +1144,7 @@ export const searchPanelMethods = {
                 const missingKey = baseEl.dataset?.missingSearchKey || '';
                 const missing = (this.missingModels || []).find(item => this.getMissingSearchKey(item) === missingKey) || {};
                 this.setDropdownValue(baseEl, value, this.getSearchBaseModelLabel(value, missing));
+                this.updateSearchBaseModelHelp(container, missing);
             }
         });
     },
@@ -1487,6 +1561,7 @@ export const searchPanelMethods = {
         const state = this.getSearchState(missing);
         const selectedSource = state.selectedSource || 'all';
         const selectedBaseModel = state.selectedBaseModel || this.getDefaultSearchBaseModel();
+        const baseModelTooltip = this.getSearchBaseModelTooltip(missing);
         const buttonText = options.buttonText
             || (this.hasSearchResultsForMissing(missing) ? 'Search Again' : 'Search');
 
@@ -1502,7 +1577,7 @@ export const searchPanelMethods = {
         html += `</div>`;
         html += `</div>`;
         html += `<div class="mr-search-source-picker mr-search-base-picker">`;
-        html += `<label class="mr-search-source-picker-label" for="${searchBaseSelectId}">Model</label>`;
+        html += `<label class="mr-search-source-picker-label" for="${searchBaseSelectId}">Model <span class="mr-tooltip-badge mr-search-model-help" data-tooltip="${this.escapeHtml(baseModelTooltip)}" tabindex="0">?</span></label>`;
         html += `<div class="mr-download-target-wrap">`;
         html += `<input id="${searchBaseSelectId}" class="mr-download-target-input mr-search-base-select" type="text" readonly autocomplete="off" data-value="${this.escapeHtml(selectedBaseModel)}" data-missing-search-key="${this.escapeHtml(this.getMissingSearchKey(missing))}" value="${this.escapeHtml(this.getSearchBaseModelLabel(selectedBaseModel, missing))}">`;
         html += `<div id="${searchBaseListId}" class="mr-download-target-list mr-search-base-list"></div>`;
