@@ -1968,17 +1968,31 @@ export const resolveDownloadMethods = {
         if (baseSelect && baseList && baseSelect.dataset.mlSearchBaseBound !== 'true') {
             baseSelect.dataset.mlSearchBaseBound = 'true';
 
-            const renderBaseOptions = () => {
-                const options = this.getKnownBaseModelOptions();
-                baseList.innerHTML = options
+            const renderBaseOptions = (filterText = '') => {
+                const filter = String(filterText || '').trim().toLowerCase();
+                const normalizedFilter = this.normalizeBaseModelToken?.(filter) || filter.replace(/[^a-z0-9]+/g, '');
+                const options = this.getKnownBaseModelOptions()
                     .map(option => {
                         const label = option.value === 'auto'
                             ? this.getSearchBaseModelLabel('auto', missing)
                             : option.label;
+                        return { ...option, label };
+                    })
+                    .filter(option => {
+                        if (!filter) return true;
+                        const searchText = `${option.value} ${option.label}`.toLowerCase();
+                        const normalizedSearchText = this.normalizeBaseModelToken?.(searchText)
+                            || searchText.replace(/[^a-z0-9]+/g, '');
+                        return searchText.includes(filter)
+                            || (normalizedFilter && normalizedSearchText.includes(normalizedFilter));
+                    });
+                baseList.innerHTML = options
+                    .map(option => {
+                        const label = option.label;
                         return `<div class="mr-download-target-option" data-value="${encodeURIComponent(option.value)}" data-label="${encodeURIComponent(label)}">${this.escapeHtml(label)}</div>`;
                     })
                     .join('');
-                baseList.style.display = 'block';
+                baseList.style.display = options.length ? 'block' : 'none';
                 baseList.querySelectorAll('.mr-download-target-option').forEach(optionEl => {
                     optionEl.addEventListener('mousedown', (event) => {
                         event.preventDefault();
@@ -1998,15 +2012,25 @@ export const resolveDownloadMethods = {
             };
 
             this.enableWheelScrollChaining(baseList);
-            baseSelect.addEventListener('focus', () => renderBaseOptions());
-            baseSelect.addEventListener('click', () => renderBaseOptions());
+            baseSelect.addEventListener('focus', () => renderBaseOptions(''));
+            baseSelect.addEventListener('click', () => renderBaseOptions(''));
+            baseSelect.addEventListener('input', () => {
+                const value = this.getSearchBaseModelInputValue(baseSelect.value, missing);
+                baseSelect.dataset.value = value;
+                this.setSearchBaseModel(missing, value, container, { sync: false });
+                renderBaseOptions(baseSelect.value);
+            });
             baseSelect.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                if (event.key === 'Enter' || event.key === 'ArrowDown') {
                     event.preventDefault();
-                    renderBaseOptions();
+                    renderBaseOptions(baseSelect.value);
                 }
             });
-            baseSelect.addEventListener('blur', hideBaseList);
+            baseSelect.addEventListener('blur', () => {
+                const value = this.getDropdownValue(baseSelect);
+                this.setDropdownValue(baseSelect, value, this.getSearchBaseModelLabel(value, missing));
+                hideBaseList();
+            });
             this.syncSearchSourceUi(missing, container);
         }
 

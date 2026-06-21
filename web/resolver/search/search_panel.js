@@ -408,6 +408,25 @@ export const searchPanelMethods = {
         return option?.label || value || 'Auto';
     },
 
+    getSearchBaseModelInputValue(text = '', missing = {}) {
+        const raw = String(text || '').trim();
+        if (!raw) return 'none';
+        const normalized = this.normalizeBaseModelToken(raw);
+        for (const option of this.getKnownBaseModelOptions()) {
+            const label = option.value === 'auto'
+                ? this.getSearchBaseModelLabel('auto', missing)
+                : option.label;
+            const optionTokens = [
+                option.value,
+                label
+            ].flatMap(value => [...this.getBaseModelTokenVariants(value)]);
+            if (optionTokens.some(token => token === normalized)) {
+                return option.value;
+            }
+        }
+        return this.resolveBaseModelAliasExact(raw) || raw;
+    },
+
     getSearchBaseModelContext(missing = {}) {
         const state = this.getSearchState(missing);
         const selected = state.selectedBaseModel || this.getDefaultSearchBaseModel();
@@ -1116,7 +1135,8 @@ export const searchPanelMethods = {
         this.syncSearchSourceUi(missing, container);
     },
 
-    setSearchBaseModel(missing, baseModel, container) {
+    setSearchBaseModel(missing, baseModel, container, options = {}) {
+        const { sync = true } = options || {};
         const state = this.getSearchState(missing);
         const nextBaseModel = baseModel || this.getDefaultSearchBaseModel();
         const changed = (state.selectedBaseModel || this.getDefaultSearchBaseModel()) !== nextBaseModel;
@@ -1143,7 +1163,11 @@ export const searchPanelMethods = {
         }
         state.selectedBaseModel = nextBaseModel;
         this.persistSearchStateForActiveWorkflow();
-        this.syncSearchSourceUi(missing, container);
+        if (sync) {
+            this.syncSearchSourceUi(missing, container);
+        } else {
+            this.updateSearchBaseModelHelp(container, missing);
+        }
         this.refreshSearchUiForMissing?.(missing, state);
     },
 
@@ -1600,7 +1624,7 @@ export const searchPanelMethods = {
         html += `<div class="mr-search-source-picker mr-search-base-picker">`;
         html += `<label class="mr-search-source-picker-label" for="${searchBaseSelectId}">Model <span class="mr-tooltip-badge mr-search-model-help" data-tooltip="${this.escapeHtml(baseModelTooltip)}" tabindex="0">?</span></label>`;
         html += `<div class="mr-download-target-wrap">`;
-        html += `<input id="${searchBaseSelectId}" class="mr-download-target-input mr-search-base-select" type="text" readonly autocomplete="off" data-value="${this.escapeHtml(selectedBaseModel)}" data-missing-search-key="${this.escapeHtml(this.getMissingSearchKey(missing))}" value="${this.escapeHtml(this.getSearchBaseModelLabel(selectedBaseModel, missing))}">`;
+        html += `<input id="${searchBaseSelectId}" class="mr-download-target-input mr-search-base-select" type="text" autocomplete="off" data-value="${this.escapeHtml(selectedBaseModel)}" data-missing-search-key="${this.escapeHtml(this.getMissingSearchKey(missing))}" value="${this.escapeHtml(this.getSearchBaseModelLabel(selectedBaseModel, missing))}">`;
         html += `<div id="${searchBaseListId}" class="mr-download-target-list mr-search-base-list"></div>`;
         html += `</div>`;
         html += `</div>`;

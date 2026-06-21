@@ -1447,7 +1447,7 @@ export const downloadTargetMethods = {
         html += `<label class="mr-download-target-label" for="${selectId}">Folder</label>`;
         html += `<label class="mr-download-target-label" for="${subfolderId}">Subfolder (optional)</label>`;
         html += `<div class="mr-download-target-wrap">`;
-        html += `<input id="${selectId}" class="mr-download-target-input mr-download-target-select" type="text" readonly autocomplete="off" data-value="${this.escapeHtml(selectedCategory)}" value="${this.escapeHtml(this.getCategoryDisplayName(selectedCategory))}">`;
+        html += `<input id="${selectId}" class="mr-download-target-input mr-download-target-select" type="text" autocomplete="off" data-value="${this.escapeHtml(selectedCategory)}" value="${this.escapeHtml(this.getCategoryDisplayName(selectedCategory))}">`;
         html += `<div id="${categoryListId}" class="mr-download-target-list"></div>`;
         html += `</div>`;
         html += `<div class="mr-download-target-wrap">`;
@@ -1559,13 +1559,22 @@ export const downloadTargetMethods = {
             });
         };
 
-        const populateCategoryOptions = () => {
+        const populateCategoryOptions = (filterText = '') => {
             if (!categoryListEl) return;
+            const filter = String(filterText || '').trim().toLowerCase();
+            const normalizedFilter = filter.replace(/[^a-z0-9]+/g, '');
             const options = this.getDownloadCategoryOptions(this.getDropdownValue(categoryEl) || 'checkpoints')
                 .map(category => ({
                     value: category,
                     label: this.getCategoryDisplayName(category)
-                }));
+                }))
+                .filter(option => {
+                    if (!filter) return true;
+                    const searchText = `${option.value} ${option.label}`.toLowerCase();
+                    const normalizedSearchText = searchText.replace(/[^a-z0-9]+/g, '');
+                    return searchText.includes(filter)
+                        || (normalizedFilter && normalizedSearchText.includes(normalizedFilter));
+                });
             renderOptions(categoryListEl, options, (value, label) => {
                 this.setDropdownValue(categoryEl, value, label);
                 subfolderEl.value = '';
@@ -1614,15 +1623,43 @@ export const downloadTargetMethods = {
 
         if (categoryListEl && categoryEl.dataset.mlCategoryBound !== 'true') {
             categoryEl.dataset.mlCategoryBound = 'true';
-            categoryEl.addEventListener('focus', () => populateCategoryOptions());
-            categoryEl.addEventListener('click', () => populateCategoryOptions());
+            categoryEl.addEventListener('focus', () => populateCategoryOptions(''));
+            categoryEl.addEventListener('click', () => populateCategoryOptions(''));
+            categoryEl.addEventListener('input', () => {
+                const typed = categoryEl.value.trim();
+                const category = typed ? this.normalizeDownloadCategory(typed) : '';
+                const previousCategory = this.getDropdownValue(categoryEl);
+                categoryEl.dataset.value = category;
+                if (category !== previousCategory) {
+                    subfolderEl.value = '';
+                    subfolderEl.dataset.baseDirectory = '';
+                    listEl.innerHTML = '';
+                    listEl.style.display = 'none';
+                }
+                this.saveDownloadTargetSelection(missing, {
+                    category,
+                    subfolder: subfolderEl.value || '',
+                    subfolderBaseDirectory: subfolderEl.dataset.baseDirectory || '',
+                    categoryTouched: true,
+                    subfolderTouched: Boolean(subfolderEl.value)
+                });
+                this.syncDownloadTargetFolderContext(categoryEl, subfolderEl);
+                populateCategoryOptions(typed);
+            });
             categoryEl.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                if (event.key === 'Enter' || event.key === 'ArrowDown') {
                     event.preventDefault();
-                    populateCategoryOptions();
+                    populateCategoryOptions(categoryEl.value);
                 }
             });
-            categoryEl.addEventListener('blur', () => hideList(categoryListEl));
+            categoryEl.addEventListener('blur', () => {
+                const category = this.getDropdownValue(categoryEl);
+                const knownCategories = this.getKnownDownloadCategorySet();
+                if (category && knownCategories.has(this.normalizeDownloadCategory(category))) {
+                    this.setDropdownValue(categoryEl, category, this.getCategoryDisplayName(category));
+                }
+                hideList(categoryListEl);
+            });
         }
 
         subfolderEl.addEventListener('focus', () => {
