@@ -1858,21 +1858,43 @@
     gap: 10px;
     margin-bottom: 0;
 }
-.mr-download-section .mr-search-source-bar > .mr-btn {
+.mr-search-button-picker {
+    width: 82px;
+    min-width: 82px;
+}
+.mr-download-section .mr-search-button-picker > .mr-btn {
     height: var(--mr-download-control-height);
     min-height: var(--mr-download-control-height);
-    padding: 0 12px;
+    width: 100%;
+    padding: 0 10px;
     border-radius: 9px;
     font-size: 12px;
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: normal;
 }
-.mr-missing-browser .mr-download-section .mr-search-source-bar > .mr-btn {
+.mr-search-btn-text {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    line-height: 1.05;
+    text-align: center;
+}
+.mr-search-btn-line {
+    display: block;
+}
+.mr-missing-browser .mr-download-section .mr-search-button-picker > .mr-btn {
     background: var(--mr-missing-control-bg, rgba(255,255,255,0.035));
     border-color: var(--mr-missing-control-border, rgba(255,255,255,0.105));
     border-radius: var(--mr-missing-control-radius, 7px);
     box-shadow: var(--mr-missing-control-shadow, none);
 }
-.mr-missing-browser .mr-download-section .mr-search-source-bar > .mr-btn:hover:not(:disabled) {
+.mr-missing-browser .mr-download-section .mr-search-button-picker > .mr-btn:hover:not(:disabled) {
     background: var(--mr-missing-control-bg-hover, rgba(255,255,255,0.06));
     border-color: var(--mr-missing-control-border-hover, rgba(255,255,255,0.17));
     transform: none;
@@ -5545,7 +5567,7 @@
 #model-resolver-modal .mr-missing-detail-pane .mr-local-link-btn,
 #model-resolver-modal .mr-missing-detail-pane .mr-combo-refresh-btn,
 #model-resolver-modal .mr-missing-detail-pane .mr-search-result-action-btn,
-#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-source-bar > .mr-btn {
+#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-button-picker > .mr-btn {
     background: var(--mr-missing-control-bg, rgba(255,255,255,0.035));
     border: 1px solid var(--mr-missing-control-border, rgba(255,255,255,0.105));
     border-radius: var(--mr-missing-control-radius, 7px);
@@ -5556,7 +5578,7 @@
 #model-resolver-modal .mr-missing-detail-pane .mr-local-link-btn:hover:not(:disabled),
 #model-resolver-modal .mr-missing-detail-pane .mr-combo-refresh-btn:hover:not(:disabled),
 #model-resolver-modal .mr-missing-detail-pane .mr-search-result-action-btn:hover:not(:disabled),
-#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-source-bar > .mr-btn:hover:not(:disabled) {
+#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-button-picker > .mr-btn:hover:not(:disabled) {
     background: var(--mr-missing-control-bg-hover, rgba(255,255,255,0.06));
     border-color: var(--mr-missing-control-border-hover, rgba(255,255,255,0.17));
     color: var(--mr-text);
@@ -5565,7 +5587,7 @@
 #model-resolver-modal .mr-missing-detail-pane .mr-local-link-btn:focus-visible,
 #model-resolver-modal .mr-missing-detail-pane .mr-combo-refresh-btn:focus-visible,
 #model-resolver-modal .mr-missing-detail-pane .mr-search-result-action-btn:focus-visible,
-#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-source-bar > .mr-btn:focus-visible {
+#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-button-picker > .mr-btn:focus-visible {
     outline: none;
     border-color: var(--mr-missing-control-focus-border, rgba(114,211,138,0.30));
     box-shadow: 0 0 0 2px var(--mr-missing-control-focus-ring, rgba(114,211,138,0.08)) !important;
@@ -5655,19 +5677,22 @@
     border-color: transparent;
     border-radius: 0;
 }
-#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-source-bar > .mr-btn {
-    min-height: var(--mr-missing-search-button-height, 34px);
-    height: var(--mr-missing-search-button-height, 34px);
-    padding: 0 12px;
+#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-button-picker > .mr-btn {
+    --mr-missing-search-button-height: var(--mr-missing-field-height, 38px);
+    width: 82px;
+    min-width: 82px;
+    min-height: var(--mr-missing-search-button-height);
+    height: var(--mr-missing-search-button-height);
+    padding: 0 10px;
     font-size: 12px;
     font-weight: 700;
 }
-#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-source-bar > .mr-btn .mr-btn-icon {
+#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-button-picker > .mr-btn .mr-btn-icon {
     width: var(--mr-missing-icon-size, 13px);
     height: var(--mr-missing-icon-size, 13px);
     font-size: var(--mr-missing-icon-size, 13px);
 }
-#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-source-bar > .mr-btn .mr-btn-icon svg {
+#model-resolver-modal .mr-missing-detail-pane .mr-download-section .mr-search-button-picker > .mr-btn .mr-btn-icon svg {
     width: var(--mr-missing-icon-size, 13px);
     height: var(--mr-missing-icon-size, 13px);
     display: block;

@@ -435,6 +435,30 @@ export const searchPanelMethods = {
         return selected;
     },
 
+    getSearchButtonLabelLines(text = '') {
+        const label = String(text || '').replace(/\s+/g, ' ').trim() || 'Search Online';
+        const normalized = label.toLowerCase();
+        if (normalized === 'search' || normalized === 'search online') {
+            return ['Online'];
+        }
+        if (normalized === 'search again') {
+            return ['Again'];
+        }
+        const searchingMatch = label.match(/^Searching(?:\s+(.+?))?\.{0,3}$/i);
+        if (searchingMatch) {
+            return ['Searching'];
+        }
+        return label.split(' ');
+    },
+
+    renderSearchButtonContent(text = '') {
+        const lines = this.getSearchButtonLabelLines(text);
+        const labelHtml = lines
+            .map(line => `<span class="mr-search-btn-line">${this.escapeHtml(line)}</span>`)
+            .join('');
+        return `${this.getSearchIconHtml()} <span class="mr-search-btn-text">${labelHtml}</span>`;
+    },
+
     getBackgroundSearchJobKey(workflowKey, missingSearchKey) {
         return `${workflowKey || 'workflow'}\n${missingSearchKey || 'missing'}`;
     },
@@ -527,8 +551,8 @@ export const searchPanelMethods = {
             const isRunning = Boolean(currentState.activeSearchRunId);
             searchBtn.disabled = isRunning;
             searchBtn.innerHTML = isRunning
-                ? `${this.getSearchIconHtml()} Searching...`
-                : `${this.getSearchIconHtml()} Search Again`;
+                ? this.renderSearchButtonContent('Searching...')
+                : this.renderSearchButtonContent('Search Again');
         }
     },
 
@@ -1158,7 +1182,9 @@ export const searchPanelMethods = {
             const searchBtn = container?.querySelector?.(`#search-${missing.node_id}-${missing.widget_index}`);
             if (searchBtn) {
                 searchBtn.disabled = false;
-                searchBtn.innerHTML = `${this.getSearchIconHtml()} ${this.hasSearchResultsForMissing(missing) ? 'Search Again' : 'Search'}`;
+                searchBtn.innerHTML = this.renderSearchButtonContent(
+                    this.hasSearchResultsForMissing(missing) ? 'Search Again' : 'Search Online'
+                );
             }
         }
         state.selectedBaseModel = nextBaseModel;
@@ -1608,12 +1634,15 @@ export const searchPanelMethods = {
         const selectedBaseModel = state.selectedBaseModel || this.getDefaultSearchBaseModel();
         const baseModelTooltip = this.getSearchBaseModelTooltip(missing);
         const buttonText = options.buttonText
-            || (this.hasSearchResultsForMissing(missing) ? 'Search Again' : 'Search');
+            || (this.hasSearchResultsForMissing(missing) ? 'Search Again' : 'Search Online');
 
         let html = `<div id="${searchSourcesId}" class="mr-search-source-bar">`;
+        html += `<div class="mr-search-source-picker mr-search-button-picker">`;
+        html += `<label class="mr-search-source-picker-label" for="search-${missing.node_id}-${missing.widget_index}">Search</label>`;
         html += `<button id="search-${missing.node_id}-${missing.widget_index}" class="mr-btn mr-btn-link">`;
-        html += `${this.getSearchIconHtml()} ${buttonText}`;
+        html += this.renderSearchButtonContent(buttonText);
         html += `</button>`;
+        html += `</div>`;
         html += `<div class="mr-search-source-picker">`;
         html += `<label class="mr-search-source-picker-label" for="${searchSourceSelectId}">Source</label>`;
         html += `<div class="mr-download-target-wrap">`;

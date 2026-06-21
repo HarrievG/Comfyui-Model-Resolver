@@ -1516,7 +1516,7 @@ export const resolveDownloadMethods = {
 
             if (searchBtn) {
                 searchBtn.disabled = true;
-                searchBtn.innerHTML = `${this.getSearchIconHtml()} Searching ${selectedSourceLabel}...`;
+                searchBtn.innerHTML = this.renderSearchButtonContent(`Searching ${selectedSourceLabel}...`);
             }
             if (resultsDiv) {
                 resultsDiv.classList.remove('mr-is-hidden');
@@ -1737,7 +1737,7 @@ export const resolveDownloadMethods = {
             }
             if (searchBtn) {
                 searchBtn.disabled = false;
-                searchBtn.innerHTML = `${this.getSearchIconHtml()} Search Again`;
+                searchBtn.innerHTML = this.renderSearchButtonContent('Search Again');
             }
             this.persistSearchStateForWorkflow(workflowKey, missing, state);
             this.refreshSearchUiForMissing(missing, state, { workflowKey });
