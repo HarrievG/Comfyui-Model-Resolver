@@ -12,6 +12,11 @@ from difflib import SequenceMatcher
 
 from .log_system.log_funcs import log_debug, log_info, log_warn, log_error, log_exception
 
+try:
+    from rapidfuzz import fuzz as rapidfuzz_fuzz
+except ImportError:
+    rapidfuzz_fuzz = None
+
 
 def normalize_filename(filename: str) -> str:
     """
@@ -45,7 +50,7 @@ def calculate_similarity(str1: str, str2: str) -> float:
     """
     Calculate similarity score between two strings (0.0 to 1.0).
 
-    Uses SequenceMatcher to compute a ratio.
+    Uses RapidFuzz when available, with SequenceMatcher as a fallback.
 
     Args:
         str1: First string
@@ -54,6 +59,9 @@ def calculate_similarity(str1: str, str2: str) -> float:
     Returns:
         Similarity score from 0.0 (completely different) to 1.0 (identical)
     """
+    if rapidfuzz_fuzz is not None:
+        return rapidfuzz_fuzz.ratio(str1, str2) / 100.0
+
     return SequenceMatcher(None, str1, str2).ratio()
 
 
@@ -190,7 +198,7 @@ def find_matches(
             # Exact match after normalization = 100% confidence
             similarity = 1.0
         else:
-            # Calculate similarity using SequenceMatcher
+            # Calculate similarity using the configured fuzzy matcher
             # This gives a ratio between 0.0 and 1.0 based on longest common subsequence
             similarity = calculate_similarity_with_normalization(
                 target_filename, candidate_filename
@@ -207,7 +215,7 @@ def find_matches(
             similarity = max(similarity, similarity_no_ext)
 
             # Cap similarity at 0.999 for non-exact matches to prevent false 100% scores
-            # SequenceMatcher can sometimes give 1.0 for very similar but not identical strings
+            # Fuzzy matchers can sometimes give 1.0 for very similar but not identical strings
             # due to normalization artifacts
             if similarity >= 0.999 and target_norm != candidate_norm:
                 similarity = 0.999

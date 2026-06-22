@@ -34,6 +34,17 @@ URL_PATTERN = re.compile(r'(https?://(?:huggingface\.co|civitai\.com)[^\s"\'<>\)
 MODEL_EXTENSIONS = (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".onnx", ".gguf")
 
 
+def get_path_identity(path: str) -> str:
+    """Return a stable path identity across symlinks/junctions."""
+    if not path:
+        return ""
+
+    try:
+        return os.path.normcase(os.path.realpath(os.path.abspath(path)))
+    except (OSError, ValueError):
+        return os.path.normcase(os.path.abspath(path))
+
+
 def strip_known_model_extension(filename: str) -> str:
     """Strip only known model extensions, preserving names like v4.0."""
     if not isinstance(filename, str):
@@ -132,18 +143,20 @@ def search_local_matches(
     for match in matches:
         model_dict = match["model"]
         absolute_path = model_dict.get("path", "")
-        if absolute_path:
-            absolute_path = os.path.normpath(absolute_path)
+        path_identity = get_path_identity(absolute_path) if absolute_path else ""
+        dedupe_key = path_identity or os.path.normcase(
+            model_dict.get("relative_path", "") or match.get("filename", "")
+        )
 
-        if absolute_path not in seen_absolute_paths:
-            seen_absolute_paths[absolute_path] = match
+        if dedupe_key not in seen_absolute_paths:
+            seen_absolute_paths[dedupe_key] = match
             deduplicated_matches.append(match)
         else:
-            existing_match = seen_absolute_paths[absolute_path]
+            existing_match = seen_absolute_paths[dedupe_key]
             if match["confidence"] > existing_match["confidence"]:
                 idx = deduplicated_matches.index(existing_match)
                 deduplicated_matches[idx] = match
-                seen_absolute_paths[absolute_path] = match
+                seen_absolute_paths[dedupe_key] = match
 
     return deduplicated_matches
 
@@ -532,18 +545,20 @@ def analyze_and_find_matches(
         for match in matches:
             model_dict = match["model"]
             absolute_path = model_dict.get("path", "")
-            if absolute_path:
-                absolute_path = os.path.normpath(absolute_path)
+            path_identity = get_path_identity(absolute_path) if absolute_path else ""
+            dedupe_key = path_identity or os.path.normcase(
+                model_dict.get("relative_path", "") or match.get("filename", "")
+            )
 
-            if absolute_path not in seen_absolute_paths:
-                seen_absolute_paths[absolute_path] = match
+            if dedupe_key not in seen_absolute_paths:
+                seen_absolute_paths[dedupe_key] = match
                 deduplicated_matches.append(match)
             else:
-                existing_match = seen_absolute_paths[absolute_path]
+                existing_match = seen_absolute_paths[dedupe_key]
                 if match["confidence"] > existing_match["confidence"]:
                     idx = deduplicated_matches.index(existing_match)
                     deduplicated_matches[idx] = match
-                    seen_absolute_paths[absolute_path] = match
+                    seen_absolute_paths[dedupe_key] = match
 
         return deduplicated_matches
 

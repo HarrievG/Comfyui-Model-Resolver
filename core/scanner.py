@@ -43,9 +43,25 @@ _MODEL_FILES_CACHE_AT: float = 0.0
 _MODEL_FILES_CACHE_TTL_SECONDS = 2.0
 
 
+def _path_identity(path: str) -> str:
+    """Return a stable identity for dedupe across symlinks/junctions."""
+    return os.path.normcase(os.path.realpath(os.path.abspath(path)))
+
+
 def _directory_identity(path: str) -> str:
     """Return a stable identity for loop detection across symlinks/junctions."""
-    return os.path.normcase(os.path.realpath(os.path.abspath(path)))
+    return _path_identity(path)
+
+
+def _model_identity(model: Dict[str, str]) -> str:
+    path = model.get("path", "")
+    if not path:
+        return ""
+
+    try:
+        return _path_identity(path)
+    except (OSError, ValueError):
+        return os.path.normcase(os.path.abspath(path))
 
 
 def get_model_directories() -> Dict[str, Tuple[List[str], set]]:
@@ -206,6 +222,8 @@ def scan_all_directories() -> List[Dict[str, str]]:
     """
     all_models = []
     directories = get_model_directories()
+    seen_scan_roots = set()
+    seen_models = set()
 
     for category, value in directories.items():
         # Skip categories that aren't typically model directories
@@ -245,8 +263,25 @@ def scan_all_directories() -> List[Dict[str, str]]:
 
         for directory_path in paths:
             try:
+                try:
+                    root_identity = _directory_identity(directory_path)
+                except (OSError, ValueError):
+                    root_identity = os.path.normcase(os.path.abspath(directory_path))
+
+                root_key = (category, root_identity)
+                if root_key in seen_scan_roots:
+                    continue
+                seen_scan_roots.add(root_key)
+
                 models = scan_directory(directory_path, extensions, category)
-                all_models.extend(models)
+                for model in models:
+                    identity = _model_identity(model)
+                    model_key = (model.get("category", category), identity)
+                    if identity and model_key in seen_models:
+                        continue
+                    if identity:
+                        seen_models.add(model_key)
+                    all_models.append(model)
                 #log_debug(f"Found {len(models)} models in {category}/{directory_path}")
             except Exception as e:
                 log_warn(f"Error scanning {category} directory {directory_path}: {e}")
