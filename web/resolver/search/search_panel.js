@@ -2111,7 +2111,7 @@ export const searchPanelMethods = {
     async refreshUrnLocalMatches(missing) {
         if (!missing?.civitai_info?.expected_filename || !this.contentElement) return;
 
-        const bodyId = `local-matches-body-${missing.node_id}-${missing.widget_index}`;
+        const bodyId = `local-matches-body-${this.getMissingModelDomKey(missing)}`;
         const container = this.contentElement.querySelector(`#${bodyId}`);
         if (container) {
             container.innerHTML = `<div class="mr-no-matches">Searching local matches for "${missing.civitai_info.expected_filename}"...</div>`;

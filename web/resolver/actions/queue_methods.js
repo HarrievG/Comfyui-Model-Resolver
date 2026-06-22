@@ -1280,8 +1280,7 @@ export const queueMethods = {
         this.rebuildPendingIndex();
         this.savePendingQueueForActiveWorkflow();
         // Update per-item selected bar
-        const m = { node_id: r.node_id, widget_index: r.widget_index, subgraph_id: r.subgraph_id, is_top_level: r.is_top_level };
-        this.updateSelectedBarForMissing?.(m);
+        this.updateSelectedBarForMissing?.(r);
         this.updateApplyPendingButton?.();
         this.updateQueuePanel();
         this.refreshMissingModelsBrowserFromCache?.();
@@ -1303,13 +1302,10 @@ export const queueMethods = {
     // Update selected bar for a specific missing model slot
     updateSelectedBarForMissing(missing) {
         if (!missing) return;
-        const nodeId = missing.node_id;
-        const widgetIndex = missing.widget_index;
-        const subgraphId = missing.subgraph_id || '';
-        const isTopLevel = missing.is_top_level !== false;
-        const key = `${nodeId}:${widgetIndex}:${subgraphId}:${isTopLevel ? 'T' : 'F'}`;
+        const key = this.getMissingModelKey(missing);
+        const domKey = this.getMissingModelDomKey(missing);
 
-        const selectedBar = document.getElementById(`selected-bar-${nodeId}-${widgetIndex}`);
+        const selectedBar = document.getElementById(`selected-bar-${domKey}`);
         if (!selectedBar) return;
 
         // Find selection for this slot
@@ -1360,8 +1356,8 @@ export const queueMethods = {
             selectedBar.removeAttribute('data-tooltip');
             selectedBar.oncontextmenu = null;
         }
-        const applyBtnId = `selected-apply-${nodeId}-${widgetIndex}`;
-        const removeBtnId = `selected-remove-${nodeId}-${widgetIndex}`;
+        const applyBtnId = `selected-apply-${domKey}`;
+        const removeBtnId = `selected-remove-${domKey}`;
 
         selectedBar.innerHTML = `<div class="mr-selected-bar-inner"${selectedContextAttrs}>`;
         selectedBar.innerHTML += `<span class="mr-selected-label">✓ Selected:</span>`;
@@ -1398,7 +1394,7 @@ export const queueMethods = {
         if (idx >= 0 && idx < this.pendingResolutions.length) {
             const r = this.pendingResolutions[idx];
             // Update the selected bar before removing
-            const m = { node_id: r.node_id, widget_index: r.widget_index, subgraph_id: r.subgraph_id, is_top_level: r.is_top_level };
+            const m = r;
 
             // Remove from array
             this.pendingResolutions.splice(idx, 1);
@@ -1438,11 +1434,7 @@ export const queueMethods = {
     },
 
     getResolutionQueueKey(resolution = {}) {
-        const nodeId = resolution.node_id ?? '';
-        const widgetIndex = resolution.widget_index ?? '';
-        const subgraphId = resolution.subgraph_id || '';
-        const scope = resolution.is_top_level !== false ? 'T' : 'F';
-        return `${nodeId}:${widgetIndex}:${subgraphId}:${scope}`;
+        return resolution.missing_key || this.getMissingModelKey(resolution);
     },
 
     getResolutionNodeRefs(missing = {}) {
@@ -1719,17 +1711,22 @@ export const queueMethods = {
             return;
         }
 
+        const missingKey = this.getMissingModelKey(missing);
         const resolution = {
+            missing_key: missingKey,
             node_id: missing.node_id,
             widget_index: missing.widget_index,
             resolved_path: resolvedModel.path,
             category: missing.category,
             resolved_model: resolvedModel,
             original_path: missing.original_path,
+            expected_filename: missing.expected_filename || missing.civitai_info?.expected_filename || missing.download_source?.filename,
+            filename: missing.filename,
+            urn_string: missing.urn_string,
             subgraph_id: missing.subgraph_id,
             is_top_level: missing.is_top_level,
             is_lora_v2: missing.is_lora_v2,
-            original_lora_name: missing.name || missing.original_path,
+            original_lora_name: missing.original_lora_name || missing.name || missing.original_path,
             nested_key: missing.nested_key,
             node_refs: this.getResolutionNodeRefs(missing),
             node_type: missing.node_type,

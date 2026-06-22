@@ -225,9 +225,7 @@ export const missingBrowserMethods = {
 
     isMissingModelResolved(missing = {}) {
         if (!missing) return false;
-        if (missing.__isExistingResolved) return true;
-        const key = this.getMissingModelKey(missing);
-        return Boolean(key && this.pendingIndex?.has?.(key));
+        return Boolean(missing.__isExistingResolved);
     },
 
     getResolvedWorkflowModels(data = {}) {
@@ -686,7 +684,8 @@ export const missingBrowserMethods = {
         this.wireDownloadSearchPanel(container, missing);
         this.updateSelectedBarForMissing(missing);
 
-        const localRefreshId = `local-matches-refresh-${missing.node_id}-${missing.widget_index}`;
+        const detailDomKey = this.getMissingModelDomKey(missing);
+        const localRefreshId = `local-matches-refresh-${detailDomKey}`;
         const localRefreshBtn = container.querySelector(`#${localRefreshId}`);
         if (localRefreshBtn) {
             localRefreshBtn.addEventListener('click', () => this.refreshLocalMatchesForMissing?.(missing, {
@@ -694,7 +693,7 @@ export const missingBrowserMethods = {
             }));
         }
 
-        const locateId = `locate-${missing.node_id}-${missing.widget_index}`;
+        const locateId = `locate-${detailDomKey}`;
         const locateBtn = container.querySelector(`#${locateId}`);
         const locateTarget = this.getMissingLocateTarget(missing);
         if (locateBtn && locateTarget.nodeId !== undefined && locateTarget.nodeId !== null && locateTarget.nodeId !== '') {
@@ -706,7 +705,7 @@ export const missingBrowserMethods = {
             });
         }
 
-        const comboId = `combo-${missing.node_id}-${missing.widget_index}`;
+        const comboId = `combo-${detailDomKey}`;
         const comboInput = container.querySelector(`#combo-input-${comboId}`);
         const comboList = container.querySelector(`#combo-list-${comboId}`);
         const comboRefresh = container.querySelector(`#combo-refresh-${comboId}`);
@@ -1102,7 +1101,8 @@ export const missingBrowserMethods = {
             html += titleSecondaryHtml;
         }
         html += `</div>`;
-        const locateId = `locate-${missing.node_id}-${missing.widget_index}`;
+        const detailDomKey = this.getMissingModelDomKey(missing);
+        const locateId = `locate-${detailDomKey}`;
         const nodeChipClasses = nodeDisplay.canLocate ? 'mr-node-chip is-locatable' : 'mr-node-chip';
         const nodeChipTitle = nodeDisplay.canLocate ? nodeDisplay.locateTooltip : '';
 
@@ -1120,7 +1120,7 @@ export const missingBrowserMethods = {
         html += `</div>`;
 
         // Selected bar - shows if this slot has a queued selection (BELOW card header)
-        const selectedBarId = `selected-bar-${missing.node_id}-${missing.widget_index}`;
+        const selectedBarId = `selected-bar-${detailDomKey}`;
         html += `<div id="${selectedBarId}" class="model-resolver-selected"></div>`;
 
         // Two-column layout
@@ -1128,17 +1128,17 @@ export const missingBrowserMethods = {
 
         // LEFT COLUMN: Local Matches
         html += `<div class="mr-column">`;
-        const localRefreshId = `local-matches-refresh-${missing.node_id}-${missing.widget_index}`;
+        const localRefreshId = `local-matches-refresh-${detailDomKey}`;
         html += `<div class="mr-column-header mr-local-matches-header">`;
         html += `<span>Local Matches</span>`;
         html += `<button id="${localRefreshId}" type="button" aria-label="Refresh local matches" data-tooltip="Rescan local model folders and refresh matches for this model" class="mr-btn mr-btn-secondary mr-btn-sm mr-btn-icon-only mr-local-matches-refresh-btn"><span class="mr-refresh-spin-target">${getSvgIcon('refreshCw', 'currentColor', 'mr-combo-refresh-icon')}</span></button>`;
         html += `</div>`;
-        html += `<div id="local-matches-body-${missing.node_id}-${missing.widget_index}">`;
+        html += `<div id="local-matches-body-${detailDomKey}">`;
         html += this.renderLocalMatchesContent(missing, missingIndex);
         html += `</div>`;
 
         // Add all-models search picker - combo-style dropdown
-        const comboId = `combo-${missing.node_id}-${missing.widget_index}`;
+        const comboId = `combo-${detailDomKey}`;
         html += `<div class="mr-combo-section">`;
         html += `<div class="mr-combo-row">`;
         html += `<label class="mr-combo-label">Model</label>`;

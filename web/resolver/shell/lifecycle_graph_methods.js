@@ -745,11 +745,49 @@ export const lifecycleGraphMethods = {
         }
     },
 
+    encodeMissingModelKeyPart(value) {
+        return encodeURIComponent(String(value ?? '').trim());
+    },
+
+    getMissingModelIdentityPart(missing = {}) {
+        return missing.original_lora_name
+            || missing.original_path
+            || missing.expected_filename
+            || missing.name
+            || missing.filename
+            || missing.urn_string
+            || '';
+    },
+
     getMissingModelKey(missing = {}) {
+        if (missing.missing_key) {
+            return String(missing.missing_key);
+        }
+
         const nodeId = missing.node_id ?? '';
         const widgetIndex = missing.widget_index ?? '';
         const subgraphId = missing.subgraph_id || '';
         const scope = missing.is_top_level !== false ? 'T' : 'F';
-        return `${nodeId}:${widgetIndex}:${subgraphId}:${scope}`;
+        const nestedKey = missing.nested_key || '';
+        const category = missing.category || '';
+        const identity = this.getMissingModelIdentityPart(missing);
+        return [
+            nodeId,
+            widgetIndex,
+            subgraphId,
+            scope,
+            nestedKey,
+            category,
+            identity
+        ].map(value => this.encodeMissingModelKeyPart(value)).join(':');
+    },
+
+    getMissingModelDomKey(missing = {}) {
+        const key = this.getMissingModelKey(missing);
+        try {
+            return btoa(key).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        } catch (e) {
+            return key.replace(/[^A-Za-z0-9_-]/g, char => `_${char.charCodeAt(0).toString(16)}_`);
+        }
     }
 };

@@ -891,7 +891,7 @@ export const resolveDownloadMethods = {
                 { category, downloadPath, downloadDirectory, filename: targetFilename }
             );
         }
-        const body = this.contentElement?.querySelector(`#local-matches-body-${missing.node_id}-${missing.widget_index}`);
+        const body = this.contentElement?.querySelector(`#local-matches-body-${this.getMissingModelDomKey(missing)}`);
         if (body) {
             body.innerHTML = `<div class="mr-no-matches">Checking local matches for ${this.escapeHtml(targetFilename)}...</div>`;
         }
@@ -931,7 +931,7 @@ export const resolveDownloadMethods = {
     refreshLocalMatchesUiForMissing(missing) {
         if (!missing || !this.contentElement) return;
 
-        const body = this.contentElement.querySelector(`#local-matches-body-${missing.node_id}-${missing.widget_index}`);
+        const body = this.contentElement.querySelector(`#local-matches-body-${this.getMissingModelDomKey(missing)}`);
         const displayIndex = Number.isFinite(missing.__displayIndex) ? missing.__displayIndex : 0;
         if (body) {
             body.innerHTML = this.renderLocalMatchesContent(missing, displayIndex);
@@ -962,7 +962,7 @@ export const resolveDownloadMethods = {
 
         const minRefreshFeedback = new Promise(resolve => setTimeout(resolve, 420));
         const refreshAnimation = this.startRefreshButtonAnimation?.(button);
-        const body = this.contentElement?.querySelector(`#local-matches-body-${missing.node_id}-${missing.widget_index}`);
+        const body = this.contentElement?.querySelector(`#local-matches-body-${this.getMissingModelDomKey(missing)}`);
         const displayName = targetFilename.split('/').pop()?.split('\\').pop() || targetFilename;
         const missingKey = this.getMissingModelKey(missing);
         const currentMissing = (this.missingModels || []).find(item => this.getMissingModelKey(item) === missingKey) || missing;
