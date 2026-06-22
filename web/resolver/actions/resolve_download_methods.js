@@ -1529,6 +1529,7 @@ export const resolveDownloadMethods = {
         const selectedSourceLabel = this.getSearchSourceLabel(selectedSource);
         const sourceIds = this.getSearchSourcesForSelection(selectedSource, missing);
         const baseModelContext = this.getSearchBaseModelContext(missing);
+        const selectedBaseModelAtStart = state.selectedBaseModel || this.getDefaultSearchBaseModel?.() || 'auto';
 
         // For URNs, use the resolved file/model name for searching instead of the URN itself
         // and pass the URN type as category (CivitAI expects specific type names)
@@ -1569,6 +1570,7 @@ export const resolveDownloadMethods = {
             ? this.contentElement?.querySelector(`#search-${missing.node_id}-${missing.widget_index}`)
             : null;
         let searchRunId = null;
+        let completedSearchRun = false;
 
         try {
             if (!sourceIds.length) {
@@ -1697,7 +1699,8 @@ export const resolveDownloadMethods = {
                     if (this.isSearchSourceCancelled?.(workflowKey, missingSearchKey, searchRunId, source)) {
                         return { source, cancelled: true };
                     }
-                    if (baseModelContext !== this.getSearchBaseModelContext(missing)) {
+                    const currentSelectedBaseModel = state.selectedBaseModel || this.getDefaultSearchBaseModel?.() || 'auto';
+                    if (currentSelectedBaseModel !== selectedBaseModelAtStart) {
                         return { source, stale: true };
                     }
 
@@ -1798,6 +1801,17 @@ export const resolveDownloadMethods = {
             this.clearSearchProgressTimers(searchRunId);
 
             if (this.isBackgroundSearchRunActive(workflowKey, missingSearchKey, searchRunId)) {
+                for (const source of sourceIds) {
+                    const progress = state.sourceProgress?.[source];
+                    if (!progress || (progress.status !== 'pending' && progress.status !== 'running')) continue;
+                    attemptedSources.add(source);
+                    this.setSourceProgress(state, source, {
+                        status: 'none',
+                        percent: 100,
+                        message: 'No match',
+                        error: null
+                    }, missing, { workflowKey });
+                }
                 state.activeSearchRunId = null;
                 state.lastAttemptSources = attemptedSources.size ? Array.from(attemptedSources) : sourceIds;
                 state.lastAttemptFound = anyFound;
@@ -1806,6 +1820,7 @@ export const resolveDownloadMethods = {
                     : null;
                 this.persistSearchStateForWorkflow(workflowKey, missing, state);
                 this.refreshSearchUiForMissing(missing, state, { workflowKey });
+                completedSearchRun = true;
             }
 
         } catch (error) {
@@ -1825,12 +1840,14 @@ export const resolveDownloadMethods = {
             if (currentJob?.runId === searchRunId) {
                 this.backgroundSearchJobs.delete(backgroundJobKey);
             }
-            this.settleInactiveSearchProgress?.(missing, state, {
-                workflowKey,
-                message: state.lastAttemptError || 'Search interrupted',
-                persist: false,
-                refresh: false
-            });
+            if (!completedSearchRun) {
+                this.settleInactiveSearchProgress?.(missing, state, {
+                    workflowKey,
+                    message: state.lastAttemptError || 'Search interrupted',
+                    persist: false,
+                    refresh: false
+                });
+            }
             if (searchBtn) {
                 searchBtn.disabled = false;
                 searchBtn.innerHTML = this.renderSearchButtonContent('Search Again');
