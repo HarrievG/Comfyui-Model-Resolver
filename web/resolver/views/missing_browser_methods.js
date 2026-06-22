@@ -676,6 +676,14 @@ export const missingBrowserMethods = {
         this.wireDownloadSearchPanel(container, missing);
         this.updateSelectedBarForMissing(missing);
 
+        const localRefreshId = `local-matches-refresh-${missing.node_id}-${missing.widget_index}`;
+        const localRefreshBtn = container.querySelector(`#${localRefreshId}`);
+        if (localRefreshBtn) {
+            localRefreshBtn.addEventListener('click', () => this.refreshLocalMatchesForMissing?.(missing, {
+                button: localRefreshBtn
+            }));
+        }
+
         const locateId = `locate-${missing.node_id}-${missing.widget_index}`;
         const locateBtn = container.querySelector(`#${locateId}`);
         const locateTarget = this.getMissingLocateTarget(missing);
@@ -1110,7 +1118,11 @@ export const missingBrowserMethods = {
 
         // LEFT COLUMN: Local Matches
         html += `<div class="mr-column">`;
-        html += `<div class="mr-column-header">Local Matches</div>`;
+        const localRefreshId = `local-matches-refresh-${missing.node_id}-${missing.widget_index}`;
+        html += `<div class="mr-column-header mr-local-matches-header">`;
+        html += `<span>Local Matches</span>`;
+        html += `<button id="${localRefreshId}" type="button" aria-label="Refresh local matches" data-tooltip="Rescan local model folders and refresh matches for this model" class="mr-btn mr-btn-secondary mr-btn-sm mr-btn-icon-only mr-local-matches-refresh-btn"><span class="mr-refresh-spin-target">${getSvgIcon('refreshCw', 'currentColor', 'mr-combo-refresh-icon')}</span></button>`;
+        html += `</div>`;
         html += `<div id="local-matches-body-${missing.node_id}-${missing.widget_index}">`;
         html += this.renderLocalMatchesContent(missing, missingIndex);
         html += `</div>`;

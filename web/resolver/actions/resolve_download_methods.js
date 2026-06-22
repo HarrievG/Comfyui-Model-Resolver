@@ -938,6 +938,92 @@ export const resolveDownloadMethods = {
         this.updateBatchFooterButtons?.();
     },
 
+    getLocalMatchRefreshTarget(missing = {}) {
+        return missing.civitai_info?.expected_filename
+            || missing.expected_filename
+            || missing.download_source?.filename
+            || missing.original_path
+            || missing.name
+            || '';
+    },
+
+    async refreshLocalMatchesForMissing(missing, { button = null } = {}) {
+        if (!missing || button?.disabled) return [];
+
+        const targetFilename = String(this.getLocalMatchRefreshTarget(missing) || '');
+        if (!targetFilename) {
+            this.showNotification('No model filename available for local refresh.', 'warning');
+            return [];
+        }
+
+        const minRefreshFeedback = new Promise(resolve => setTimeout(resolve, 420));
+        const refreshAnimation = this.startRefreshButtonAnimation?.(button);
+        const body = this.contentElement?.querySelector(`#local-matches-body-${missing.node_id}-${missing.widget_index}`);
+        const displayName = targetFilename.split('/').pop()?.split('\\').pop() || targetFilename;
+        const missingKey = this.getMissingModelKey(missing);
+        const currentMissing = (this.missingModels || []).find(item => this.getMissingModelKey(item) === missingKey) || missing;
+        const previousMatches = this.cloneLocalMatches?.(currentMissing.matches || missing.matches || []) || [];
+
+        try {
+            if (button) {
+                button.disabled = true;
+                button.classList.add('mr-btn-is-disabled', 'mr-is-refreshing');
+            }
+            if (body) {
+                body.innerHTML = `<div class="mr-no-matches">Refreshing local matches for ${this.escapeHtml(displayName)}...</div>`;
+            }
+
+            const response = await api.fetchApi('/model_resolver/local-matches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    filename: targetFilename,
+                    category: missing.category || '',
+                    force_rescan: true
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Local match refresh failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const matches = Array.isArray(data.matches) ? data.matches : [];
+            currentMissing.matches = matches;
+            missing.matches = matches;
+            if (currentMissing.is_urn) {
+                currentMissing.__urnLocalMatchesFilename = targetFilename;
+                missing.__urnLocalMatchesFilename = targetFilename;
+            }
+
+            this.rememberDownloadedLocalMatchesForMissing(currentMissing, matches, {
+                targetFilename,
+                category: missing.category || '',
+                manualRefresh: true
+            });
+            this.allModels = null;
+            this.invalidateLoadedModelsCacheForActiveWorkflow?.();
+            await minRefreshFeedback;
+            this.refreshLocalMatchesUiForMissing(currentMissing);
+
+            return matches;
+        } catch (error) {
+            await minRefreshFeedback;
+            console.error('Model Resolver: local match refresh failed:', error);
+            currentMissing.matches = previousMatches;
+            missing.matches = previousMatches;
+            this.refreshLocalMatchesUiForMissing(currentMissing);
+            this.showNotification(`Local match refresh failed: ${error.message}`, 'error');
+            return [];
+        } finally {
+            refreshAnimation?.cancel?.();
+            if (button) {
+                button.disabled = false;
+                button.classList.remove('mr-btn-is-disabled', 'mr-is-refreshing');
+            }
+        }
+    },
+
     refreshMissingListRowForMissing(missing) {
         if (!missing || !this.contentElement) return;
 
