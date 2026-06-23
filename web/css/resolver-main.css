@@ -3838,7 +3838,37 @@
     transition: opacity 0.18s ease, transform 0.18s ease;
     pointer-events: none;
 }
+.mr-info-image-civitai-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 7px;
+    border-radius: 999px;
+    background: rgba(10, 12, 16, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #f2f4f7;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+.mr-info-image-civitai-badge:hover,
+.mr-info-image-civitai-badge:focus-visible {
+    background: rgba(18, 132, 247, 0.88);
+    border-color: rgba(255, 255, 255, 0.24);
+    color: #ffffff;
+}
 .mr-info-image-preview-label svg {
+    width: 13px;
+    height: 13px;
+}
+.mr-info-image-civitai-icon {
     width: 13px;
     height: 13px;
 }
@@ -3880,6 +3910,8 @@
     filter: brightness(0.82);
 }
 .mr-info-image-item:hover .mr-info-image-preview-label,
+.mr-info-image-item:hover .mr-info-image-civitai-badge,
+.mr-info-image-civitai-badge:focus-visible,
 .mr-info-image-preview-btn:focus-visible .mr-info-image-preview-label {
     opacity: 1;
     transform: translateY(0);
@@ -4140,23 +4172,62 @@
 }
 .mr-image-preview-resource {
     display: grid;
-    gap: 3px;
-    padding-bottom: 8px;
+    gap: 4px;
+    padding: 8px 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .mr-image-preview-resource:last-child {
     padding-bottom: 0;
     border-bottom: 0;
 }
-.mr-image-preview-resource strong {
+.mr-image-preview-resource-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+.mr-image-preview-resource-name {
     color: #e8e8eb;
     font-size: 12px;
     font-weight: 800;
+    min-width: 0;
     overflow-wrap: anywhere;
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 255, 255, 0.34);
+    text-underline-offset: 2px;
 }
-.mr-image-preview-resource span {
+.mr-image-preview-resource-name:not(a) {
+    text-decoration: none;
+}
+.mr-image-preview-resource-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+}
+.mr-image-preview-resource-badges span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 19px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: rgba(78, 161, 255, 0.16);
+    border: 1px solid rgba(78, 161, 255, 0.18);
+    color: #cfe5ff;
+    font-size: 10px;
+    font-weight: 800;
+}
+.mr-image-preview-resource-version {
     color: var(--mr-text-muted, #b1b1b1);
     font-size: 11px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-decoration: none;
+}
+a.mr-image-preview-resource-version:hover,
+a.mr-image-preview-resource-name:hover {
+    color: var(--mr-link-color, #8fc2ff);
 }
 .mr-image-preview-card p {
     margin: 0;

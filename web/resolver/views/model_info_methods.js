@@ -1089,9 +1089,6 @@ export const modelInfoMethods = {
 
         const renderImageCard = (img, index) => {
             const captionParts = [];
-            if (img.civitaiUrl) {
-                captionParts.push(`<a href="${this.escapeHtml(img.civitaiUrl)}" target="_blank" rel="noopener noreferrer" class="mr-info-image-link">civitai</a>`);
-            }
             if (img.seed) captionParts.push(`<span><label>seed</label> ${this.escapeHtml(img.seed)}</span>`);
             if (img.steps) captionParts.push(`<span><label>steps</label> ${this.escapeHtml(img.steps)}</span>`);
             if (img.cfg) captionParts.push(`<span><label>cfg</label> ${this.escapeHtml(img.cfg)}</span>`);
@@ -1103,6 +1100,12 @@ export const modelInfoMethods = {
             return `
                 <div class="mr-info-image-item">
                     <figure>
+                        ${img.civitaiUrl ? `
+                            <a href="${this.escapeHtml(img.civitaiUrl)}" target="_blank" rel="noopener noreferrer" class="mr-info-image-civitai-badge" data-tooltip="Open image on CivitAI">
+                                ${getSvgIcon('civitai', 'currentColor', 'mr-info-image-civitai-icon')}
+                                CivitAI
+                            </a>
+                        ` : ''}
                         <button type="button" class="mr-info-image-preview-btn" data-image-index="${index}" aria-label="Preview example image ${index + 1}">
                         <img src="${this.escapeHtml(img.url)}" alt="Example" loading="lazy" />
                         <span class="mr-info-image-preview-label">${getSvgIcon('eye')} Preview</span>
@@ -1124,33 +1127,26 @@ export const modelInfoMethods = {
                 this.openInfoImagePreview(visibleImages, Number.isNaN(index) ? 0 : index);
             });
         });
-    },
-
-    getInfoImagePromptTags(image = {}) {
-        const prompt = String(image.positive || '').trim();
-        const explicitTags = Array.isArray(image.tags)
-            ? image.tags.map(tag => String(tag || '').trim()).filter(Boolean)
-            : [];
-
-        const promptTags = prompt
-            ? prompt
-                .split(/[,;\n]/)
-                .map(tag => tag.trim())
-                .filter(tag => tag && tag.length <= 64)
-            : [];
-
-        return [...new Set([...explicitTags, ...promptTags])].slice(0, 24);
+        this.bindTooltips(imagesContainer);
     },
 
     getInfoImageMetadataRows(image = {}) {
-        const size = image.width && image.height ? `${image.width} x ${image.height}` : '';
+        const metadata = image.metadata && typeof image.metadata === 'object' ? image.metadata : {};
+        const width = image.width || metadata.width || '';
+        const height = image.height || metadata.height || '';
+        const cfg = image.cfg || image.cfgScale || metadata.cfg || metadata.cfgScale || '';
+        const denoise = image.denoise || metadata.denoise || '';
+        const scheduler = image.scheduler || metadata.scheduler || '';
         const rows = [
             ['Seed', image.seed],
             ['Steps', image.steps],
-            ['CFG', image.cfg],
+            ['Width', width],
+            ['Height', height],
+            ['CFG Scale', cfg],
+            ['Denoise', denoise],
             ['Sampler', image.sampler],
+            ['Scheduler', scheduler],
             ['Clip skip', image.clip_skip],
-            ['Size', size],
             ['Model', image.model]
         ];
 
@@ -1158,14 +1154,32 @@ export const modelInfoMethods = {
     },
 
     getInfoImageResources(image = {}) {
-        const resources = Array.isArray(image.resources) ? image.resources : [];
+        const metadata = image.metadata && typeof image.metadata === 'object' ? image.metadata : {};
+        const resources = Array.isArray(image.resources)
+            ? image.resources
+            : Array.isArray(image.additionalResources)
+                ? image.additionalResources
+                : Array.isArray(metadata.additionalResources)
+                    ? metadata.additionalResources
+                    : Array.isArray(metadata.resources)
+                        ? metadata.resources
+                        : [];
         return resources
             .filter(resource => resource && typeof resource === 'object')
-            .map(resource => ({
-                name: resource.name || resource.modelName || resource.model || resource.hash || 'Resource',
-                type: resource.type || resource.modelType || resource.resourceType || '',
-                weight: resource.weight || resource.strength || resource.value || ''
-            }))
+            .map(resource => {
+                const modelId = resource.modelId || resource.model_id;
+                const versionId = resource.modelVersionId || resource.versionId || resource.model_version_id;
+                const url = resource.url
+                    || resource.modelUrl
+                    || (modelId ? `https://civitai.com/models/${modelId}${versionId ? `?modelVersionId=${versionId}` : ''}` : '');
+                return {
+                    name: resource.name || resource.modelName || resource.model || resource.hash || 'Resource',
+                    version: resource.versionName || resource.modelVersionName || resource.version || '',
+                    type: resource.type || resource.modelType || resource.resourceType || '',
+                    weight: resource.weight || resource.strength || resource.value || '',
+                    url
+                };
+            })
             .filter(resource => resource.name);
     },
 
@@ -1190,15 +1204,10 @@ export const modelInfoMethods = {
         const images = Array.isArray(preview?._images) ? preview._images : [];
         const index = Math.max(0, Math.min(images.length - 1, preview?._imageIndex || 0));
         const image = images[index] || {};
-        const tags = this.getInfoImagePromptTags(image);
         const metadataRows = this.getInfoImageMetadataRows(image);
         const resources = this.getInfoImageResources(image);
         const hasPrevious = images.length > 1;
         const positionText = images.length > 1 ? `${index + 1} / ${images.length}` : '1 image';
-
-        const tagsHtml = tags.length
-            ? `<div class="mr-image-preview-tags">${tags.map(tag => `<span>${this.escapeHtml(tag)}</span>`).join('')}</div>`
-            : '<div class="mr-image-preview-empty">No prompt tags available.</div>';
 
         const metadataHtml = metadataRows.length
             ? metadataRows.map(([label, value]) => `
@@ -1211,8 +1220,22 @@ export const modelInfoMethods = {
         const resourcesHtml = resources.length
             ? resources.map(resource => `
                 <div class="mr-image-preview-resource">
-                    <strong>${this.escapeHtml(resource.name)}</strong>
-                    <span>${this.escapeHtml([resource.type, resource.weight].filter(Boolean).join(' / '))}</span>
+                    <div class="mr-image-preview-resource-main">
+                        ${resource.url
+                            ? `<a href="${this.escapeHtml(resource.url)}" target="_blank" rel="noopener noreferrer" class="mr-image-preview-resource-name">${this.escapeHtml(resource.name)}</a>`
+                            : `<strong class="mr-image-preview-resource-name">${this.escapeHtml(resource.name)}</strong>`
+                        }
+                        <div class="mr-image-preview-resource-badges">
+                            ${resource.type ? `<span>${this.escapeHtml(resource.type)}</span>` : ''}
+                            ${resource.weight !== '' ? `<span>${this.escapeHtml(resource.weight)}</span>` : ''}
+                        </div>
+                    </div>
+                    ${resource.version
+                        ? (resource.url
+                            ? `<a href="${this.escapeHtml(resource.url)}" target="_blank" rel="noopener noreferrer" class="mr-image-preview-resource-version">${this.escapeHtml(resource.version)}</a>`
+                            : `<div class="mr-image-preview-resource-version">${this.escapeHtml(resource.version)}</div>`
+                        )
+                        : ''}
                 </div>
             `).join('')
             : '';
@@ -1233,12 +1256,6 @@ export const modelInfoMethods = {
                         ${hasPrevious ? `<button type="button" class="mr-image-preview-nav is-right" data-action="next" aria-label="Next image">&rsaquo;</button>` : ''}
                     </section>
                     <aside class="mr-image-preview-panel">
-                        <section class="mr-image-preview-card">
-                            <div class="mr-image-preview-card-head">
-                                <h4>Tags</h4>
-                            </div>
-                            ${tagsHtml}
-                        </section>
                         <section class="mr-image-preview-card">
                             <div class="mr-image-preview-card-head">
                                 <h4>Generation data</h4>
@@ -1332,6 +1349,8 @@ export const modelInfoMethods = {
         const images = Array.isArray(preview?._images) ? preview._images : [];
         const image = images[preview?._imageIndex || 0] || {};
         const key = button?.dataset?.copyKey || '';
+        const metadataRows = this.getInfoImageMetadataRows(image);
+        const resources = this.getInfoImageResources(image);
         const text = key === 'positive'
             ? image.positive
             : key === 'negative'
@@ -1339,11 +1358,13 @@ export const modelInfoMethods = {
                 : [
                     image.positive ? `Prompt: ${image.positive}` : '',
                     image.negative ? `Negative prompt: ${image.negative}` : '',
-                    image.seed ? `Seed: ${image.seed}` : '',
-                    image.steps ? `Steps: ${image.steps}` : '',
-                    image.cfg ? `CFG: ${image.cfg}` : '',
-                    image.sampler ? `Sampler: ${image.sampler}` : '',
-                    image.model ? `Model: ${image.model}` : ''
+                    ...metadataRows.map(([label, value]) => `${label}: ${value}`),
+                    ...resources.map(resource => `Resource: ${[
+                        resource.name,
+                        resource.version,
+                        resource.type,
+                        resource.weight !== '' ? `strength ${resource.weight}` : ''
+                    ].filter(Boolean).join(' / ')}`)
                 ].filter(Boolean).join('\n');
 
         if (!text) return;

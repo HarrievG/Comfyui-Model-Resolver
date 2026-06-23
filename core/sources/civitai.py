@@ -1718,7 +1718,9 @@ def _extract_model_images(version_info: Dict[str, Any]) -> List[Dict[str, Any]]:
             "civitaiUrl": _build_civitai_image_url(img),
             "seed": img.get("seed") or meta.get("seed"),
             "steps": img.get("steps") or meta.get("steps"),
-            "cfg": img.get("cfg") or meta.get("cfg"),
+            "cfg": img.get("cfg") or meta.get("cfg") or meta.get("cfgScale"),
+            "denoise": img.get("denoise") or meta.get("denoise"),
+            "scheduler": img.get("scheduler") or meta.get("scheduler"),
             "sampler": img.get("sampler") or meta.get("sampler"),
             "model": img.get("model") or meta.get("model") or meta.get("Model"),
             "positive": img.get("positive") or meta.get("prompt"),
@@ -1731,8 +1733,13 @@ def _extract_model_images(version_info: Dict[str, Any]) -> List[Dict[str, Any]]:
             "clip_skip": img.get("clipSkip") or meta.get("Clip skip") or meta.get("clipSkip"),
             "width": img.get("width") or meta.get("width"),
             "height": img.get("height") or meta.get("height"),
-            "tags": img.get("tags") or meta.get("tags") or [],
-            "resources": img.get("resources") or meta.get("resources") or [],
+            "resources": (
+                img.get("resources")
+                or img.get("additionalResources")
+                or meta.get("resources")
+                or meta.get("additionalResources")
+                or []
+            ),
             "metadata": meta,
         }
 
@@ -1897,7 +1904,9 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
                     "civitaiUrl": _build_civitai_image_url(img),
                     "seed": img_meta.get("seed"),
                     "steps": img_meta.get("steps"),
-                    "cfg": img_meta.get("cfg"),
+                    "cfg": img_meta.get("cfg") or img_meta.get("cfgScale"),
+                    "denoise": img_meta.get("denoise"),
+                    "scheduler": img_meta.get("scheduler"),
                     "sampler": img_meta.get("sampler"),
                     "model": img_meta.get("model") or img_meta.get("Model"),
                     "positive": img_meta.get("prompt"),
@@ -1909,8 +1918,13 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
                     "clip_skip": img_meta.get("Clip skip") or img_meta.get("clipSkip"),
                     "width": img.get("width") or img_meta.get("width"),
                     "height": img.get("height") or img_meta.get("height"),
-                    "tags": img.get("tags") or img_meta.get("tags") or [],
-                    "resources": img.get("resources") or img_meta.get("resources") or [],
+                    "resources": (
+                        img.get("resources")
+                        or img.get("additionalResources")
+                        or img_meta.get("resources")
+                        or img_meta.get("additionalResources")
+                        or []
+                    ),
                     "metadata": img_meta,
                 }
             )
