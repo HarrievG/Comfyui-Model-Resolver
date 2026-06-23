@@ -1655,10 +1655,13 @@ export const resolveDownloadMethods = {
 
             const searchPromises = sourceIds.map(async (source) => {
                 const sourceIsUrn = isUrn && source !== 'lora_manager_archive';
+                const progressId = `${searchRunId}-${source}-${Math.random().toString(36).slice(2, 8)}`;
                 const searchData = {
                     ...baseSearchData,
                     is_urn: sourceIsUrn,
-                    sources: [source]
+                    sources: [source],
+                    progress_id: progressId,
+                    progress_source: source
                 };
                 const sourceController = typeof AbortController !== 'undefined'
                     ? new AbortController()
@@ -1667,6 +1670,7 @@ export const resolveDownloadMethods = {
                 if (sourceController && currentJob?.runId === searchRunId) {
                     currentJob.sourceControllers?.set(source, sourceController);
                 }
+                this.startBackendSearchProgressPolling?.(state, missing, source, searchRunId, progressId, { workflowKey });
 
                 try {
                     if (this.isSearchSourceCancelled?.(workflowKey, missingSearchKey, searchRunId, source)) {
@@ -1727,6 +1731,7 @@ export const resolveDownloadMethods = {
                     state.lastAttemptSources = Array.from(attemptedSources);
                     state.lastAttemptFound = anyFound;
                     this.clearSearchProgressTimer(searchRunId, source);
+                    this.clearBackendSearchProgressTimer?.(searchRunId, source);
                     this.setSourceProgress(state, source, {
                         status: sourceError ? 'error' : (found ? 'found' : 'none'),
                         percent: 100,
@@ -1764,6 +1769,7 @@ export const resolveDownloadMethods = {
                         || this.isSearchSourceCancelled?.(workflowKey, missingSearchKey, searchRunId, source);
                     if (wasCancelled) {
                         this.clearSearchProgressTimer(searchRunId, source);
+                        this.clearBackendSearchProgressTimer?.(searchRunId, source);
                         return { source, cancelled: true };
                     }
 
@@ -1777,6 +1783,7 @@ export const resolveDownloadMethods = {
                     state.lastAttemptSources = Array.from(attemptedSources);
                     state.lastAttemptFound = anyFound;
                     this.clearSearchProgressTimer(searchRunId, source);
+                    this.clearBackendSearchProgressTimer?.(searchRunId, source);
                     this.setSourceProgress(state, source, {
                         status: 'error',
                         percent: 100,
@@ -1799,6 +1806,7 @@ export const resolveDownloadMethods = {
             }
             await Promise.all(searchPromises);
             this.clearSearchProgressTimers(searchRunId);
+            this.clearBackendSearchProgressTimers?.(searchRunId);
 
             if (this.isBackgroundSearchRunActive(workflowKey, missingSearchKey, searchRunId)) {
                 for (const source of sourceIds) {
@@ -1826,6 +1834,7 @@ export const resolveDownloadMethods = {
         } catch (error) {
             console.error('Model Resolver: Search error:', error);
             this.clearSearchProgressTimers(searchRunId);
+            this.clearBackendSearchProgressTimers?.(searchRunId);
             state.lastAttemptError = error.message;
             this.persistSearchStateForWorkflow(workflowKey, missing, state);
             if (resultsDiv) {
@@ -1834,6 +1843,7 @@ export const resolveDownloadMethods = {
         } finally {
             if (!searchRunId || this.isBackgroundSearchRunActive(workflowKey, missingSearchKey, searchRunId)) {
                 this.clearSearchProgressTimers(searchRunId);
+                this.clearBackendSearchProgressTimers?.(searchRunId);
                 state.activeSearchRunId = null;
             }
             const currentJob = this.backgroundSearchJobs?.get(backgroundJobKey);

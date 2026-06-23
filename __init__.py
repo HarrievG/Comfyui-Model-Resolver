@@ -7,6 +7,8 @@
 """
 
 import asyncio
+import threading
+import time
 from .core.log_system.log_funcs import (
     create_module_logger,
     log_debug,
@@ -35,6 +37,8 @@ class ModelResolverExtension:
         self.routes_setup = False
         self.logger = create_module_logger(__name__)
         self.analysis_progress = {}
+        self.search_progress = {}
+        self.search_progress_lock = threading.Lock()
         self.search_result_timestamps = {}
 
     def initialize(self):
@@ -992,6 +996,64 @@ class ModelResolverExtension:
 
             if download_available:
 
+                def cleanup_search_progress(max_age_seconds=300):
+                    now = time.time()
+                    with self.search_progress_lock:
+                        expired = [
+                            progress_id
+                            for progress_id, progress in self.search_progress.items()
+                            if now - progress.get(
+                                "updated_at", progress.get("created_at", now)
+                            )
+                            > max_age_seconds
+                        ]
+                        for progress_id in expired:
+                            self.search_progress.pop(progress_id, None)
+
+                def update_search_progress(
+                    progress_id,
+                    source="",
+                    stage="running",
+                    message="Searching...",
+                    percent=None,
+                    status="running",
+                    **extra,
+                ):
+                    if not progress_id:
+                        return
+                    cleanup_search_progress()
+                    now = time.time()
+                    with self.search_progress_lock:
+                        current = self.search_progress.get(progress_id, {})
+                        payload = {
+                            **current,
+                            "progress_id": progress_id,
+                            "source": source or current.get("source", ""),
+                            "stage": stage,
+                            "message": message,
+                            "status": status,
+                            "updated_at": now,
+                            "created_at": current.get("created_at", now),
+                        }
+                        if percent is not None:
+                            try:
+                                payload["percent"] = max(0, min(100, float(percent)))
+                            except (TypeError, ValueError):
+                                pass
+                        payload.update(extra)
+                        self.search_progress[progress_id] = payload
+
+                @routes.get("/model_resolver/search-progress/{progress_id}")
+                async def get_search_progress_route(request):
+                    """Return live progress for an in-flight source search."""
+                    progress_id = request.match_info.get("progress_id", "")
+                    cleanup_search_progress()
+                    with self.search_progress_lock:
+                        progress = dict(self.search_progress.get(progress_id) or {})
+                    if not progress:
+                        return web.json_response({"exists": False})
+                    return web.json_response({"exists": True, **progress})
+
                 @routes.post("/model_resolver/search")
                 async def search_sources(request):
                     """Search for model download sources."""
@@ -1090,6 +1152,8 @@ class ModelResolverExtension:
                         filename = data.get("filename", "")
                         category = data.get("category", "")
                         base_model_context = data.get("base_model_context", "")
+                        progress_id = str(data.get("progress_id") or "").strip()
+                        progress_source = str(data.get("progress_source") or "").strip()
                         civitai_candidate_limit_raw = data.get(
                             "civitai_candidate_limit", 5
                         )
@@ -1204,6 +1268,12 @@ class ModelResolverExtension:
                         search_lora_manager_archive_source = (
                             "lora_manager_archive" in normalized_sources
                         )
+                        if not progress_source:
+                            progress_source = (
+                                next(iter(normalized_sources))
+                                if len(normalized_sources) == 1
+                                else "all"
+                            )
                         force_search = data.get("force_search", False)
                         force_search = (
                             force_search
@@ -1211,7 +1281,22 @@ class ModelResolverExtension:
                             else str(force_search).lower() == "true"
                         )
 
+                        update_search_progress(
+                            progress_id,
+                            progress_source,
+                            "starting",
+                            "Preparing search",
+                            8,
+                        )
+
                         if force_search:
+                            update_search_progress(
+                                progress_id,
+                                progress_source,
+                                "cache",
+                                "Refreshing search caches",
+                                12,
+                            )
                             if search_local:
                                 reload_popular_databases()
                                 reload_model_list()
@@ -1356,12 +1441,26 @@ class ModelResolverExtension:
                             source_results = {"popular": None, "model_list": None}
                             source_found = False
 
+                            update_search_progress(
+                                progress_id,
+                                "local",
+                                "popular",
+                                "Checking popular models",
+                                28,
+                            )
                             log_info(
                                 "Search [local] start "
                                 + format_log_fields(file=filename, cat=category)
                             )
                             popular_info = get_popular_model_url(filename)
                             log_search_result("popular", popular_info)
+                            update_search_progress(
+                                progress_id,
+                                "local",
+                                "model_list",
+                                "Checking local model database",
+                                58,
+                            )
                             model_list_result = search_model_list(filename)
                             log_search_result(
                                 "model_list",
@@ -1399,9 +1498,23 @@ class ModelResolverExtension:
                                     source_results["model_list"] = model_list_result
                                     source_found = True
 
+                            update_search_progress(
+                                progress_id,
+                                "local",
+                                "done",
+                                "Local database checked",
+                                92,
+                            )
                             return source_results, source_found
 
                         def search_huggingface_source_task():
+                            update_search_progress(
+                                progress_id,
+                                "huggingface",
+                                "query",
+                                "Querying HuggingFace",
+                                32,
+                            )
                             log_info(
                                 "Search [huggingface] start "
                                 + format_log_fields(file=filename)
@@ -1415,6 +1528,13 @@ class ModelResolverExtension:
                                 use_brave_fallback=hf_use_brave_fallback,
                                 force_refresh=force_search,
                             )
+                            update_search_progress(
+                                progress_id,
+                                "huggingface",
+                                "parse",
+                                "Checking HuggingFace result",
+                                86,
+                            )
                             log_search_result("huggingface", hf_result)
                             return {"huggingface": hf_result}, bool(hf_result)
 
@@ -1422,6 +1542,13 @@ class ModelResolverExtension:
                             source_results = {"civitai": None}
                             source_found = False
 
+                            update_search_progress(
+                                progress_id,
+                                "civitai",
+                                "query",
+                                "Querying CivitAI",
+                                30,
+                            )
                             log_info(
                                 "Search [civitai] start "
                                 + format_log_fields(
@@ -1437,9 +1564,23 @@ class ModelResolverExtension:
                                 version_id = data.get("version_id")
 
                                 if model_id and version_id:
+                                    update_search_progress(
+                                        progress_id,
+                                        "civitai",
+                                        "urn",
+                                        "Resolving CivitAI URN",
+                                        46,
+                                    )
                                     # Use resolve_urn to get model info (cached)
                                     model_info = resolve_urn(model_id, version_id)
                                     if model_info:
+                                        update_search_progress(
+                                            progress_id,
+                                            "civitai",
+                                            "file",
+                                            "Selecting CivitAI file",
+                                            76,
+                                        )
                                         primary_file = None
                                         for file_info in model_info.get("files", []):
                                             if (
@@ -1495,6 +1636,13 @@ class ModelResolverExtension:
                                         )
                                 elif category:
                                     # Fallback to search if no IDs
+                                    update_search_progress(
+                                        progress_id,
+                                        "civitai",
+                                        "fallback",
+                                        "Searching CivitAI fallback",
+                                        58,
+                                    )
                                     log_info(
                                         "Search [civitai] URN ids missing; falling back"
                                     )
@@ -1526,6 +1674,13 @@ class ModelResolverExtension:
                                         }
                                         source_found = True
                             else:
+                                update_search_progress(
+                                    progress_id,
+                                    "civitai",
+                                    "match",
+                                    "Matching CivitAI files",
+                                    48,
+                                )
                                 civitai_result = search_civitai_for_file(
                                     filename,
                                     model_type=category,
@@ -1537,6 +1692,13 @@ class ModelResolverExtension:
                                 )
                                 log_search_result("civitai", civitai_result)
                                 if not civitai_result and base_model_context:
+                                    update_search_progress(
+                                        progress_id,
+                                        "civitai",
+                                        "any_model",
+                                        "Retrying CivitAI any model",
+                                        72,
+                                    )
                                     log_info(
                                         "Search [civitai] retry any model "
                                         + format_log_fields(
@@ -1566,12 +1728,26 @@ class ModelResolverExtension:
                                     source_results["civitai"] = civitai_result
                                     source_found = True
 
+                            update_search_progress(
+                                progress_id,
+                                "civitai",
+                                "done",
+                                "CivitAI checked",
+                                92,
+                            )
                             return source_results, source_found
 
                         def search_civarchive_source_task():
                             source_results = {"civarchive": None}
                             source_found = False
 
+                            update_search_progress(
+                                progress_id,
+                                "civarchive",
+                                "query",
+                                "Querying CivArchive",
+                                30,
+                            )
                             log_info(
                                 "Search [civarchive] start "
                                 + format_log_fields(
@@ -1585,6 +1761,13 @@ class ModelResolverExtension:
                                     model_id = data.get("model_id")
                                     version_id = data.get("version_id")
                                     if model_id and version_id:
+                                        update_search_progress(
+                                            progress_id,
+                                            "civarchive",
+                                            "urn",
+                                            "Resolving CivArchive version",
+                                            50,
+                                        )
                                         civarchive_result = resolve_civarchive_model_version(
                                             model_id,
                                             version_id,
@@ -1611,6 +1794,13 @@ class ModelResolverExtension:
                                             },
                                         )
                                 else:
+                                    update_search_progress(
+                                        progress_id,
+                                        "civarchive",
+                                        "match",
+                                        "Matching CivArchive files",
+                                        48,
+                                    )
                                     civarchive_result = search_civarchive_for_file(
                                         filename,
                                         model_type=category,
@@ -1619,6 +1809,13 @@ class ModelResolverExtension:
                                     )
                                     log_search_result("civarchive", civarchive_result)
                                     if not civarchive_result and base_model_context:
+                                        update_search_progress(
+                                            progress_id,
+                                            "civarchive",
+                                            "any_model",
+                                            "Retrying CivArchive any model",
+                                            72,
+                                        )
                                         log_info(
                                             "Search [civarchive] retry any model "
                                             + format_log_fields(
@@ -1647,13 +1844,36 @@ class ModelResolverExtension:
                             except CivArchiveSearchError as e:
                                 error_message = f"CivArchive search failed: {e}"
                                 log_warn(error_message)
+                                update_search_progress(
+                                    progress_id,
+                                    "civarchive",
+                                    "error",
+                                    error_message,
+                                    100,
+                                    status="error",
+                                )
                                 source_results["source_errors"] = {
                                     "civarchive": error_message
                                 }
 
+                            if not source_results.get("source_errors"):
+                                update_search_progress(
+                                    progress_id,
+                                    "civarchive",
+                                    "done",
+                                    "CivArchive checked",
+                                    92,
+                                )
                             return source_results, source_found
 
                         def search_lora_manager_archive_source_task():
+                            update_search_progress(
+                                progress_id,
+                                "lora_manager_archive",
+                                "query",
+                                "Searching LoRA Manager archive",
+                                36,
+                            )
                             log_info(
                                 "Search [lora_manager_archive] start "
                                 + format_log_fields(file=filename, cat=category)
@@ -1670,6 +1890,13 @@ class ModelResolverExtension:
                                 lora_manager_archive_result,
                             )
                             if not lora_manager_archive_result and base_model_context:
+                                update_search_progress(
+                                    progress_id,
+                                    "lora_manager_archive",
+                                    "any_model",
+                                    "Retrying LoRA archive any model",
+                                    72,
+                                )
                                 log_info(
                                     "Search [lora_manager_archive] retry any model "
                                     + format_log_fields(
@@ -1733,6 +1960,13 @@ class ModelResolverExtension:
                                 "Search sources async "
                                 + format_log_fields(count=len(search_tasks))
                             )
+                        update_search_progress(
+                            progress_id,
+                            progress_source,
+                            "running",
+                            "Waiting for search sources",
+                            18,
+                        )
 
                         for source_results, source_found in await asyncio.gather(
                             *search_tasks
@@ -1752,10 +1986,26 @@ class ModelResolverExtension:
                                 found=results["found"],
                             )
                         )
+                        update_search_progress(
+                            progress_id,
+                            progress_source,
+                            "completed",
+                            "Search complete",
+                            100,
+                            status="completed",
+                        )
                         stamp_search_results(results)
                         return web.json_response(results)
 
                     except Exception as e:
+                        update_search_progress(
+                            progress_id if "progress_id" in locals() else "",
+                            progress_source if "progress_source" in locals() else "",
+                            "error",
+                            str(e),
+                            100,
+                            status="error",
+                        )
                         log_exception(f"Model Resolver search error: {e}")
                         return web.json_response({"error": str(e)}, status=500)
 

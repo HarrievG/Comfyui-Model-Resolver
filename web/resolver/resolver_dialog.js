@@ -43,6 +43,7 @@ export class ResolverManagerDialog extends ComfyDialog {
         this.searchResultCache = new Map();
         this.backgroundSearchJobs = new Map();
         this.searchProgressTimers = new Map();
+        this.backendSearchProgressTimers = new Map();
         this.urnResolvePromises = new Map();
         this.urnLocalMatchPromises = new Map();
         this.cachedAnalysisData = null;

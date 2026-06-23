@@ -928,6 +928,112 @@ export const searchPanelMethods = {
         }
     },
 
+    getBackendSearchProgressTimerKey(runId, source) {
+        return `${runId || 'search'}:${source}:backend`;
+    },
+
+    clearBackendSearchProgressTimer(runId, source) {
+        const key = this.getBackendSearchProgressTimerKey(runId, source);
+        const timer = this.backendSearchProgressTimers?.get(key);
+        if (timer) {
+            clearInterval(timer.interval);
+            this.backendSearchProgressTimers.delete(key);
+        }
+    },
+
+    clearBackendSearchProgressTimers(runId) {
+        if (!runId || !this.backendSearchProgressTimers) return;
+        const prefix = `${runId}:`;
+        for (const [key, timer] of this.backendSearchProgressTimers.entries()) {
+            if (key.startsWith(prefix)) {
+                clearInterval(timer.interval);
+                this.backendSearchProgressTimers.delete(key);
+            }
+        }
+    },
+
+    startBackendSearchProgressPolling(state, missing, source, runId, progressId, { workflowKey = this.getWorkflowScopedQueueKey() } = {}) {
+        if (!progressId || !source || !runId) return;
+        if (!(this.backendSearchProgressTimers instanceof Map)) {
+            this.backendSearchProgressTimers = new Map();
+        }
+
+        this.clearBackendSearchProgressTimer(runId, source);
+        const key = this.getBackendSearchProgressTimerKey(runId, source);
+        const timerRecord = { interval: null, inFlight: false };
+
+        const tick = async () => {
+            const missingSearchKey = this.getMissingSearchKey(missing);
+            if (
+                state.activeSearchRunId !== runId
+                && !this.isBackgroundSearchRunActive(workflowKey, missingSearchKey, runId)
+            ) {
+                this.clearBackendSearchProgressTimer(runId, source);
+                return;
+            }
+
+            const currentProgress = state.sourceProgress?.[source];
+            if (!currentProgress || (currentProgress.status !== 'pending' && currentProgress.status !== 'running')) {
+                this.clearBackendSearchProgressTimer(runId, source);
+                return;
+            }
+            if (timerRecord.inFlight) return;
+
+            timerRecord.inFlight = true;
+            try {
+                const response = await api.fetchApi(`/model_resolver/search-progress/${encodeURIComponent(progressId)}`);
+                if (!response.ok) return;
+                const progress = await response.json();
+                if (!progress?.exists) return;
+                const latestProgress = state.sourceProgress?.[source];
+                if (!latestProgress || (latestProgress.status !== 'pending' && latestProgress.status !== 'running')) {
+                    this.clearBackendSearchProgressTimer(runId, source);
+                    return;
+                }
+
+                if (progress.status === 'error') {
+                    this.setSourceProgress(state, source, {
+                        status: 'error',
+                        percent: 100,
+                        message: progress.message || 'Error',
+                        error: progress.message || 'Error',
+                        backendStage: progress.stage || ''
+                    }, missing, { workflowKey });
+                    this.persistSearchStateForWorkflow(workflowKey, missing, state);
+                    this.refreshSearchUiForMissing(missing, state, { workflowKey });
+                    this.clearBackendSearchProgressTimer(runId, source);
+                    return;
+                }
+
+                if (progress.status === 'completed') {
+                    this.clearBackendSearchProgressTimer(runId, source);
+                    return;
+                }
+
+                const nextPercent = Math.max(
+                    Number(currentProgress.percent) || 0,
+                    Number(progress.percent) || 0
+                );
+                this.setSourceProgress(state, source, {
+                    status: 'running',
+                    percent: nextPercent,
+                    message: progress.message || currentProgress.message || 'Searching...',
+                    backendStage: progress.stage || currentProgress.backendStage || ''
+                }, missing, { workflowKey });
+                this.persistSearchStateForWorkflow(workflowKey, missing, state);
+                this.refreshSearchUiForMissing(missing, state, { workflowKey });
+            } catch (error) {
+                this.clearBackendSearchProgressTimer(runId, source);
+            } finally {
+                timerRecord.inFlight = false;
+            }
+        };
+
+        timerRecord.interval = setInterval(tick, 550);
+        this.backendSearchProgressTimers.set(key, timerRecord);
+        tick();
+    },
+
     startEstimatedSearchProgress(state, missing, container, source, runId, { workflowKey = this.getWorkflowScopedQueueKey() } = {}) {
         this.clearSearchProgressTimer(runId, source);
 
@@ -1107,8 +1213,9 @@ export const searchPanelMethods = {
                 ? 0
                 : (status === 'running' ? progress?.percent : 100);
             const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+            const runningMessage = progress?.message || 'Searching...';
             const statusLabel = status === 'running'
-                ? `Searching... ${Math.round(safePercent)}%`
+                ? `${runningMessage} ${Math.round(safePercent)}%`
                 : (progress?.message || statusLabels[status] || status);
             const title = progress?.error ? ` data-tooltip="${this.escapeHtml(`${label}: ${progress.error}`)}"` : '';
             const cancelButton = canCancel

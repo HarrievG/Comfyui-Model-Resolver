@@ -548,6 +548,10 @@ export const workflowStateMethods = {
             clearInterval(timer);
         }
         this.searchProgressTimers.clear();
+        for (const timer of this.backendSearchProgressTimers?.values?.() || []) {
+            clearInterval(timer.interval);
+        }
+        this.backendSearchProgressTimers?.clear?.();
     },
 
     syncWorkflowScopedQueue(workflow = null) {
