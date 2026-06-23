@@ -1482,8 +1482,107 @@ export const downloadTargetMethods = {
         };
     },
 
+    bindDropdownListPointerGuard(listEl) {
+        if (!listEl || listEl.dataset.mlPointerGuardBound === 'true') return;
+        listEl.dataset.mlPointerGuardBound = 'true';
+
+        let releaseTimer = null;
+        const clearPointerActive = () => {
+            if (releaseTimer) {
+                window.clearTimeout(releaseTimer);
+                releaseTimer = null;
+            }
+            listEl.dataset.mlPointerActive = 'false';
+        };
+        const markPointerActive = () => {
+            if (releaseTimer) {
+                window.clearTimeout(releaseTimer);
+                releaseTimer = null;
+            }
+            listEl.dataset.mlPointerActive = 'true';
+        };
+        const releasePointerActive = () => {
+            if (releaseTimer) {
+                window.clearTimeout(releaseTimer);
+            }
+            releaseTimer = window.setTimeout(() => {
+                clearPointerActive();
+            }, 250);
+        };
+        const isPointerInsideList = (event) => (
+            event?.target instanceof Node && listEl.contains(event.target)
+        ) || this.isPointerEventInsideElementBounds(event, listEl, 24);
+        const clearPointerActiveIfOutside = (event) => {
+            if (isPointerInsideList(event)) {
+                markPointerActive();
+                return;
+            }
+            clearPointerActive();
+        };
+
+        window.addEventListener('pointerdown', clearPointerActiveIfOutside, true);
+        window.addEventListener('mousedown', clearPointerActiveIfOutside, true);
+        listEl.addEventListener('pointerdown', markPointerActive, true);
+        listEl.addEventListener('mousedown', markPointerActive, true);
+        window.addEventListener('pointerup', releasePointerActive, true);
+        window.addEventListener('mouseup', releasePointerActive, true);
+        window.addEventListener('blur', clearPointerActive, true);
+    },
+
+    isDropdownListPointerActive(listEl) {
+        return listEl?.dataset?.mlPointerActive === 'true';
+    },
+
+    isPointerEventInsideElementBounds(event, element, tolerance = 0) {
+        if (!event || !element || typeof event.clientX !== 'number' || typeof event.clientY !== 'number') {
+            return false;
+        }
+        const rect = element.getBoundingClientRect();
+        return event.clientX >= rect.left - tolerance
+            && event.clientX <= rect.right + tolerance
+            && event.clientY >= rect.top - tolerance
+            && event.clientY <= rect.bottom + tolerance;
+    },
+
+    bindDropdownOutsideDismiss(listEl, anchorEls = [], onDismiss = null) {
+        if (!listEl || listEl.dataset.mlOutsideDismissBound === 'true') return;
+        listEl.dataset.mlOutsideDismissBound = 'true';
+
+        const anchors = Array.isArray(anchorEls)
+            ? anchorEls.filter(Boolean)
+            : [anchorEls].filter(Boolean);
+        const dismiss = () => {
+            if (typeof onDismiss === 'function') {
+                onDismiss();
+            } else {
+                listEl.style.display = 'none';
+            }
+        };
+        const handleOutsidePointer = (event) => {
+            if (listEl.style.display === 'none') return;
+            const target = event?.target;
+            if (!(target instanceof Node)) return;
+            const isInsideList = listEl.contains(target)
+                || this.isPointerEventInsideElementBounds(event, listEl, 24);
+            const isInsideAnchor = anchors.some(anchor => (
+                anchor.contains(target)
+                || this.isPointerEventInsideElementBounds(event, anchor)
+            ));
+            if (isInsideList || isInsideAnchor) {
+                return;
+            }
+            listEl.dataset.mlPointerActive = 'false';
+            dismiss();
+        };
+
+        window.addEventListener('pointerdown', handleOutsidePointer, true);
+        window.addEventListener('mousedown', handleOutsidePointer, true);
+    },
+
     enableWheelScrollChaining(scrollEl) {
-        if (!scrollEl || scrollEl.dataset.mlWheelChainBound === 'true') return;
+        if (!scrollEl) return;
+        this.bindDropdownListPointerGuard(scrollEl);
+        if (scrollEl.dataset.mlWheelChainBound === 'true') return;
         scrollEl.dataset.mlWheelChainBound = 'true';
 
         scrollEl.addEventListener('wheel', (event) => {
@@ -1557,6 +1656,7 @@ export const downloadTargetMethods = {
             cleanupFloatingPositioning();
             listEl.style.display = 'none';
         };
+        this.bindDropdownOutsideDismiss(listEl, [subfolderEl], hideFloatingSubfolderList);
 
         const clampNumber = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -2001,16 +2101,6 @@ export const downloadTargetMethods = {
             });
         };
 
-        const hideList = (targetEl) => {
-            setTimeout(() => {
-                if (targetEl === listEl) {
-                    hideFloatingSubfolderList();
-                } else {
-                    targetEl.style.display = 'none';
-                }
-            }, 150);
-        };
-
         if (categoryListEl && categoryEl.dataset.mlCategoryBound !== 'true') {
             categoryEl.dataset.mlCategoryBound = 'true';
             categoryEl.addEventListener('focus', () => populateCategoryOptions(''));
@@ -2042,13 +2132,19 @@ export const downloadTargetMethods = {
                     populateCategoryOptions(categoryEl.value);
                 }
             });
-            categoryEl.addEventListener('blur', () => {
+            const normalizeCategoryInput = () => {
                 const category = this.getDropdownValue(categoryEl);
                 const knownCategories = this.getKnownDownloadCategorySet();
                 if (category && knownCategories.has(this.normalizeDownloadCategory(category))) {
                     this.setDropdownValue(categoryEl, category, this.getCategoryDisplayName(category));
                 }
-                hideList(categoryListEl);
+            };
+            this.bindDropdownOutsideDismiss(categoryListEl, [categoryEl], () => {
+                normalizeCategoryInput();
+                categoryListEl.style.display = 'none';
+            });
+            categoryEl.addEventListener('blur', () => {
+                normalizeCategoryInput();
             });
         }
 
@@ -2067,8 +2163,6 @@ export const downloadTargetMethods = {
             this.syncDownloadTargetFolderContext(categoryEl, subfolderEl);
             populateSubfolderOptions(subfolderEl.value);
         });
-
-        subfolderEl.addEventListener('blur', () => hideList(listEl));
 
         if (suggestBtn && suggestBtn.dataset.mlSuggestBound !== 'true') {
             suggestBtn.dataset.mlSuggestBound = 'true';

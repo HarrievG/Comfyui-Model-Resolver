@@ -2067,13 +2067,8 @@ export const resolveDownloadMethods = {
                 });
             };
 
-            const hideSourceList = () => {
-                setTimeout(() => {
-                    sourceList.style.display = 'none';
-                }, 150);
-            };
-
             this.enableWheelScrollChaining(sourceList);
+            this.bindDropdownOutsideDismiss?.(sourceList, [sourceSelect]);
             sourceSelect.addEventListener('focus', () => renderSourceOptions());
             sourceSelect.addEventListener('click', () => renderSourceOptions());
             sourceSelect.addEventListener('keydown', (event) => {
@@ -2082,7 +2077,6 @@ export const resolveDownloadMethods = {
                     renderSourceOptions();
                 }
             });
-            sourceSelect.addEventListener('blur', hideSourceList);
             this.syncSearchSourceUi(missing, container);
         }
 
@@ -2128,13 +2122,12 @@ export const resolveDownloadMethods = {
                 });
             };
 
-            const hideBaseList = () => {
-                setTimeout(() => {
-                    baseList.style.display = 'none';
-                }, 150);
-            };
-
             this.enableWheelScrollChaining(baseList);
+            this.bindDropdownOutsideDismiss?.(baseList, [baseSelect], () => {
+                const value = this.getDropdownValue(baseSelect);
+                this.setDropdownValue(baseSelect, value, this.getSearchBaseModelLabel(value, missing));
+                baseList.style.display = 'none';
+            });
             baseSelect.addEventListener('focus', () => renderBaseOptions(''));
             baseSelect.addEventListener('click', () => renderBaseOptions(''));
             baseSelect.addEventListener('input', () => {
@@ -2152,7 +2145,6 @@ export const resolveDownloadMethods = {
             baseSelect.addEventListener('blur', () => {
                 const value = this.getDropdownValue(baseSelect);
                 this.setDropdownValue(baseSelect, value, this.getSearchBaseModelLabel(value, missing));
-                hideBaseList();
             });
             this.syncSearchSourceUi(missing, container);
         }
