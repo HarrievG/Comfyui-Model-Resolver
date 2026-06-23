@@ -253,6 +253,13 @@ export const modelInfoMethods = {
         document.body.appendChild(dialog);
         this.bindTooltips(dialog);
         this.bindInfoDialogResizePersistence(dialog);
+        dialog._onInfoDialogKeyDown = (event) => {
+            if (event.key !== 'Escape') return;
+            if (document.querySelector('.mr-image-preview-backdrop')) return;
+            event.preventDefault();
+            this.closeInfoDialog(dialog);
+        };
+        document.addEventListener('keydown', dialog._onInfoDialogKeyDown);
 
         // Add close handlers
         const closeBtn = dialog.querySelector('.mr-info-dialog-close');
@@ -281,6 +288,16 @@ export const modelInfoMethods = {
     /**
      * Create the info dialog element
      */
+    renderInfoFieldLabel(iconName, label, tooltip) {
+        return `
+            <span class="mr-info-field-label">
+                ${getSvgIcon(iconName, 'currentColor', 'mr-info-label-icon')}
+                <span class="mr-info-label-text">${this.escapeHtml(label)}</span>
+                <span class="mr-tooltip-badge" data-tooltip="${this.escapeHtml(tooltip)}">?</span>
+            </span>
+        `;
+    },
+
     createInfoDialog(loraName, modelData) {
         const loraDisplayName = loraName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
 
@@ -310,29 +327,29 @@ export const modelInfoMethods = {
                         <table class="mr-info-table">
                             <tbody>
                                 <tr class="mr-info-file-row">
-                                    <td><span>File <span class="mr-tooltip-badge" data-tooltip="The model file name found locally or returned by CivitAI.">?</span></span></td>
+                                    <td>${this.renderInfoFieldLabel('file', 'File', 'The model file name found locally or returned by CivitAI.')}</td>
                                     <td><span class="mr-info-file"></span></td>
                                 </tr>
                                 <tr class="mr-info-basemodel-row">
-                                    <td><span>Base Model <span class="mr-tooltip-badge" data-tooltip="Base model this resource was made for, for example SD1.5, SDXL or Flux.">?</span></span></td>
+                                    <td>${this.renderInfoFieldLabel('box', 'Base Model', 'Base model this resource was made for, for example SD1.5, SDXL or Flux.')}</td>
                                     <td><span class="mr-info-base-model"></span></td>
                                 </tr>
                                 <tr class="mr-info-hash-row">
-                                    <td><span>Hash (sha256) <span class="mr-tooltip-badge" data-tooltip="Unique fingerprint of the local file. Model Resolver uses it to confirm the exact CivitAI version.">?</span></span></td>
+                                    <td>${this.renderInfoFieldLabel('hash', 'Hash (sha256)', 'Unique fingerprint of the local file. Model Resolver uses it to confirm the exact CivitAI version.')}</td>
                                     <td><span class="mr-info-hash"></span></td>
                                 </tr>
                                 <tr class="mr-info-size-row mr-hidden-initial">
-                                    <td><span>Size <span class="mr-tooltip-badge" data-tooltip="The local model file size, read from metadata or from the file on disk.">?</span></span></td>
+                                    <td>${this.renderInfoFieldLabel('hardDrive', 'Size', 'The local model file size, read from metadata or from the file on disk.')}</td>
                                     <td><span class="mr-info-size"></span></td>
                                 </tr>
                                 <tr class="mr-info-location-row mr-info-row-wide mr-hidden-initial">
-                                    <td><span>Location <span class="mr-tooltip-badge" data-tooltip="Folder where this local model file is stored.">?</span></span></td>
+                                    <td>${this.renderInfoFieldLabel('locate', 'Location', 'Folder where this local model file is stored.')}</td>
                                     <td><span class="mr-info-location"></span></td>
                                 </tr>
                                 <tr class="mr-info-trainedwords-row mr-hidden-initial">
                                     <td>
                                         <div class="mr-info-trained-words-label">
-                                            Trained Words <span class="mr-tooltip-badge" data-tooltip="Trigger words recommended by the model author. Click the words you want, then copy them into your prompt.">?</span>
+                                            ${this.renderInfoFieldLabel('bookType', 'Trained Words', 'Trigger words recommended by the model author. Click the words you want, then copy them into your prompt.')}
                                             <small class="mr-info-trained-words-meta">
                                                 <span class="mr-info-trained-words-count">0 selected</span>
                                                 <button type="button" class="mr-info-copy-trained-words" disabled>Copy</button>
@@ -345,11 +362,11 @@ export const modelInfoMethods = {
                                     </td>
                                 </tr>
                                 <tr class="mr-info-clipskip-row mr-hidden-initial">
-                                    <td><span>Clip Skip <span class="mr-tooltip-badge" data-tooltip="Recommended Clip Skip value from the model author, if one is provided.">?</span></span></td>
+                                    <td>${this.renderInfoFieldLabel('wrench', 'Clip Skip', 'Recommended Clip Skip value from the model author, if one is provided.')}</td>
                                     <td><span class="mr-info-clip-skip"></span></td>
                                 </tr>
                                 <tr class="mr-info-description-row mr-hidden-initial">
-                                    <td><span>Description <span class="mr-tooltip-badge" data-tooltip="Model description from CivitAI or local metadata. Long descriptions are shortened until you click Show more.">?</span></span></td>
+                                    <td>${this.renderInfoFieldLabel('fileText', 'Description', 'Model description from CivitAI or local metadata. Long descriptions are shortened until you click Show more.')}</td>
                                     <td>
                                         <div class="mr-info-description-wrap">
                                             <div class="mr-info-description"></div>
@@ -775,8 +792,8 @@ export const modelInfoMethods = {
             const height = Number(saved.h);
             if (!Number.isFinite(width) || !Number.isFinite(height)) return;
 
-            const maxWidth = Math.floor(window.innerWidth * 0.9);
-            const maxHeight = Math.floor(window.innerHeight * 0.8);
+            const maxWidth = Math.floor(window.innerWidth * 0.92);
+            const maxHeight = Math.max(320, window.innerHeight - 16);
             const clampedWidth = Math.max(420, Math.min(width, maxWidth));
             const clampedHeight = Math.max(320, Math.min(height, maxHeight));
 
@@ -2056,6 +2073,10 @@ export const modelInfoMethods = {
         if (dialog?._infoDialogResizeSaveTimer) {
             clearTimeout(dialog._infoDialogResizeSaveTimer);
             dialog._infoDialogResizeSaveTimer = null;
+        }
+        if (dialog?._onInfoDialogKeyDown) {
+            document.removeEventListener('keydown', dialog._onInfoDialogKeyDown);
+            dialog._onInfoDialogKeyDown = null;
         }
         this.saveInfoDialogSize(dialog);
         this.closeInfoImagePreview();

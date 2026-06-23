@@ -3238,6 +3238,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 8px;
+    box-sizing: border-box;
 }
 .mr-info-dialog {
     background: var(--comfy-menu-bg, #202020);
@@ -3245,7 +3247,7 @@
     border-radius: 8px;
     width: 640px;
     max-width: 92vw;
-    max-height: 80vh;
+    max-height: calc(100vh - 16px);
     min-width: min(520px, 92vw);
     min-height: 320px;
     overflow: hidden;
@@ -3524,8 +3526,7 @@
     font-weight: 650;
     word-break: break-word;
 }
-.mr-info-table td:first-child > span,
-.mr-info-trained-words-label {
+.mr-info-field-label {
     display: grid;
     grid-template-columns: 14px minmax(0, 1fr) auto;
     align-items: center;
@@ -3536,22 +3537,19 @@
     line-height: 1.25;
     white-space: nowrap;
 }
-.mr-info-table td:first-child > span {
-    overflow: visible;
-}
-.mr-info-table td:first-child .mr-tooltip-badge,
-.mr-info-trained-words-label .mr-tooltip-badge {
-    justify-self: end;
-}
-.mr-info-table td:first-child > span::before,
-.mr-info-trained-words-label::before {
-    content: "";
+.mr-info-label-icon {
     width: 14px;
     height: 14px;
-    border: 1px solid rgba(255,255,255,0.22);
-    border-radius: 4px;
-    background: rgba(255,255,255,0.035);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset;
+    color: var(--mr-text-muted, #888);
+    opacity: 0.82;
+}
+.mr-info-label-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: clip;
+}
+.mr-info-field-label .mr-tooltip-badge {
+    justify-self: end;
 }
 .mr-info-location {
     font-family: "Cascadia Mono", "Consolas", monospace;
@@ -3594,11 +3592,20 @@
     opacity: 0.78;
 }
 .mr-info-trained-words-label {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     gap: 8px;
+    width: 100%;
+    min-width: 0;
 }
 .mr-info-trained-words-meta {
-    grid-column: 1 / -1;
-    justify-self: start;
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--mr-text-muted, #888);
 }
 .mr-info-trainedwords-row td {
     align-items: flex-start;
@@ -3611,13 +3618,6 @@
 .mr-info-trainedwords-row td:last-child {
     align-items: center;
     justify-content: flex-start;
-}
-.mr-info-trained-words-meta {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    color: var(--mr-text-muted, #888);
 }
 .mr-info-trained-words-hint {
     margin-bottom: 8px;
