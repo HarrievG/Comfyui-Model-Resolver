@@ -1492,20 +1492,25 @@ export const downloadTargetMethods = {
                 return;
             }
 
-            event.preventDefault();
-            event.stopPropagation();
+            const nestedScrollEl = event.target?.closest?.('.mr-folder-browser-scroll');
+            const targetScrollEl = nestedScrollEl && scrollEl.contains(nestedScrollEl)
+                ? nestedScrollEl
+                : scrollEl;
 
-            const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+            const maxScrollTop = Math.max(0, targetScrollEl.scrollHeight - targetScrollEl.clientHeight);
             if (maxScrollTop <= 0) {
                 return;
             }
 
+            event.preventDefault();
+            event.stopPropagation();
+
             const nextScrollTop = Math.min(
                 maxScrollTop,
-                Math.max(0, scrollEl.scrollTop + deltaY)
+                Math.max(0, targetScrollEl.scrollTop + deltaY)
             );
 
-            scrollEl.scrollTop = nextScrollTop;
+            targetScrollEl.scrollTop = nextScrollTop;
         }, { passive: false });
     },
 
@@ -1760,7 +1765,11 @@ export const downloadTargetMethods = {
                 .join('');
         };
 
-        const renderDownloadFolderBrowser = (targetEl, folders, filterText, onSelect) => {
+        const renderDownloadFolderBrowser = (targetEl, folders, filterText, onSelect, options = {}) => {
+            const previousScrollEl = options.preserveScroll
+                ? targetEl.querySelector('.mr-folder-browser-scroll')
+                : null;
+            const previousScrollTop = previousScrollEl ? previousScrollEl.scrollTop : 0;
             const rawFilter = String(filterText || '').trim();
             const filter = rawFilter.toLowerCase();
             const normalizedFilter = filter.replace(/[\/]+/g, '\\');
@@ -1807,22 +1816,6 @@ export const downloadTargetMethods = {
                 || selectedValue
                 || this.getDownloadTargetBaseDirectory(category)
                 || '';
-            const hasExactTypedMatch = rawFilter
-                ? folderEntries.some(entry => entry.value.toLowerCase() === normalizeSubfolderPath(rawFilter).toLowerCase())
-                : true;
-            const typedPath = normalizeSubfolderPath(rawFilter);
-            const clearRow = selectedValue
-                ? `<button class="mr-folder-browser-manual" type="button" data-browser-action="select" data-value="" data-base-directory="">
-                    <span class="mr-folder-browser-manual-title">Use model root</span>
-                    <span class="mr-folder-browser-manual-path">${this.escapeHtml(this.getDownloadTargetBaseDirectory(category) || 'Category root')}</span>
-                </button>`
-                : '';
-            const manualRow = typedPath && !hasExactTypedMatch
-                ? `<button class="mr-folder-browser-manual" type="button" data-browser-action="select" data-value="${encodeURIComponent(typedPath)}" data-base-directory="">
-                    <span class="mr-folder-browser-manual-title">Use typed folder</span>
-                    <span class="mr-folder-browser-manual-path">${this.escapeHtml(typedPath)}</span>
-                </button>`
-                : '';
             const rootHtml = rootGroups.map(group => {
                 const tree = buildFolderTree(group.entries);
                 const stateKey = `root:${group.key}`;
@@ -1854,24 +1847,25 @@ export const downloadTargetMethods = {
 
             targetEl.classList.add('mr-download-folder-browser');
             targetEl.innerHTML = `
-                <div class="mr-folder-browser-head">
-                    <div>
-                        <div class="mr-folder-browser-title">Browse folders</div>
-                        <div class="mr-folder-browser-subtitle">${filteredEntries.length} of ${folderEntries.length} folders</div>
-                    </div>
-                    <div class="mr-folder-browser-category">${this.escapeHtml(this.getCategoryDisplayName(category))}</div>
-                </div>
                 <div class="mr-folder-browser-preview">
                     <span class="mr-folder-browser-preview-label">Target folder path</span>
                     <span class="mr-folder-browser-preview-path">${this.escapeHtml(previewPath)}</span>
                 </div>
-                ${clearRow}
-                ${manualRow}
                 <div class="mr-folder-browser-scroll">
                     ${rootHtml || `<div class="mr-folder-browser-empty">No folders match this filter.</div>`}
                 </div>
             `;
             showFloatingSubfolderList();
+            if (options.preserveScroll) {
+                const restoreScrollPosition = () => {
+                    const scrollEl = targetEl.querySelector('.mr-folder-browser-scroll');
+                    if (!scrollEl) return;
+                    const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+                    scrollEl.scrollTop = Math.min(previousScrollTop, maxScrollTop);
+                };
+                restoreScrollPosition();
+                requestAnimationFrame(restoreScrollPosition);
+            }
 
             targetEl.querySelectorAll('[data-browser-action="toggle"]').forEach(button => {
                 button.addEventListener('mousedown', (event) => {
@@ -1884,7 +1878,9 @@ export const downloadTargetMethods = {
                     } else {
                         expandedSet.add(stateKey);
                     }
-                    renderDownloadFolderBrowser(targetEl, folders, filterText, onSelect);
+                    renderDownloadFolderBrowser(targetEl, folders, filterText, onSelect, {
+                        preserveScroll: true
+                    });
                 });
             });
 
