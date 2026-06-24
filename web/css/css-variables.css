@@ -60,9 +60,10 @@
     --mr-z-floating-button: 10000;
     --mr-z-notification: 100000;
     --mr-z-context-menu: 100001;
-    --mr-z-info-dialog: 100002;
-    --mr-z-image-preview: 100003;
-    --mr-z-tooltip: 100004;
+    --mr-z-context-menu-popup: 100002;
+    --mr-z-info-dialog: 100003;
+    --mr-z-image-preview: 100004;
+    --mr-z-tooltip: 100005;
     --mr-spacing-1: 1px;
     --mr-spacing-2: 2px;
     --mr-spacing-3: 3px;

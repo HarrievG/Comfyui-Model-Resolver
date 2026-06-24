@@ -35,7 +35,7 @@
 .mr-context-menu {
     position: fixed;
     display: none;
-    z-index: var(--mr-z-context-menu);
+    z-index: var(--mr-z-context-menu-popup, calc(var(--mr-z-context-menu) + 1));
 }
 
 .mr-context-menu-item {

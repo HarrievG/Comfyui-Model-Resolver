@@ -788,6 +788,55 @@ export const missingBrowserMethods = {
             if (!clean) return 'Default root';
             return clean.split(/[\\\/]+/).filter(Boolean).pop() || clean;
         };
+        const joinLocalModelPath = (basePath = '', relativePath = '') => {
+            if (typeof this.joinLocalPath === 'function') {
+                return this.joinLocalPath(basePath, relativePath);
+            }
+            const base = String(basePath || '').replace(/[\/\\]+$/, '');
+            const relative = String(relativePath || '').replace(/^[\/\\]+/, '');
+            if (!base) return relative;
+            if (!relative) return base;
+            return `${base}${base.includes('\\') ? '\\' : '/'}${relative}`;
+        };
+        const buildLocalFolderContext = (folderPath = '', name = 'Folder', category = '') => {
+            const path = String(folderPath || '').trim();
+            if (!path) return null;
+            return {
+                context_scope: 'download_folder',
+                open_folder_label: 'Open Folder',
+                name,
+                path,
+                resolved_path: path,
+                open_path: path,
+                folder_path: path,
+                download_directory: path,
+                category
+            };
+        };
+        const buildLocalModelContext = (entry = {}) => {
+            const model = entry.model || {};
+            const path = entry.fullPath || model.path || model.resolved_path || '';
+            if (!path) return null;
+            const directory = entry.folderPath
+                ? joinLocalModelPath(entry.baseDirectory, entry.folderPath)
+                : entry.baseDirectory;
+            return {
+                ...model,
+                context_scope: model.context_scope || 'local_model',
+                open_folder_label: 'Containing Folder',
+                name: entry.filename || model.filename || entry.relativePath || path,
+                path,
+                resolved_path: path,
+                open_path: path,
+                folder_path: directory || path,
+                directory: directory || '',
+                category: entry.category || model.category || ''
+            };
+        };
+        const getLocalPathContextAttrs = (context, tooltip = 'Right-click for options') => {
+            if (!context) return '';
+            return ` data-model="${this.escapeHtml(encodeURIComponent(JSON.stringify(context)))}" oncontextmenu="window.MLOpenContextMenu(event, this)" data-tooltip="${this.escapeHtml(tooltip)}"`;
+        };
         const makeModelEntry = (model, index, preferredCategory = getPreferredModelCategory()) => {
             const category = getModelCategory(model);
             const categoryLabel = this.getCategoryDisplayName(category);
@@ -947,8 +996,10 @@ export const missingBrowserMethods = {
             .map(entry => {
                 const selected = getModelIdentity(entry.model) === selectedIdentity;
                 const folderText = entry.folderPath || entry.baseLabel || '';
+                const context = buildLocalModelContext(entry);
+                const contextAttrs = getLocalPathContextAttrs(context, entry.fullPath || entry.relativePath);
                 return `
-                    <div class="mr-folder-browser-row mr-local-model-row ${selected ? 'is-selected' : ''}" data-browser-action="select-model" data-model-index="${entry.index}" data-tooltip="${this.escapeHtml(entry.fullPath || entry.relativePath)}">
+                    <div class="mr-folder-browser-row mr-local-model-row ${selected ? 'is-selected' : ''}" data-browser-action="select-model" data-model-index="${entry.index}"${contextAttrs}>
                         <span class="mr-folder-browser-toggle mr-folder-browser-toggle-empty"></span>
                         <span class="mr-folder-browser-folder-icon mr-local-model-file-icon">${getSvgIcon('file', 'currentColor', 'mr-folder-browser-svg')}</span>
                         <span class="mr-folder-browser-name">${this.escapeHtml(entry.filename)}</span>
@@ -957,23 +1008,28 @@ export const missingBrowserMethods = {
                 `;
             })
             .join('');
-        const renderModelTreeNodes = (node, groupKey, expandedSet, filter, selectedIdentity) => {
+        const renderModelTreeNodes = (node, group, expandedSet, filter, selectedIdentity) => {
             const folderHtml = Array.from(node.folders.values())
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map(folder => {
-                    const stateKey = `node:${groupKey}:${folder.path.toLowerCase()}`;
+                    const stateKey = `node:${group.key}:${folder.path.toLowerCase()}`;
                     const modelCount = countTreeModels(folder);
                     const shouldExpand = Boolean(filter) || expandedSet.has(stateKey);
+                    const folderFullPath = group.baseDirectory
+                        ? joinLocalModelPath(group.baseDirectory, folder.path)
+                        : '';
+                    const context = buildLocalFolderContext(folderFullPath, folder.path, group.category);
+                    const contextAttrs = getLocalPathContextAttrs(context, folderFullPath);
                     return `
                         <div class="mr-folder-browser-node">
-                            <div class="mr-folder-browser-row is-expandable mr-local-model-folder-row" data-browser-action="toggle" data-state-key="${encodeURIComponent(stateKey)}">
+                            <div class="mr-folder-browser-row is-expandable mr-local-model-folder-row" data-browser-action="toggle" data-state-key="${encodeURIComponent(stateKey)}"${contextAttrs}>
                                 <button class="mr-folder-browser-toggle ${shouldExpand ? 'is-expanded' : ''}" type="button" aria-label="${shouldExpand ? 'Collapse folder' : 'Expand folder'}"><span class="mr-folder-browser-chevron"></span></button>
                                 <span class="mr-folder-browser-folder-icon">${getSvgIcon('folderOpen', 'currentColor', 'mr-folder-browser-svg')}</span>
                                 <span class="mr-folder-browser-name">${this.escapeHtml(folder.name)}</span>
                                 <span class="mr-folder-browser-count">${modelCount}</span>
                             </div>
                             <div class="mr-folder-browser-children ${shouldExpand ? 'is-expanded' : ''}">
-                                ${renderModelTreeNodes(folder, groupKey, expandedSet, filter, selectedIdentity)}
+                                ${renderModelTreeNodes(folder, group, expandedSet, filter, selectedIdentity)}
                             </div>
                         </div>
                     `;
@@ -1027,16 +1083,22 @@ export const missingBrowserMethods = {
                         || expandedSet.has(stateKey)
                         || (group.isPreferred && !expandedSet.has(collapsedStateKey));
                     const tree = buildModelTree(group.entries);
+                    const rootContext = buildLocalFolderContext(
+                        group.baseDirectory,
+                        `${group.label} root`,
+                        group.category
+                    );
+                    const rootContextAttrs = getLocalPathContextAttrs(rootContext, group.baseDirectory || group.label);
                     return `
                         <div class="mr-folder-browser-root ${group.isPreferred ? 'is-preferred' : ''}">
-                            <button class="mr-folder-browser-root-head ${isExpanded ? 'is-expanded' : ''}" type="button" data-browser-action="toggle" data-state-key="${encodeURIComponent(stateKey)}">
+                            <button class="mr-folder-browser-root-head ${isExpanded ? 'is-expanded' : ''}" type="button" data-browser-action="toggle" data-state-key="${encodeURIComponent(stateKey)}"${rootContextAttrs}>
                                 <span class="mr-folder-browser-chevron"></span>
                                 <span class="mr-folder-browser-root-title">${this.escapeHtml(group.label)}${group.isPreferred ? ' · recommended' : ''}</span>
                                 <span class="mr-folder-browser-root-count">${group.entries.length}</span>
                             </button>
                             ${group.baseDirectory ? `<div class="mr-folder-browser-root-path">${this.escapeHtml(group.baseDirectory)}</div>` : ''}
                             <div class="mr-folder-browser-tree ${isExpanded ? 'is-expanded' : ''}">
-                                ${renderModelTreeNodes(tree, group.key, expandedSet, filter, selectedIdentity)}
+                                ${renderModelTreeNodes(tree, group, expandedSet, filter, selectedIdentity)}
                             </div>
                         </div>
                     `;

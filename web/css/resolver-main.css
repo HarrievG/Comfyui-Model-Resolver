@@ -3223,7 +3223,7 @@
     border: 1px solid var(--border-color, #555555);
     border-radius: 6px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-    z-index: var(--mr-z-context-menu);
+    z-index: var(--mr-z-context-menu-popup, calc(var(--mr-z-context-menu) + 1));
     min-width: 160px;
     overflow: hidden;
 }
