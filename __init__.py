@@ -80,6 +80,8 @@ class ModelResolverExtension:
                 from .core.resolver import (
                     analyze_and_find_matches,
                     apply_resolution,
+                    normalize_sha256,
+                    search_local_matches_by_hash,
                     search_local_matches,
                 )
                 from .core.path_templates import infer_download_path_templates
@@ -1483,6 +1485,7 @@ class ModelResolverExtension:
                             "civitai": None,
                             "civarchive": None,
                             "lora_manager_archive": None,
+                            "local_hash_matches": [],
                             "found": False,
                             "searched_sources": sorted(normalized_sources),
                             "source_errors": {},
@@ -1582,6 +1585,125 @@ class ModelResolverExtension:
                             marked["base_model_fallback"] = True
                             marked["requested_base_model"] = base_model_context
                             return marked
+
+                        def iter_result_items(result):
+                            if isinstance(result, list):
+                                for item in result:
+                                    if isinstance(item, dict):
+                                        yield item
+                            elif isinstance(result, dict):
+                                yield result
+
+                        def get_result_sha256(result):
+                            if not isinstance(result, dict):
+                                return ""
+                            hashes = (
+                                result.get("hashes")
+                                if isinstance(result.get("hashes"), dict)
+                                else {}
+                            )
+                            file_info = (
+                                result.get("file_info")
+                                if isinstance(result.get("file_info"), dict)
+                                else {}
+                            )
+                            file_hashes = (
+                                file_info.get("hashes")
+                                if isinstance(file_info.get("hashes"), dict)
+                                else {}
+                            )
+                            for candidate in (
+                                result.get("sha256"),
+                                result.get("hash"),
+                                hashes.get("SHA256"),
+                                hashes.get("sha256"),
+                                file_info.get("sha256"),
+                                file_info.get("hash"),
+                                file_hashes.get("SHA256"),
+                                file_hashes.get("sha256"),
+                            ):
+                                normalized = normalize_sha256(candidate)
+                                if normalized:
+                                    return normalized
+                            return ""
+
+                        def is_hash_lookup_candidate(result):
+                            if not isinstance(result, dict):
+                                return False
+                            try:
+                                confidence = float(result.get("confidence") or 0)
+                            except (TypeError, ValueError):
+                                confidence = 0.0
+                            if confidence >= 100.0:
+                                return True
+                            match_type = str(result.get("match_type") or "").lower()
+                            if match_type in {"exact", "model_title", "title"}:
+                                return True
+                            return confidence >= 95.0
+
+                        def collect_local_hash_matches(payload):
+                            matches = []
+                            seen_match_paths = set()
+                            seen_hash_sources = set()
+                            for source_key in ("huggingface", "civitai", "civarchive"):
+                                for source_result in iter_result_items(payload.get(source_key)):
+                                    if not is_hash_lookup_candidate(source_result):
+                                        continue
+                                    sha256 = get_result_sha256(source_result)
+                                    if not sha256:
+                                        continue
+
+                                    hash_source_key = (source_key, sha256)
+                                    if hash_source_key in seen_hash_sources:
+                                        continue
+                                    seen_hash_sources.add(hash_source_key)
+
+                                    update_search_progress(
+                                        progress_id,
+                                        progress_source,
+                                        "local_hash",
+                                        "Checking local metadata hashes",
+                                        94,
+                                    )
+                                    try:
+                                        hash_matches = search_local_matches_by_hash(
+                                            sha256,
+                                            category=category or None,
+                                            max_matches=20,
+                                            force_rescan=force_search,
+                                        )
+                                    except Exception as hash_error:
+                                        log_warn(
+                                            f"Local metadata hash lookup failed for {source_key}:{sha256}: {hash_error}"
+                                        )
+                                        continue
+
+                                    for match in hash_matches:
+                                        model_path = (
+                                            match.get("model", {}).get("path")
+                                            or match.get("path")
+                                            or ""
+                                        )
+                                        path_key = model_path.lower()
+                                        if path_key and path_key in seen_match_paths:
+                                            continue
+                                        if path_key:
+                                            seen_match_paths.add(path_key)
+                                        enriched = {
+                                            **match,
+                                            "hash_lookup_source": source_key,
+                                            "hash_lookup_filename": source_result.get("filename")
+                                            or source_result.get("path")
+                                            or filename,
+                                        }
+                                        matches.append(enriched)
+
+                            if matches:
+                                log_info(
+                                    "Search local hash matches "
+                                    + format_log_fields(count=len(matches))
+                                )
+                            return matches
 
                         def make_source_progress_callback(
                             source_key,
@@ -1808,6 +1930,12 @@ class ModelResolverExtension:
                                             "size": primary_file.get("size"),
                                             "base_model": model_info.get("base_model"),
                                             "tags": model_info.get("tags", []),
+                                            "sha256": primary_file.get("sha256")
+                                            or (primary_file.get("hashes") or {}).get("SHA256")
+                                            or (primary_file.get("hashes") or {}).get("sha256"),
+                                            "hashes": primary_file.get("hashes") or {},
+                                            "match_type": "exact",
+                                            "confidence": 100.0,
                                         }
                                         log_search_result(
                                             "civitai/urn",
@@ -2191,6 +2319,8 @@ class ModelResolverExtension:
                                     results[source_key] = source_result
                             if source_found:
                                 results["found"] = True
+
+                        results["local_hash_matches"] = collect_local_hash_matches(results)
 
                         log_info(
                             f"Search [{','.join(results['searched_sources'])}] done "

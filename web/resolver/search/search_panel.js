@@ -36,7 +36,8 @@ export const searchPanelMethods = {
                 huggingface: null,
                 civitai: null,
                 civarchive: null,
-                lora_manager_archive: null
+                lora_manager_archive: null,
+                local_hash_matches: []
             },
             lastAttemptSources: [],
             lastAttemptBaseModelContext: '',
@@ -586,6 +587,15 @@ export const searchPanelMethods = {
             }
             return existingResults[source] || null;
         };
+        const localHashMatches = this.mergeLocalMatches
+            ? this.mergeLocalMatches(
+                Array.isArray(existingResults.local_hash_matches) ? existingResults.local_hash_matches : [],
+                Array.isArray(newResults.local_hash_matches) ? newResults.local_hash_matches : []
+            )
+            : [
+                ...(Array.isArray(existingResults.local_hash_matches) ? existingResults.local_hash_matches : []),
+                ...(Array.isArray(newResults.local_hash_matches) ? newResults.local_hash_matches : [])
+            ];
 
         return {
             popular: pickResult('popular'),
@@ -593,7 +603,8 @@ export const searchPanelMethods = {
             huggingface: pickResult('huggingface'),
             civitai: pickResult('civitai'),
             civarchive: pickResult('civarchive'),
-            lora_manager_archive: pickResult('lora_manager_archive')
+            lora_manager_archive: pickResult('lora_manager_archive'),
+            local_hash_matches: localHashMatches
         };
     },
 

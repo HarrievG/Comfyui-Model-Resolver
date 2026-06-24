@@ -924,9 +924,11 @@ export const missingBrowserMethods = {
      */
     displayMissingModels(container, data) {
         const listScrollSnapshot = this.getMissingListScrollSnapshot(container);
-        const missingModels = (data.missing_models || []).map(missing => (
-            this.restoreDownloadedLocalMatchesForMissing?.(missing) || missing
-        ));
+        const missingModels = (data.missing_models || []).map(missing => {
+            let restored = this.restoreDownloadedLocalMatchesForMissing?.(missing) || missing;
+            restored = this.restoreSearchLocalHashMatchesForMissing?.(restored) || restored;
+            return restored;
+        });
         const resolvedModels = this.getResolvedWorkflowModels(data);
         const allModelsForDisplay = [...missingModels, ...resolvedModels];
         const rawMissingCount = data.total_missing ?? missingModels.length;

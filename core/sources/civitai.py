@@ -263,6 +263,8 @@ def _build_civitai_result_from_version(
 ) -> Dict[str, Any]:
     """Normalize CivitAI model/version/file data into the search result format."""
     version_id = version.get("id")
+    hashes = file_info.get("hashes") if isinstance(file_info.get("hashes"), dict) else {}
+    sha256 = file_info.get("sha256") or hashes.get("SHA256") or hashes.get("sha256")
     return {
         "source": "civitai",
         "model_id": model_id,
@@ -277,6 +279,8 @@ def _build_civitai_result_from_version(
         "base_model": version.get("baseModel"),
         "tags": tags or [],
         "match_type": match_type,
+        "sha256": sha256,
+        "hashes": hashes,
     }
 
 
@@ -730,6 +734,9 @@ def _find_civitai_file_in_model(
         if primary_file is None:
             primary_file = (resolved.get("files") or [{}])[0]
 
+        hashes = primary_file.get("hashes") if isinstance(primary_file.get("hashes"), dict) else {}
+        sha256 = primary_file.get("sha256") or hashes.get("SHA256") or hashes.get("sha256")
+
         return {
             "source": "civitai",
             "model_id": model_id,
@@ -746,6 +753,8 @@ def _find_civitai_file_in_model(
             "confidence": _calculate_filename_confidence(
                 filename, expected_filename
             ),
+            "sha256": sha256,
+            "hashes": hashes,
         }
 
     def resolved_version_matches(resolved: Dict[str, Any]) -> bool:
@@ -1461,7 +1470,16 @@ def resolve_urn(
             "base_model": target_version.get("baseModel"),
             "tags": data.get("tags", []),
             "files": [
-                {"name": f.get("name"), "size": f.get("sizeKB", 0) * 1024}
+                {
+                    "name": f.get("name"),
+                    "size": f.get("sizeKB", 0) * 1024,
+                    "sha256": (
+                        f.get("sha256")
+                        or (f.get("hashes") or {}).get("SHA256")
+                        or (f.get("hashes") or {}).get("sha256")
+                    ),
+                    "hashes": f.get("hashes") or {},
+                }
                 for f in files
             ],
         }

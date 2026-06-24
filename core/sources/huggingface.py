@@ -441,6 +441,13 @@ def clean_filename_for_search(filename: str) -> str:
 def _build_huggingface_result(
     repo_id: str, file_path: str, file_info: Dict[str, Any], match_type: str
 ) -> Dict[str, Any]:
+    lfs_info = file_info.get("lfs") if isinstance(file_info.get("lfs"), dict) else {}
+    sha256 = (
+        file_info.get("sha256")
+        or file_info.get("hash")
+        or lfs_info.get("sha256")
+        or lfs_info.get("oid")
+    )
     return {
         "source": "huggingface",
         "repo_id": repo_id,
@@ -449,6 +456,7 @@ def _build_huggingface_result(
         "url": get_huggingface_download_url(repo_id, file_path),
         "size": file_info.get("size"),
         "match_type": match_type,
+        "sha256": sha256,
     }
 
 

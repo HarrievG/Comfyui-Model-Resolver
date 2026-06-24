@@ -285,6 +285,216 @@ def search_local_matches(
     return deduplicated_matches
 
 
+SHA256_PATTERN = re.compile(r"^[a-fA-F0-9]{64}$")
+
+
+def normalize_sha256(value: Any) -> str:
+    """Return a normalized SHA256 hex string or an empty string."""
+    if value is None:
+        return ""
+
+    text = str(value).strip()
+    for prefix in ("sha256:", "sha256="):
+        if text.lower().startswith(prefix):
+            text = text[len(prefix):].strip()
+
+    return text.lower() if SHA256_PATTERN.match(text) else ""
+
+
+def _metadata_sidecar_candidates(model_path: str) -> List[str]:
+    if not model_path:
+        return []
+
+    directory = os.path.dirname(model_path)
+    filename = os.path.basename(model_path)
+    stem, _ = os.path.splitext(filename)
+
+    candidates = [
+        os.path.join(directory, f"{stem}.metadata.json"),
+        f"{model_path}.metadata.json",
+        os.path.join(directory, f"{filename}.metadata.json"),
+    ]
+
+    seen = set()
+    unique = []
+    for candidate in candidates:
+        key = os.path.normcase(os.path.abspath(candidate))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique
+
+
+def _as_dict(value: Any) -> Dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return []
+
+
+def _collect_hashes_from_container(value: Any) -> List[str]:
+    container = _as_dict(value)
+    hashes = _as_dict(container.get("hashes"))
+    return [
+        normalize_sha256(candidate)
+        for candidate in (
+            container.get("sha256"),
+            container.get("hash"),
+            container.get("SHA256"),
+            hashes.get("SHA256"),
+            hashes.get("sha256"),
+            hashes.get("hash"),
+        )
+        if normalize_sha256(candidate)
+    ]
+
+
+def _metadata_file_matches_model(file_info: Dict[str, Any], model: Dict[str, Any]) -> bool:
+    model_filename = str(model.get("filename") or os.path.basename(model.get("path", ""))).lower()
+    model_relative = str(model.get("relative_path") or "").replace("\\", "/").lower()
+    model_stem = strip_known_model_extension(os.path.basename(model_filename)).lower()
+
+    candidates = [
+        file_info.get("name"),
+        file_info.get("filename"),
+        file_info.get("path"),
+        file_info.get("file_path"),
+    ]
+    for candidate in candidates:
+        text = str(candidate or "").replace("\\", "/").lower()
+        basename = os.path.basename(text)
+        stem = strip_known_model_extension(basename).lower()
+        if text and model_relative and text == model_relative:
+            return True
+        if basename and basename == model_filename:
+            return True
+        if stem and model_stem and stem == model_stem:
+            return True
+    return False
+
+
+def _extract_model_sha256_from_metadata(
+    metadata: Dict[str, Any], model: Dict[str, Any]
+) -> List[str]:
+    if not isinstance(metadata, dict):
+        return []
+
+    hash_status = str(metadata.get("hash_status") or "").strip().lower()
+    if hash_status and hash_status != "completed":
+        return []
+
+    values: List[str] = []
+    values.extend(_collect_hashes_from_container(metadata))
+    values.extend(_collect_hashes_from_container(metadata.get("path_metadata")))
+    values.extend(_collect_hashes_from_container(metadata.get("file_info")))
+    values.extend(_collect_hashes_from_container(metadata.get("file")))
+
+    nested_file_lists = [
+        metadata.get("files"),
+        _as_dict(metadata.get("selected_version")).get("files"),
+        _as_dict(metadata.get("civitai")).get("files"),
+    ]
+    for file_list in nested_file_lists:
+        for file_info in _as_list(file_list):
+            if isinstance(file_info, dict) and _metadata_file_matches_model(file_info, model):
+                values.extend(_collect_hashes_from_container(file_info))
+
+    return [value for value in _unique_ordered_strings(values) if normalize_sha256(value)]
+
+
+def _unique_ordered_strings(values: List[Any]) -> List[str]:
+    seen = set()
+    unique = []
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        unique.append(text)
+    return unique
+
+
+def search_local_matches_by_hash(
+    sha256: str,
+    category: Optional[str] = None,
+    max_matches: int = 20,
+    force_rescan: bool = False,
+) -> List[Dict[str, Any]]:
+    """
+    Find local models whose sidecar .metadata.json contains the given SHA256.
+
+    This intentionally does not hash model files. It only reads metadata sidecars
+    next to models already discovered by the scanner.
+    """
+    normalized_hash = normalize_sha256(sha256)
+    if not normalized_hash:
+        return []
+
+    available_models = get_model_files(force_rescan=force_rescan)
+    if category and category != "unknown":
+        preferred_models = [
+            model for model in available_models if model.get("category") == category
+        ]
+        other_models = [
+            model for model in available_models if model.get("category") != category
+        ]
+        available_models = preferred_models + other_models
+
+    matches: List[Dict[str, Any]] = []
+
+    for model in available_models:
+        model_path = model.get("path", "")
+        if not model_path:
+            continue
+
+        metadata_path = next(
+            (candidate for candidate in _metadata_sidecar_candidates(model_path) if os.path.exists(candidate)),
+            "",
+        )
+        if not metadata_path:
+            continue
+
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as handle:
+                metadata = json.load(handle)
+        except Exception as exc:
+            log_debug(f"Could not read metadata sidecar for hash match: {metadata_path} ({exc})")
+            continue
+
+        metadata_hashes = _extract_model_sha256_from_metadata(metadata, model)
+        if normalized_hash not in metadata_hashes:
+            continue
+
+        model_with_metadata = {
+            **model,
+            "sha256": normalized_hash,
+            "metadata_path": metadata_path,
+        }
+        matches.append(
+            {
+                "model": model_with_metadata,
+                "filename": model.get("filename") or os.path.basename(model_path),
+                "similarity": 1.0,
+                "confidence": 100.0,
+                "match_type": "hash",
+                "hash_match": True,
+                "hash_source": "metadata",
+                "sha256": normalized_hash,
+                "metadata_path": metadata_path,
+            }
+        )
+        if max_matches > 0 and len(matches) >= max_matches:
+            break
+
+    return matches
+
+
 def extract_workflow_urls(workflow_json: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     """
     Extract model URLs from workflow JSON.

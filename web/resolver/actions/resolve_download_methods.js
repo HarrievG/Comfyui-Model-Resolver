@@ -586,6 +586,72 @@ export const resolveDownloadMethods = {
         return merged.sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0));
     },
 
+    applyLocalHashMatchesFromSearchResponse(missing, data = {}, { workflowKey = this.getWorkflowScopedQueueKey?.() } = {}) {
+        const hashMatches = Array.isArray(data?.local_hash_matches)
+            ? data.local_hash_matches
+            : [];
+        if (!missing || !hashMatches.length) return [];
+
+        const missingKey = this.getMissingModelKey(missing);
+        const currentMissing = (this.missingModels || [])
+            .find(item => this.getMissingModelKey(item) === missingKey)
+            || missing;
+        const currentMatches = Array.isArray(currentMissing.matches)
+            ? currentMissing.matches
+            : (Array.isArray(missing.matches) ? missing.matches : []);
+        const mergedMatches = this.mergeLocalMatches(currentMatches, hashMatches);
+
+        currentMissing.matches = mergedMatches;
+        missing.matches = mergedMatches;
+        this.persistLocalMatchesInAnalysisCache(currentMissing, hashMatches);
+
+        const state = workflowKey
+            ? this.getSearchStateForWorkflow?.(workflowKey, currentMissing)
+            : this.searchResultCache?.get(this.getMissingSearchKey(currentMissing));
+        if (state) {
+            state.results = {
+                ...(state.results || {}),
+                local_hash_matches: this.mergeLocalMatches(
+                    state.results?.local_hash_matches || [],
+                    hashMatches
+                )
+            };
+            state.lastAttemptSources = Array.from(new Set([...(state.lastAttemptSources || []), 'local']));
+            state.lastAttemptFound = true;
+            state.sourceProgress = {
+                ...(state.sourceProgress || {}),
+                local: {
+                    status: 'found',
+                    percent: 100,
+                    message: 'Hash metadata match',
+                    updatedAt: Date.now()
+                }
+            };
+            if (workflowKey) {
+                this.persistSearchStateForWorkflow?.(workflowKey, currentMissing, state);
+            }
+        }
+
+        this.refreshLocalMatchesUiForMissing?.(currentMissing);
+        return hashMatches;
+    },
+
+    restoreSearchLocalHashMatchesForMissing(missing) {
+        if (!missing) return missing;
+
+        const state = this.searchResultCache?.get(this.getMissingSearchKey(missing));
+        const hashMatches = Array.isArray(state?.results?.local_hash_matches)
+            ? state.results.local_hash_matches
+            : [];
+        if (!hashMatches.length) return missing;
+
+        missing.matches = this.mergeLocalMatches(
+            Array.isArray(missing.matches) ? missing.matches : [],
+            this.cloneLocalMatches(hashMatches)
+        );
+        return missing;
+    },
+
     rememberDownloadedLocalMatchesForMissing(missing, matches = [], metadata = {}) {
         if (!missing || !Array.isArray(matches)) return null;
 
@@ -1732,6 +1798,7 @@ export const resolveDownloadMethods = {
                         searchedAt: new Date().toISOString(),
                         forceRefresh: Boolean(forceSearch)
                     });
+                    this.applyLocalHashMatchesFromSearchResponse(missing, data, { workflowKey });
                     state.lastAttemptSources = Array.from(attemptedSources);
                     state.lastAttemptFound = anyFound;
                     this.clearSearchProgressTimer(searchRunId, source);

@@ -1315,6 +1315,13 @@ def _build_result_from_payload(
     version_name = version.get("name") or ""
     filename = selected_file.get("name") or preferred_filename or query
     match_type = "exact" if best_confidence == 100.0 else "similar"
+    hashes = selected_file.get("hashes") if isinstance(selected_file.get("hashes"), dict) else {}
+    sha256 = (
+        selected_file.get("sha256")
+        or selected_file.get("hash")
+        or hashes.get("SHA256")
+        or hashes.get("sha256")
+    )
 
     tags = context.get("tags") or []
     if not isinstance(tags, list):
@@ -1359,6 +1366,9 @@ def _build_result_from_payload(
         "is_deleted": bool(context.get("deletedAt") or version.get("deletedAt")),
         "match_type": match_type,
         "confidence": best_confidence,
+        "sha256": sha256,
+        "hash": sha256,
+        "hashes": hashes,
     }
 
 
