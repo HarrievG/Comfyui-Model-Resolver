@@ -1168,26 +1168,18 @@ export const resolveDownloadMethods = {
         }
     },
 
-    /**
-     * Download a model from a known source
-     */
-    async downloadModel(missing) {
-        const source = missing.download_source;
-        if (!source || !source.url) {
-            this.showNotification('No download URL available', 'error');
-            return;
-        }
-
-        // Use filename from download source if available (may be different from original)
-        const originalFilename = missing.original_path?.split('/').pop()?.split('\\').pop() || 'model.safetensors';
-        const filename = source.filename || originalFilename;
-        const targetSelection = this.getDownloadTargetSelection(missing, source.directory || missing.category || 'checkpoints');
-        const category = targetSelection.category;
-        const subfolder = targetSelection.subfolder;
-        const baseDirectory = targetSelection.baseDirectory || '';
+    async executeDownloadRequest(missing, {
+        url,
+        filename,
+        category,
+        subfolder = '',
+        baseDirectory = '',
+        pathMetadata = null,
+        downloadMetadata = null,
+        btn = null
+    }) {
         const progressId = this.getDownloadProgressElementId(missing);
         const progressDiv = this.contentElement?.querySelector(`#${progressId}`);
-        const downloadBtn = this.contentElement?.querySelector(`#${this.getDownloadButtonElementId(missing)}`);
         const tokens = this.getStoredTokens();
         const workflowContext = this.getActiveWorkflowTabContext?.() || {};
         const workflowKey = this.getWorkflowScopedQueueKey?.() || '';
@@ -1209,7 +1201,7 @@ export const resolveDownloadMethods = {
                 downloadPath: '',
                 downloadDirectory: '',
                 baseDirectory,
-                sourceUrl: source.url,
+                sourceUrl: url,
                 workflowKey,
                 workflowId,
                 workflowRouteKey,
@@ -1224,16 +1216,21 @@ export const resolveDownloadMethods = {
                 isActive: true
             });
 
-            // Disable button and show progress with cancel button immediately
-            if (downloadBtn) {
-                downloadBtn.disabled = true;
-                downloadBtn.classList.remove('mr-is-success-action', 'mr-btn-primary');
-                downloadBtn.textContent = 'Starting...';
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.remove('mr-is-success-action', 'mr-btn-primary');
+                if (btn.classList.contains('search-download-btn')) {
+                    btn.innerHTML = getSvgIcon('download');
+                    btn.setAttribute('data-tooltip', 'Starting download...');
+                    btn.setAttribute('aria-label', 'Starting download');
+                } else {
+                    btn.textContent = 'Starting...';
+                }
             }
+
             if (progressDiv) {
                 progressDiv.classList.remove('mr-is-hidden');
                 progressDiv.classList.add('mr-is-visible');
-                // Show progress bar with cancel button immediately
                 progressDiv.innerHTML = this.renderProgressWithAction({
                     percent: 0,
                     leftText: '<span class="mr-info-accent-text">Connecting...</span>',
@@ -1243,23 +1240,15 @@ export const resolveDownloadMethods = {
                 });
             }
 
-            const pathMetadata = this.getDownloadPathMetadata(missing, source);
-            const downloadMetadata = this.getDownloadMetadata(missing, source, {
-                filename,
-                category,
-                url: source.url,
-                pathMetadata
-            });
-
             // Start download
             const response = await api.fetchApi('/model_resolver/download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    url: source.url,
-                    filename: filename,
-                    category: category,
-                    subfolder: subfolder,
+                    url,
+                    filename,
+                    category,
+                    subfolder,
                     base_directory: baseDirectory,
                     path_metadata: pathMetadata,
                     download_metadata: downloadMetadata,
@@ -1277,19 +1266,18 @@ export const resolveDownloadMethods = {
                 throw new Error(data.error || 'Download failed');
             }
 
-            // Track download and poll for progress
             const downloadId = data.download_id;
             this.activeDownloads[downloadId] = {
                 missing,
                 progressDiv,
-                downloadBtn,
+                downloadBtn: btn,
                 category,
                 subfolder,
                 filename,
                 downloadPath: data.path || '',
                 downloadDirectory: data.directory || '',
                 baseDirectory,
-                sourceUrl: source.url,
+                sourceUrl: url,
                 workflowKey,
                 workflowId,
                 workflowRouteKey,
@@ -1300,6 +1288,7 @@ export const resolveDownloadMethods = {
                 workflowTabAriaControls,
                 workflowTabText
             };
+
             const snapshot = this.rememberDownloadUiState(
                 downloadId,
                 this.activeDownloads[downloadId],
@@ -1313,7 +1302,6 @@ export const resolveDownloadMethods = {
                 { isActive: true }
             );
 
-            // Update the Download All button state
             this.updateDownloadAllButtonState();
             this.updateQueuePanel?.();
             this.renderDownloadSnapshot(downloadId, snapshot);
@@ -1329,7 +1317,7 @@ export const resolveDownloadMethods = {
                 downloadPath: '',
                 downloadDirectory: '',
                 baseDirectory,
-                sourceUrl: source.url,
+                sourceUrl: url,
                 workflowKey,
                 workflowId,
                 workflowRouteKey,
@@ -1345,17 +1333,61 @@ export const resolveDownloadMethods = {
                 type: 'error',
                 isActive: false
             });
+
             if (progressDiv) {
-                this.renderDownloadSnapshot(null, snapshot, { progressDiv, downloadBtn });
+                this.renderDownloadSnapshot(null, snapshot, { progressDiv, downloadBtn: btn });
             }
-            if (downloadBtn) {
-                downloadBtn.disabled = false;
-                downloadBtn.classList.remove('mr-is-success-action', 'mr-btn-primary');
-                downloadBtn.innerHTML = '<span class="mr-btn-icon">☁</span> Retry';
+
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('mr-is-success-action', 'mr-btn-primary');
+                if (btn.classList.contains('search-download-btn')) {
+                    btn.innerHTML = getSvgIcon('download');
+                    btn.setAttribute('data-tooltip', 'Retry download');
+                    btn.setAttribute('aria-label', 'Retry download');
+                } else {
+                    btn.innerHTML = '<span class="mr-btn-icon">☁</span> Retry';
+                }
             }
+
             this.updateQueuePanel?.();
             this.showNotification('Download failed: ' + error.message, 'error');
         }
+    },
+
+    /**
+     * Download a model from a known source
+     */
+    async downloadModel(missing) {
+        const source = missing.download_source;
+        if (!source || !source.url) {
+            this.showNotification('No download URL available', 'error');
+            return;
+        }
+
+        const originalFilename = missing.original_path?.split('/').pop()?.split('\\').pop() || 'model.safetensors';
+        const filename = source.filename || originalFilename;
+        const targetSelection = this.getDownloadTargetSelection(missing, source.directory || missing.category || 'checkpoints');
+        const downloadBtn = this.contentElement?.querySelector(`#${this.getDownloadButtonElementId(missing)}`);
+
+        const pathMetadata = this.getDownloadPathMetadata(missing, source);
+        const downloadMetadata = this.getDownloadMetadata(missing, source, {
+            filename,
+            category: targetSelection.category,
+            url: source.url,
+            pathMetadata
+        });
+
+        await this.executeDownloadRequest(missing, {
+            url: source.url,
+            filename,
+            category: targetSelection.category,
+            subfolder: targetSelection.subfolder,
+            baseDirectory: targetSelection.baseDirectory || '',
+            pathMetadata,
+            downloadMetadata,
+            btn: downloadBtn
+        });
     },
 
     /**
@@ -2420,20 +2452,8 @@ export const resolveDownloadMethods = {
      * Download from search results
      */
     async downloadFromSearch(missing, url, filename, category, btn, pathMetadata = null, downloadMetadata = null) {
-        const progressId = this.getDownloadProgressElementId(missing);
-        const progressDiv = this.contentElement?.querySelector(`#${progressId}`);
-        const tokens = this.getStoredTokens();
         const targetSelection = this.getDownloadTargetSelection(missing, category || missing.category || 'checkpoints');
-        const workflowContext = this.getActiveWorkflowTabContext?.() || {};
-        const workflowKey = this.getWorkflowScopedQueueKey?.() || '';
-        const workflowRouteKey = workflowContext.workflowRouteKey || this.getActiveWorkflowRouteKey?.() || this.activeWorkflowRouteKey || '';
-        const workflowLabel = workflowContext.workflowLabel || this.getActiveWorkflowDownloadLabel?.() || 'Current workflow';
-        const workflowId = workflowContext.workflowId || this.getActiveWorkflowId?.() || '';
-        const workflowSignature = workflowContext.workflowSignature || this.activeWorkflowSignature || '';
-        const workflowTabId = workflowContext.workflowTabId || '';
-        const workflowTabName = workflowContext.workflowTabName || '';
-        const workflowTabAriaControls = workflowContext.workflowTabAriaControls || '';
-        const workflowTabText = workflowContext.workflowTabText || '';
+        
         const resolvedPathMetadata = pathMetadata || this.getDownloadPathMetadata(missing, {
             filename,
             category: targetSelection.category
@@ -2457,161 +2477,16 @@ export const resolveDownloadMethods = {
         resolvedDownloadMetadata.source_url = url;
         resolvedDownloadMetadata.path_metadata = resolvedPathMetadata;
 
-        try {
-            this.rememberDownloadSnapshotForMissing(missing, {
-                downloadId: null,
-                category: targetSelection.category,
-                subfolder: targetSelection.subfolder,
-                filename,
-                downloadPath: '',
-                downloadDirectory: '',
-                baseDirectory: targetSelection.baseDirectory || '',
-                sourceUrl: url,
-                workflowKey,
-                workflowId,
-                workflowRouteKey,
-                workflowLabel,
-                workflowSignature,
-                workflowTabId,
-                workflowTabName,
-                workflowTabAriaControls,
-                workflowTabText,
-                progress: { status: 'starting', progress: 0, filename },
-                status: 'starting',
-                isActive: true
-            });
-
-            btn.disabled = true;
-            btn.classList.remove('mr-is-success-action', 'mr-btn-primary');
-            if (btn.classList.contains('search-download-btn')) {
-                btn.innerHTML = getSvgIcon('download');
-                btn.setAttribute('data-tooltip', 'Starting download...');
-                btn.setAttribute('aria-label', 'Starting download');
-            } else {
-                btn.textContent = 'Starting...';
-            }
-
-            if (progressDiv) {
-                progressDiv.classList.remove('mr-is-hidden');
-                progressDiv.classList.add('mr-is-visible');
-                // Show progress bar with cancel button immediately
-                progressDiv.innerHTML = this.renderProgressWithAction({
-                    percent: 0,
-                    leftText: '<span class="mr-info-accent-text">Connecting...</span>',
-                    rightText: '',
-                    actionClass: 'cancel-download-btn-pending mr-btn mr-btn-danger mr-btn-sm',
-                    actionText: 'Cancel'
-                });
-            }
-
-            const response = await api.fetchApi('/model_resolver/download', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    url,
-                    filename,
-                    category: targetSelection.category,
-                    subfolder: targetSelection.subfolder,
-                    base_directory: targetSelection.baseDirectory || '',
-                    path_metadata: resolvedPathMetadata,
-                    download_metadata: resolvedDownloadMetadata,
-                    hf_token: tokens.hf_token,
-                    civitai_key: tokens.civitai_key
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Download failed: ${response.status}`);
-            }
-
-            const data = await response.json();
-            if (!data.success) {
-                throw new Error(data.error || 'Download failed');
-            }
-
-            // Track and poll
-            const downloadId = data.download_id;
-            this.activeDownloads[downloadId] = {
-                missing,
-                progressDiv,
-                downloadBtn: btn,
-                category: targetSelection.category,
-                subfolder: targetSelection.subfolder,
-                filename,
-                downloadPath: data.path || '',
-                downloadDirectory: data.directory || '',
-                baseDirectory: targetSelection.baseDirectory || '',
-                sourceUrl: url,
-                workflowKey,
-                workflowId,
-                workflowRouteKey,
-                workflowLabel,
-                workflowSignature,
-                workflowTabId,
-                workflowTabName,
-                workflowTabAriaControls,
-                workflowTabText
-            };
-            const snapshot = this.rememberDownloadUiState(
-                downloadId,
-                this.activeDownloads[downloadId],
-                {
-                    status: 'starting',
-                    progress: 0,
-                    filename,
-                    path: data.path || '',
-                    directory: data.directory || ''
-                },
-                { isActive: true }
-            );
-
-            // Update the Download All button state
-            this.updateDownloadAllButtonState();
-            this.updateQueuePanel?.();
-            this.renderDownloadSnapshot(downloadId, snapshot);
-
-            this.pollDownloadProgress(downloadId);
-
-        } catch (error) {
-            console.error('Model Resolver: Download error:', error);
-            const snapshot = this.rememberDownloadSnapshotForMissing(missing, {
-                downloadId: null,
-                category: targetSelection.category,
-                filename,
-                downloadPath: '',
-                downloadDirectory: '',
-                baseDirectory: targetSelection.baseDirectory || '',
-                sourceUrl: url,
-                workflowKey,
-                workflowId,
-                workflowRouteKey,
-                workflowLabel,
-                workflowSignature,
-                workflowTabId,
-                workflowTabName,
-                workflowTabAriaControls,
-                workflowTabText,
-                progress: { status: 'error', filename, error: error.message },
-                status: 'error',
-                message: error.message,
-                type: 'error',
-                isActive: false
-            });
-            if (progressDiv) {
-                this.renderDownloadSnapshot(null, snapshot, { progressDiv, downloadBtn: btn });
-            }
-            btn.disabled = false;
-            btn.classList.remove('mr-is-success-action', 'mr-btn-primary');
-            if (btn.classList.contains('search-download-btn')) {
-                btn.innerHTML = getSvgIcon('download');
-                btn.setAttribute('data-tooltip', 'Retry download');
-                btn.setAttribute('aria-label', 'Retry download');
-            } else {
-                btn.textContent = 'Retry';
-            }
-            this.updateQueuePanel?.();
-            this.showNotification('Download failed: ' + error.message, 'error');
-        }
+        await this.executeDownloadRequest(missing, {
+            url,
+            filename,
+            category: targetSelection.category,
+            subfolder: targetSelection.subfolder,
+            baseDirectory: targetSelection.baseDirectory || '',
+            pathMetadata: resolvedPathMetadata,
+            downloadMetadata: resolvedDownloadMetadata,
+            btn
+        });
     },
 
     async fetchLocalMatches(filename, category = '', forceRescan = false) {
