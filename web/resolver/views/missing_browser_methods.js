@@ -386,11 +386,7 @@ export const missingBrowserMethods = {
             const isBatchSelected = this.batchSelectedMissingKeys?.has(key);
             const isResolved = this.isMissingModelResolved(missing);
             const filename = this.getMissingFilename(missing);
-            const bestMatch = this.getBestLocalMatch(missing, 70);
-            const confidence = bestMatch ? Number(bestMatch.confidence || 0) : 0;
-            const matchName = bestMatch?.model?.relative_path || bestMatch?.filename || bestMatch?.path || '';
-            const matchDisplay = matchName || 'No local match';
-            const matchClass = confidence === 100 ? 'exact' : (bestMatch ? 'partial' : 'none');
+            const { bestMatch, confidence, matchDisplay, matchClass } = this.getLocalMatchDisplayInfo(missing);
             const typeLabel = missing.category ? this.getCategoryDisplayName(missing.category) : 'unknown';
             const typeColorClass = this.getModelTypeColorClass(missing.category || typeLabel);
             const nodeDisplay = this.getMissingNodeDisplay(missing);
@@ -1609,11 +1605,7 @@ export const missingBrowserMethods = {
             .find(item => item.dataset.missingKey === missingKey);
         if (!row) return;
 
-        const bestMatch = this.getBestLocalMatch(missing, 70);
-        const confidence = bestMatch ? Number(bestMatch.confidence || 0) : 0;
-        const matchName = bestMatch?.model?.relative_path || bestMatch?.filename || bestMatch?.path || '';
-        const matchDisplay = matchName || 'No local match';
-        const matchClass = confidence === 100 ? 'exact' : (bestMatch ? 'partial' : 'none');
+        const { bestMatch, confidence, matchDisplay, matchClass } = this.getLocalMatchDisplayInfo(missing);
 
         const bestEl = row.querySelector('.mr-missing-row-best');
         if (bestEl) {

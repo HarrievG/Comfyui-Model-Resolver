@@ -1,4 +1,4 @@
-﻿import { app } from "../../../../../scripts/app.js";
+import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -242,5 +242,73 @@ export const renderFormatMethods = {
 
             await new Promise(resolve => setTimeout(resolve, 250));
         }
+    },
+
+    /**
+     * Get display information for the best local match of a missing model
+     * @param {object} missing - The missing model object
+     * @returns {object} Match display metadata
+     */
+    getLocalMatchDisplayInfo(missing) {
+        const bestMatch = this.getBestLocalMatch?.(missing, 70) || null;
+        const confidence = bestMatch ? Number(bestMatch.confidence || 0) : 0;
+        const matchName = bestMatch?.model?.relative_path || bestMatch?.filename || bestMatch?.path || '';
+        const matchDisplay = matchName || 'No local match';
+        const matchClass = confidence === 100 ? 'exact' : (bestMatch ? 'partial' : 'none');
+        return { bestMatch, confidence, matchDisplay, matchClass };
+    },
+
+    /**
+     * Format bytes to human readable string
+     */
+    formatBytes(bytes) {
+        const value = Number(bytes) || 0;
+        if (!Number.isFinite(value) || value <= 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.min(sizes.length - 1, Math.floor(Math.log(value) / Math.log(k)));
+        return parseFloat((value / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    },
+
+    formatDuration(seconds) {
+        const totalSeconds = Math.max(0, Math.ceil(Number(seconds) || 0));
+        if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return '';
+
+        if (totalSeconds < 60) return `${totalSeconds}s`;
+
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const remainingSeconds = totalSeconds % 60;
+
+        if (hours > 0) {
+            return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+        }
+
+        return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+    },
+
+    getDownloadEtaText(progress = {}) {
+        const totalSize = Number(progress.total_size) || 0;
+        const downloaded = Number(progress.downloaded) || 0;
+        const speed = Number(progress.speed) || 0;
+        if (totalSize <= 0 || downloaded <= 0 || speed <= 0 || downloaded >= totalSize) return '';
+
+        const duration = this.formatDuration((totalSize - downloaded) / speed);
+        return duration ? `ETA ${duration}` : '';
+    },
+
+    formatDownloadProgressMeta(progress = {}) {
+        const parts = [];
+        const speed = Number(progress.speed) || 0;
+        if (speed > 0) {
+            parts.push(`${this.formatBytes(speed)}/s`);
+        }
+
+        const eta = this.getDownloadEtaText(progress);
+        if (eta) {
+            parts.push(eta);
+        }
+
+        return parts.join(' | ');
     }
 };
