@@ -7,7 +7,7 @@ Implements fuzzy string matching to find similar model names.
 import os
 import re
 import heapq
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from difflib import SequenceMatcher
 
 from .log_system.log_funcs import log_debug, log_info, log_warn, log_error, log_exception
@@ -238,3 +238,64 @@ def find_matches(
                 heapq.heapreplace(best_matches, entry)
 
     return [match for _, _, match in sorted(best_matches, key=lambda x: x[0], reverse=True)]
+
+
+def normalize_base_model(value: str) -> str:
+    """
+    Normalize a base model name to standard alphanumeric lowercase format.
+    
+    Args:
+        value: The base model name to normalize
+        
+    Returns:
+        Normalized base model name
+    """
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def base_model_matches(candidate: str, preferred: Optional[str]) -> bool:
+    """
+    Check if a candidate base model matches a preferred base model family.
+    
+    Args:
+        candidate: Candidate base model name
+        preferred: Preferred base model name
+        
+    Returns:
+        True if the candidate base model is a match for the preferred family, False otherwise.
+    """
+    preferred_norm = normalize_base_model(preferred or "")
+    if not preferred_norm:
+        return True
+
+    candidate_norm = normalize_base_model(candidate or "")
+    if not candidate_norm:
+        return False
+
+    from .sources.popular import load_base_model_aliases
+    aliases = load_base_model_aliases()
+    # Exact alias membership check - avoids false positives from substring matching
+    # e.g. prevents "zimage" (Z-Image alias) from matching "zimagebase" (ZImageBase)
+    preferred_tokens = aliases.get(preferred_norm, [preferred_norm])
+    if candidate_norm in preferred_tokens:
+        return True
+    # Symmetric check: if preferred is an alias of candidate's model family
+    candidate_tokens = aliases.get(candidate_norm, [candidate_norm])
+    return preferred_norm in candidate_tokens
+
+
+def base_model_score(candidate: str, preferred: Optional[str]) -> float:
+    """
+    Calculate a score for a base model match (1000.0 if matches, -1000.0 otherwise).
+    
+    Args:
+        candidate: Candidate base model name
+        preferred: Preferred base model name
+        
+    Returns:
+        Match score
+    """
+    if not preferred:
+        return 0.0
+    return 1000.0 if base_model_matches(candidate, preferred) else -1000.0
+

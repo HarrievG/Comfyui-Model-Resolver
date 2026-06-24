@@ -14,7 +14,13 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 import requests
 
-from ..matcher import calculate_similarity_with_normalization, normalize_filename
+from ..matcher import (
+    calculate_similarity_with_normalization,
+    normalize_filename,
+    normalize_base_model as _normalize_base_model,
+    base_model_matches as _base_model_matches,
+    base_model_score as _base_model_score,
+)
 from ..log_system.log_funcs import (
     log_debug,
     log_info,
@@ -1221,36 +1227,6 @@ def _resolve_civarchive_model_title_match(
         base_model_context=base_model_context,
     )
 
-
-def _normalize_base_model(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
-
-
-def _base_model_matches(candidate: str, preferred: Optional[str]) -> bool:
-    preferred_norm = _normalize_base_model(preferred or "")
-    if not preferred_norm:
-        return True
-
-    candidate_norm = _normalize_base_model(candidate or "")
-    if not candidate_norm:
-        return False
-
-    from .popular import load_base_model_aliases
-    aliases = load_base_model_aliases()
-    # Exact alias membership check - avoids false positives from substring matching
-    # e.g. prevents "zimage" (Z-Image alias) from matching "zimagebase" (ZImageBase)
-    preferred_tokens = aliases.get(preferred_norm, [preferred_norm])
-    if candidate_norm in preferred_tokens:
-        return True
-    # Symmetric check: if preferred is an alias of candidate's model family
-    candidate_tokens = aliases.get(candidate_norm, [candidate_norm])
-    return preferred_norm in candidate_tokens
-
-
-def _base_model_score(candidate: str, preferred: Optional[str]) -> float:
-    if not preferred:
-        return 0.0
-    return 1000.0 if _base_model_matches(candidate, preferred) else -1000.0
 
 
 def _build_result_from_payload(

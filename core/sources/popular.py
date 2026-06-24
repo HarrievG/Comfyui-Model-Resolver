@@ -74,9 +74,7 @@ def _load_model_aliases() -> Dict[str, List[str]]:
     return _model_aliases_cache
 
 
-def _normalize_base_model(value: str) -> str:
-    import re
-    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+from ..matcher import normalize_base_model as _normalize_base_model
 
 
 def load_base_model_aliases() -> Dict[str, List[str]]:
