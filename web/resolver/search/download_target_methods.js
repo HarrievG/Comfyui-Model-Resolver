@@ -503,6 +503,73 @@ export const downloadTargetMethods = {
         return this.downloadSubfolders.get(this.normalizeDownloadCategory(category)) || [];
     },
 
+    normalizeDownloadSubfolderPath(value = '') {
+        return String(value || '')
+            .replace(/\//g, '\\')
+            .split('\\')
+            .map(part => part.trim())
+            .filter(part => part && part !== '.' && part !== '..')
+            .join('\\');
+    },
+
+    getDownloadSubfolderPrefixes(value = '') {
+        const parts = this.normalizeDownloadSubfolderPath(value).split('\\').filter(Boolean);
+        const prefixes = [];
+        let current = '';
+        parts.forEach(part => {
+            current = current ? `${current}\\${part}` : part;
+            prefixes.push(current);
+        });
+        return prefixes;
+    },
+
+    rememberDownloadedSubfolder(category = '', subfolder = '', baseDirectory = '') {
+        const key = this.normalizeDownloadCategory(category);
+        if (!key || key === 'unknown') return;
+
+        const prefixes = this.getDownloadSubfolderPrefixes(subfolder);
+        if (!prefixes.length) return;
+
+        const cached = this.downloadSubfolders.get(key);
+        if (!Array.isArray(cached)) {
+            this.downloadSubfolders.delete(key);
+            return;
+        }
+
+        const targetBaseDirectory = String(baseDirectory || this.getDownloadTargetBaseDirectory(key) || '');
+        const normalizeBase = (value = '') => String(value || '')
+            .replace(/[\\/]+/g, '/')
+            .replace(/\/+$/g, '')
+            .toLowerCase();
+        const normalizeValue = (value = '') => this.normalizeDownloadSubfolderPath(value).toLowerCase();
+        const makeIdentity = (value = '', base = '') => `${normalizeValue(value)}::${normalizeBase(base)}`;
+        const known = new Set(cached.map(option => makeIdentity(
+            this.getSubfolderOptionValue(option),
+            this.getSubfolderOptionBaseDirectory(option)
+        )));
+        const next = [...cached];
+
+        prefixes.forEach(prefix => {
+            const identity = makeIdentity(prefix, targetBaseDirectory);
+            if (known.has(identity)) return;
+            known.add(identity);
+            next.push({
+                value: prefix,
+                label: prefix,
+                base_directory: targetBaseDirectory
+            });
+        });
+
+        next.sort((a, b) => {
+            const valueCompare = this.getSubfolderOptionValue(a)
+                .localeCompare(this.getSubfolderOptionValue(b), undefined, { sensitivity: 'base' });
+            if (valueCompare !== 0) return valueCompare;
+            return this.getSubfolderOptionBaseDirectory(a)
+                .localeCompare(this.getSubfolderOptionBaseDirectory(b), undefined, { sensitivity: 'base' });
+        });
+        this.downloadSubfolders.set(key, next);
+    },
+
     getSubfolderOptionValue(option) {
         return String(
             option && typeof option === 'object'

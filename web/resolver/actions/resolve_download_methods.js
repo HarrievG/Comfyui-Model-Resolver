@@ -492,6 +492,18 @@ export const resolveDownloadMethods = {
         if (progress.filename) info.filename = progress.filename;
     },
 
+    rememberDownloadSubfolderAfterCompletion(info = {}, progress = {}) {
+        const category = info?.category || progress?.category || '';
+        const subfolder = info?.subfolder || progress?.subfolder || '';
+        if (!category || !subfolder) return;
+
+        this.rememberDownloadedSubfolder?.(
+            category,
+            subfolder,
+            info?.baseDirectory || progress?.base_directory || progress?.baseDirectory || ''
+        );
+    },
+
     renderDownloadStatusMessage(message, type, progress = {}, info = {}) {
         const contextMenuModel = this.getDownloadFolderContext(progress, info);
         return this.renderStatusMessage(message, type, {
@@ -742,6 +754,7 @@ export const resolveDownloadMethods = {
         const snapshot = this.rememberDownloadSnapshotForMissing(info.missing, {
             downloadId,
             category: info.category || '',
+            subfolder: info.subfolder || '',
             filename: progress.filename || info.filename || '',
             downloadPath: progress.path || info.downloadPath || '',
             downloadDirectory: progress.directory || info.downloadDirectory || '',
@@ -1261,6 +1274,7 @@ export const resolveDownloadMethods = {
             this.rememberDownloadSnapshotForMissing(missing, {
                 downloadId: null,
                 category,
+                subfolder,
                 filename,
                 downloadPath: '',
                 downloadDirectory: '',
@@ -1340,6 +1354,7 @@ export const resolveDownloadMethods = {
                 progressDiv,
                 downloadBtn,
                 category,
+                subfolder,
                 filename,
                 downloadPath: data.path || '',
                 downloadDirectory: data.directory || '',
@@ -1450,6 +1465,7 @@ export const resolveDownloadMethods = {
                     isActive: false
                 });
                 this.renderDownloadSnapshot(downloadId, completedSnapshot, { progressDiv, downloadBtn });
+                this.rememberDownloadSubfolderAfterCompletion(info, progress);
                 this.rememberCompletedDownloadHistory?.(downloadId, info, progress);
                 delete this.activeDownloads[downloadId];
                 this.updateDownloadAllButtonState();
@@ -2515,6 +2531,7 @@ export const resolveDownloadMethods = {
             this.rememberDownloadSnapshotForMissing(missing, {
                 downloadId: null,
                 category: targetSelection.category,
+                subfolder: targetSelection.subfolder,
                 filename,
                 downloadPath: '',
                 downloadDirectory: '',
@@ -2589,6 +2606,7 @@ export const resolveDownloadMethods = {
                 progressDiv,
                 downloadBtn: btn,
                 category: targetSelection.category,
+                subfolder: targetSelection.subfolder,
                 filename,
                 downloadPath: data.path || '',
                 downloadDirectory: data.directory || '',
