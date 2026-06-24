@@ -29,6 +29,7 @@ from .workflow_analyzer import (
 from .matcher import find_matches
 from .workflow_updater import update_workflow_nodes
 from .sources.civitai import resolve_urn
+from .sources.huggingface import parse_huggingface_url as parse_hf_url
 
 # Regex patterns for URL extraction (matches HuggingFace and CivitAI URLs)
 URL_PATTERN = re.compile(r'(https?://(?:huggingface\.co|civitai\.com)[^\s"\'<>\)\\]+)')
@@ -659,16 +660,9 @@ def parse_huggingface_url(url: str) -> Tuple[Optional[str], Optional[str]]:
     Returns:
         Tuple of (repo_id, file_path) or (None, None) if not valid
     """
-    if not url or "huggingface.co" not in url:
-        return None, None
-
-    # Pattern: https://huggingface.co/user/repo/resolve/main/path/to/file.safetensors
-    match = re.match(
-        r"https?://huggingface\.co/([^/]+/[^/]+)/(?:resolve|blob)/[^/]+/(.+)", url
-    )
-    if match:
-        return match.group(1), match.group(2)
-
+    parsed = parse_hf_url(url)
+    if parsed:
+        return parsed.get("repo"), parsed.get("filename")
     return None, None
 
 

@@ -22,6 +22,7 @@ from .log_system.log_funcs import (
     log_error,
     log_exception,
 )
+from .resolver import normalize_sha256
 
 try:
     import folder_paths
@@ -305,17 +306,6 @@ def _find_metadata_file_info(
     return {}
 
 
-def _normalize_sha256(value: Any) -> str:
-    text = str(value or "").strip().lower()
-    for prefix in ("sha256:", "sha256="):
-        if text.startswith(prefix):
-            text = text[len(prefix):].strip()
-            break
-    if len(text) == 64 and all(char in "0123456789abcdef" for char in text):
-        return text
-    return ""
-
-
 def _extract_expected_sha256(metadata: Optional[Dict[str, Any]]) -> str:
     source = metadata if isinstance(metadata, dict) else {}
     details = _as_dict(source.get("civitai_details") or source.get("details"))
@@ -329,7 +319,7 @@ def _extract_expected_sha256(metadata: Optional[Dict[str, Any]]) -> str:
     )
     file_info = _find_metadata_file_info(source, selected_version, str(filename))
     hashes = _as_dict(_first_present(file_info.get("hashes"), source.get("hashes")))
-    return _normalize_sha256(
+    return normalize_sha256(
         _first_present(
             source.get("sha256"),
             source.get("hash"),
@@ -364,7 +354,7 @@ def read_completed_metadata_sha256(file_path: str) -> str:
         )
         return ""
 
-    return _normalize_sha256(payload.get("sha256") or payload.get("hash"))
+    return normalize_sha256(payload.get("sha256") or payload.get("hash"))
 
 
 def calculate_file_sha256(file_path: str) -> str:
