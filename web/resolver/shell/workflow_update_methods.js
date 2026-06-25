@@ -1,4 +1,4 @@
-﻿import { app } from "../../../../../scripts/app.js";
+import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -45,12 +45,7 @@ export const workflowUpdateMethods = {
     },
 
     async fetchComfyNodeDefs() {
-        const response = await api.fetchApi(`/object_info?model_resolver_refresh=${Date.now()}`);
-        if (!response.ok) {
-            throw new Error(`object_info refresh failed: ${response.status}`);
-        }
-
-        return await response.json();
+        return await this.fetchJson(`/object_info?model_resolver_refresh=${Date.now()}`, {}, 'Fetch ComfyUI node definitions');
     },
 
     shouldRefreshComfyModelCatalogForApply(workflow = null, resolutions = []) {

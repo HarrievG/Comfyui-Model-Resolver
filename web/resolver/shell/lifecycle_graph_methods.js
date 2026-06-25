@@ -198,21 +198,18 @@ export const lifecycleGraphMethods = {
 
             // Call analyze endpoint
             const progressPromise = this.pollAnalysisProgress(analysisId, analysisId);
-            const response = await api.fetchApi('/model_resolver/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ workflow, analysis_id: analysisId, force_rescan: Boolean(forceRescan) })
-            });
-            if (this._analysisProgressToken === analysisId) {
-                this._analysisProgressToken = null;
+            let data;
+            try {
+                data = await this.fetchJson('/model_resolver/analyze', {
+                    method: 'POST',
+                    body: JSON.stringify({ workflow, analysis_id: analysisId, force_rescan: Boolean(forceRescan) })
+                }, 'Analyze workflow');
+            } finally {
+                if (this._analysisProgressToken === analysisId) {
+                    this._analysisProgressToken = null;
+                }
+                await progressPromise;
             }
-            await progressPromise;
-
-            if (!response.ok) {
-                throw new Error(`API error: ${response.status}`);
-            }
-
-            const data = await response.json();
             if (this._workflowDataLoadToken === loadToken) {
                 this.cachedWorkflowSignature = workflowSignature;
                 this.cachedAnalysisData = data;

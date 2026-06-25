@@ -220,14 +220,15 @@ export const renderFormatMethods = {
     async pollAnalysisProgress(analysisId, token) {
         while (this._analysisProgressToken === token) {
             try {
-                const response = await api.fetchApi(`/model_resolver/analyze-progress/${analysisId}`);
+                const progress = await this.fetchJson(`/model_resolver/analyze-progress/${analysisId}`, {
+                    silent: true
+                }, 'Poll analysis progress');
                 if (
-                    response.ok &&
+                    progress &&
                     this.contentElement &&
                     this._analysisProgressToken === token &&
                     this.activeTab === 'missing'
                 ) {
-                    const progress = await response.json();
                     this.contentElement.innerHTML = this.renderAnalysisProgress(progress);
                     if (progress.status === 'completed' || progress.status === 'error') {
                         if (this._analysisProgressToken === token) {

@@ -41,20 +41,13 @@ export const resolveDownloadMethods = {
                 original_lora_name: ref.name || ref.original_path
             }));
 
-            const response = await api.fetchApi('/model_resolver/resolve', {
+            const data = await this.fetchJson('/model_resolver/resolve', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     workflow,
                     resolutions: resolutions
                 })
-            });
-
-            if (!response.ok) {
-                throw new Error(`API error: ${response.status}`);
-            }
-
-            const data = await response.json();
+            }, 'Resolve model');
             log.debug('Resolve response: success=', data.success, ' missing count:', data.workflow?.nodes?.length);
 
             if (data.success) {
@@ -95,17 +88,10 @@ export const resolveDownloadMethods = {
             }
 
             // Analyze workflow first
-            const analyzeResponse = await api.fetchApi('/model_resolver/analyze', {
+            const analyzeData = await this.fetchJson('/model_resolver/analyze', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow })
-            });
-
-            if (!analyzeResponse.ok) {
-                throw new Error(`API error: ${analyzeResponse.status}`);
-            }
-
-            const analyzeData = await analyzeResponse.json();
+            }, 'Analyze workflow');
             const missingModels = analyzeData.missing_models || [];
 
             // Collect all 100% matches
@@ -135,20 +121,13 @@ export const resolveDownloadMethods = {
             }
 
             // Apply resolutions
-            const resolveResponse = await api.fetchApi('/model_resolver/resolve', {
+            const resolveData = await this.fetchJson('/model_resolver/resolve', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     workflow,
                     resolutions
                 })
-            });
-
-            if (!resolveResponse.ok) {
-                throw new Error(`API error: ${resolveResponse.status}`);
-            }
-
-            const resolveData = await resolveResponse.json();
+            }, 'Resolve models');
 
             if (resolveData.success) {
                 await this.refreshComfyModelCatalogAfterApply?.(resolveData.workflow, resolutions);
@@ -195,17 +174,10 @@ export const resolveDownloadMethods = {
             }
 
             // Analyze workflow first
-            const analyzeResponse = await api.fetchApi('/model_resolver/analyze', {
+            const analyzeData = await this.fetchJson('/model_resolver/analyze', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow })
-            });
-
-            if (!analyzeResponse.ok) {
-                throw new Error(`API error: ${analyzeResponse.status}`);
-            }
-
-            const analyzeData = await analyzeResponse.json();
+            }, 'Analyze workflow');
             const missingModels = analyzeData.missing_models || [];
 
             // Collect models that need downloading:
@@ -1241,9 +1213,8 @@ export const resolveDownloadMethods = {
             }
 
             // Start download
-            const response = await api.fetchApi('/model_resolver/download', {
+            const data = await this.fetchJson('/model_resolver/download', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     url,
                     filename,
@@ -1255,13 +1226,8 @@ export const resolveDownloadMethods = {
                     hf_token: tokens.hf_token,
                     civitai_key: tokens.civitai_key
                 })
-            });
+            }, 'Start download');
 
-            if (!response.ok) {
-                throw new Error(`Download failed: ${response.status}`);
-            }
-
-            const data = await response.json();
             if (!data.success) {
                 throw new Error(data.error || 'Download failed');
             }
@@ -1398,12 +1364,7 @@ export const resolveDownloadMethods = {
         if (!info) return;
 
         try {
-            const response = await api.fetchApi(`/model_resolver/progress/${downloadId}`);
-            if (!response.ok) {
-                throw new Error('Failed to get progress');
-            }
-
-            const progress = await response.json();
+            const progress = await this.fetchJson(`/model_resolver/progress/${downloadId}`, { silent: true }, 'Get download progress');
             const snapshot = this.rememberDownloadUiState(downloadId, info, progress, { isActive: true });
             const { progressDiv, downloadBtn } = this.resolveDownloadUiElements(info);
             const { missing, category } = info;
@@ -1523,13 +1484,9 @@ export const resolveDownloadMethods = {
      */
     async cancelDownload(downloadId) {
         try {
-            const response = await api.fetchApi(`/model_resolver/cancel/${downloadId}`, {
+            await this.fetchJson(`/model_resolver/cancel/${downloadId}`, {
                 method: 'POST'
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to cancel download');
-            }
+            }, 'Cancel download');
 
             const info = this.activeDownloads[downloadId];
             if (info) {
@@ -1727,22 +1684,12 @@ export const resolveDownloadMethods = {
 
                     log.debug('Model Resolver: Search request:', JSON.stringify(searchData));
 
-                    const requestOptions = {
+                    const data = await this.fetchJson('/model_resolver/search', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(searchData)
-                    };
-                    if (sourceController) {
-                        requestOptions.signal = sourceController.signal;
-                    }
-
-                    const response = await api.fetchApi('/model_resolver/search', requestOptions);
-
-                    if (!response.ok) {
-                        throw new Error(`Search failed: ${response.status}`);
-                    }
-
-                    const data = await response.json();
+                        body: JSON.stringify(searchData),
+                        signal: sourceController?.signal,
+                        silent: true
+                    }, 'Search source');
                     log.debug('Model Resolver: Search response:', JSON.stringify(data));
 
                     if (!this.isBackgroundSearchRunActive(workflowKey, missingSearchKey, searchRunId)) {
@@ -1948,17 +1895,12 @@ export const resolveDownloadMethods = {
                 };
                 log.debug('resolveUrnAsync payload:', JSON.stringify(payload));
 
-                const response = await api.fetchApi('/model_resolver/search', {
+                data = await this.fetchJson('/model_resolver/search', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                log.debug('resolveUrnAsync response status:', response.status);
-                if (!response.ok) {
-                    throw new Error(`URN resolve failed: ${response.status}`);
-                }
-                data = await response.json();
+                    body: JSON.stringify(payload),
+                    silent: true
+                }, 'Resolve URN');
+                log.debug('resolveUrnAsync search completed');
             }
 
             if (data) {
@@ -2490,20 +2432,13 @@ export const resolveDownloadMethods = {
     },
 
     async fetchLocalMatches(filename, category = '', forceRescan = false) {
-        const response = await api.fetchApi('/model_resolver/local-matches', {
+        return await this.fetchJson('/model_resolver/local-matches', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 filename,
                 category: category || '',
                 force_rescan: Boolean(forceRescan)
             })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Local match search failed: ${response.status}`);
-        }
-
-        return await response.json();
+        }, 'Fetch local matches');
     }
 };

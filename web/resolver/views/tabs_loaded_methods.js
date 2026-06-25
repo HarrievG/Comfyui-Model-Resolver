@@ -1,4 +1,4 @@
-﻿import { app } from "../../../../../scripts/app.js";
+import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
@@ -114,17 +114,10 @@ export const tabsLoadedMethods = {
                 this.contentElement.innerHTML = '<p>Loading loaded models...</p>';
             }
 
-            const response = await api.fetchApi('/model_resolver/loaded', {
+            const data = await this.fetchJson('/model_resolver/loaded', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow })
-            });
-
-            if (!response.ok) {
-                throw new Error(`API error: ${response.status}`);
-            }
-
-            const data = await response.json();
+            }, 'Fetch loaded models');
             if (this._loadedModelsLoadToken === loadToken) {
                 this.cachedLoadedModelsSignature = workflowSignature;
                 this.cachedLoadedModelsData = data;

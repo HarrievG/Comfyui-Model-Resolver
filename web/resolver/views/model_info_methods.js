@@ -831,25 +831,17 @@ export const modelInfoMethods = {
                 || modelData?.folder_path
                 || modelData?.download_directory
                 || '';
-            const response = await api.fetchApi('/model_resolver/civitai-search', {
+            const data = await this.fetchJson('/model_resolver/civitai-search', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     filename: loraName,
                     category: modelData?.category || '',
                     resolved_path: resolvedPath
                 })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                this.updateInfoDialogWithData(dialog, data);
-            } else {
-                this.updateInfoDialogError(dialog, 'Model not found on CivitAI');
-            }
+            }, 'Fetch CivitAI model info');
+            this.updateInfoDialogWithData(dialog, data);
         } catch (e) {
-            console.error('Model Resolver: Error fetching model info:', e);
-            this.updateInfoDialogError(dialog, 'Error fetching info');
+            this.updateInfoDialogError(dialog, 'Error fetching info from CivitAI');
         }
     },
 
@@ -1415,22 +1407,15 @@ export const modelInfoMethods = {
 
         try {
             const tokens = this.getStoredTokens?.() || {};
-            const response = await api.fetchApi('/model_resolver/model-details', {
+            const data = await this.fetchJson('/model_resolver/model-details', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     source: model.details_source || model.source,
                     model_id: model.model_id || model.modelId,
                     version_id: model.version_id || model.versionId,
                     civitai_key: tokens.civitai_key || ''
                 })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Details request failed: ${response.status}`);
-            }
-
-            const data = await response.json();
+            }, 'Fetch model details');
             details._detailsData = data;
             details._selectedVersionId = String(data.selected_version?.id || data.version_id || '');
             details.innerHTML = this.renderSourceModelDetails(data, model);
@@ -1486,22 +1471,15 @@ export const modelInfoMethods = {
         try {
             const data = details._detailsData;
             const tokens = this.getStoredTokens?.() || {};
-            const response = await api.fetchApi('/model_resolver/model-details', {
+            const fresh = await this.fetchJson('/model_resolver/model-details', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     source: data.source || details._sourceModel?.details_source || details._sourceModel?.source,
                     model_id: data.model_id || details._sourceModel?.model_id || details._sourceModel?.modelId,
                     version_id: versionId,
                     civitai_key: tokens.civitai_key || ''
                 })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Version details request failed: ${response.status}`);
-            }
-
-            const fresh = await response.json();
+            }, 'Fetch model version details');
             const freshVersion = fresh.selected_version;
             if (!freshVersion?.id) return;
 

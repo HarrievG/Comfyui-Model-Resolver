@@ -659,18 +659,17 @@ export class ModelResolver {
             this.lastCheckedWorkflow = workflowHash;
 
             // Call analyze endpoint to check for missing models
-            const response = await api.fetchApi('/model_resolver/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ workflow })
-            });
-
-            if (!response.ok) {
+            let data;
+            try {
+                data = await this.dialog.fetchJson('/model_resolver/analyze', {
+                    method: 'POST',
+                    body: JSON.stringify({ workflow }),
+                    silent: true
+                }, 'Analyze workflow');
+            } catch (error) {
                 console.warn('Model Resolver: Failed to analyze workflow for missing models');
                 return;
             }
-
-            const data = await response.json();
             
             // Auto-open dialog if there are missing models
             if (data.total_missing > 0) {

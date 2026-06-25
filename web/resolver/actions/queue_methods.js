@@ -1795,15 +1795,10 @@ export const queueMethods = {
                 return;
             }
 
-            const response = await api.fetchApi('/model_resolver/resolve', {
+            const data = await this.fetchJson('/model_resolver/resolve', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ workflow, resolutions: applyResolutions })
-            });
-
-            if (!response.ok) throw new Error(`API error: ${response.status}`);
-
-            const data = await response.json();
+            }, 'Apply resolutions');
             if (data.success) {
                 const optimisticData = this.getOptimisticAnalysisDataAfterApply(appliedSelections);
                 await this.refreshComfyModelCatalogAfterApply?.(data.workflow, applyResolutions);
@@ -2168,34 +2163,30 @@ export const queueMethods = {
         return true;
     },
 
-    refreshAnalysisInBackground(workflow, expectedSignature = null) {
+    async refreshAnalysisInBackground(workflow, expectedSignature = null) {
         if (!workflow) return;
 
         const signature = expectedSignature || this.getWorkflowSignature(workflow);
-        api.fetchApi('/model_resolver/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ workflow })
-        })
-            .then(response => {
-                if (!response.ok) throw new Error(`API error: ${response.status}`);
-                return response.json();
-            })
-            .then(data => {
-                if (signature && this.activeWorkflowSignature !== signature) return;
-                this.applyResolvedSelectionAliasesToAnalysisData(data);
-                this.cachedWorkflowSignature = signature || this.cachedWorkflowSignature;
-                this.cachedAnalysisData = data;
-                this.saveAnalysisCacheForActiveWorkflow?.();
+        try {
+            const data = await this.fetchJson('/model_resolver/analyze', {
+                method: 'POST',
+                body: JSON.stringify({ workflow }),
+                silent: true
+            }, 'Background analysis');
 
-                if (this.activeTab === 'missing' && this.contentElement && !this._analysisProgressToken) {
-                    this.displayMissingModels(this.contentElement, data);
-                    this.reconnectActiveDownloads?.();
-                }
-            })
-            .catch(error => {
-                console.warn('Model Resolver: background analysis refresh failed:', error);
-            });
+            if (signature && this.activeWorkflowSignature !== signature) return;
+            this.applyResolvedSelectionAliasesToAnalysisData(data);
+            this.cachedWorkflowSignature = signature || this.cachedWorkflowSignature;
+            this.cachedAnalysisData = data;
+            this.saveAnalysisCacheForActiveWorkflow?.();
+
+            if (this.activeTab === 'missing' && this.contentElement && !this._analysisProgressToken) {
+                this.displayMissingModels(this.contentElement, data);
+                this.reconnectActiveDownloads?.();
+            }
+        } catch (error) {
+            console.warn('Model Resolver: background analysis refresh failed:', error);
+        }
     },
 
     previewFooterMenuModels(models = []) {

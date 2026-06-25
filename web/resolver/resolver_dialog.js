@@ -222,7 +222,14 @@ export class ResolverManagerDialog extends ComfyDialog {
             };
             const response = await api.fetchApi(endpoint, fetchOptions);
             if (!response.ok) {
-                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                let errorMsg = `Server returned ${response.status}: ${response.statusText}`;
+                try {
+                    const errData = await response.json();
+                    if (errData && errData.error) {
+                        errorMsg = errData.error;
+                    }
+                } catch (_) {}
+                throw new Error(errorMsg);
             }
             if (response.status === 204) {
                 return null;
@@ -230,7 +237,7 @@ export class ResolverManagerDialog extends ComfyDialog {
             return await response.json();
         } catch (error) {
             console.error(`Model Resolver: ${errorContext} failed:`, error);
-            if (typeof this.showNotification === 'function') {
+            if (!options.silent && typeof this.showNotification === 'function') {
                 this.showNotification(error.message || 'API request failed', 'error');
             }
             throw error;

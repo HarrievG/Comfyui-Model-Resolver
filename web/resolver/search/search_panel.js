@@ -992,9 +992,10 @@ export const searchPanelMethods = {
 
             timerRecord.inFlight = true;
             try {
-                const response = await api.fetchApi(`/model_resolver/search-progress/${encodeURIComponent(progressId)}`);
-                if (!response.ok) return;
-                const progress = await response.json();
+                const progress = await this.fetchJson(`/model_resolver/search-progress/${encodeURIComponent(progressId)}`, {
+                    silent: true
+                }, 'Poll search progress');
+                if (!progress) return;
                 if (!progress?.exists) return;
                 const latestProgress = state.sourceProgress?.[source];
                 if (!latestProgress || (latestProgress.status !== 'pending' && latestProgress.status !== 'running')) {
@@ -2096,17 +2097,10 @@ export const searchPanelMethods = {
                 civitai_candidate_limit: tokens.civitai_candidate_limit
             };
 
-            const response = await api.fetchApi('/model_resolver/search', {
+            const data = await this.fetchJson('/model_resolver/search', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                throw new Error(`URN resolve failed: ${response.status}`);
-            }
-
-            const data = await response.json();
+            }, 'Resolve URN');
             if (data.civitai) {
                 this.applyCivitaiUrnResult(missing, data.civitai);
             }

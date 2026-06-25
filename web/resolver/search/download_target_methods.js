@@ -11,9 +11,7 @@ export const downloadTargetMethods = {
         const force = options === true || Boolean(options?.force);
         if (!force && this.allModels && this.allModels.length) return;
         try {
-            const resp = await api.fetchApi(`/model_resolver/models${force ? '?force=1' : ''}`);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const models = await resp.json();
+            const models = await this.fetchJson(`/model_resolver/models${force ? '?force=1' : ''}`, {}, 'Load all models');
             const list = Array.isArray(models) ? models : [];
             // Build labels and sort alphabetically
             this.allModels = list.map((m) => ({
@@ -29,9 +27,7 @@ export const downloadTargetMethods = {
     async ensureDownloadDirectoriesLoaded() {
         if (this.downloadDirectories) return;
         try {
-            const resp = await api.fetchApi('/model_resolver/directories');
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const directories = await resp.json();
+            const directories = await this.fetchJson('/model_resolver/directories', {}, 'Load download directories');
             if (directories && typeof directories === 'object') {
                 this.downloadDirectories = Object.entries(directories).reduce((acc, [key, value]) => {
                     const normalizedKey = this.normalizeDownloadCategory(key);
@@ -52,9 +48,7 @@ export const downloadTargetMethods = {
     async ensureCapabilitiesLoaded() {
         if (this.capabilities) return;
         try {
-            const resp = await api.fetchApi('/model_resolver/capabilities');
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
+            const data = await this.fetchJson('/model_resolver/capabilities', {}, 'Load capabilities');
             this.capabilities = data && typeof data === 'object' ? data : { sources: {} };
         } catch (e) {
             console.warn('Model Resolver: could not load capabilities', e);
@@ -65,9 +59,7 @@ export const downloadTargetMethods = {
     async ensureDownloadRootDirectoriesLoaded() {
         if (this.downloadRootDirectories) return this.downloadRootDirectories;
         try {
-            const resp = await api.fetchApi('/model_resolver/root-directories');
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
+            const data = await this.fetchJson('/model_resolver/root-directories', {}, 'Load root directories');
             this.downloadRootDirectories = data && typeof data === 'object' ? data : {};
         } catch (e) {
             console.warn('Model Resolver: could not load root directories', e);
@@ -79,9 +71,7 @@ export const downloadTargetMethods = {
     async ensureBaseModelsLoaded() {
         if (this.baseModels) return;
         try {
-            const resp = await api.fetchApi('/model_resolver/base-models');
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
+            const data = await this.fetchJson('/model_resolver/base-models', {}, 'Load base models config');
             this.baseModels = data && typeof data === 'object' ? data : {};
         } catch (e) {
             console.warn('Model Resolver: could not load base-models config', e);
@@ -1500,9 +1490,7 @@ export const downloadTargetMethods = {
         }
 
         try {
-            const resp = await api.fetchApi(`/model_resolver/subfolders/${encodeURIComponent(key)}`);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const subfolders = await resp.json();
+            const subfolders = await this.fetchJson(`/model_resolver/subfolders/${encodeURIComponent(key)}`, {}, 'Load subfolders');
             const list = Array.isArray(subfolders) ? subfolders : [];
             this.downloadSubfolders.set(key, list);
             return list;
@@ -2300,12 +2288,9 @@ export const downloadTargetMethods = {
 
     async clearBackendSearchCaches({ throwOnError = false } = {}) {
         try {
-            const response = await api.fetchApi('/model_resolver/clear-search-cache', {
+            await this.fetchJson('/model_resolver/clear-search-cache', {
                 method: 'POST'
-            });
-            if (!response.ok) {
-                throw new Error('Failed to clear backend search cache');
-            }
+            }, 'Clear search cache');
             return true;
         } catch (error) {
             console.error('Model Resolver: Clear search cache error:', error);

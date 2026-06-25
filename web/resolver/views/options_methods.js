@@ -731,15 +731,10 @@ export const optionsMethods = {
             try {
                 if (button) button.disabled = true;
                 setTokenCheckStatus(statusEl, 'Checking...', 'is-pending');
-                const response = await api.fetchApi(endpoint, {
+                const data = await this.fetchJson(endpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ [payloadKey]: value })
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.error || `Check failed: ${response.status}`);
-                }
+                }, 'Check credential');
                 setTokenCheckStatus(
                     statusEl,
                     data.message || (data.valid ? 'Valid' : 'Invalid'),
@@ -794,11 +789,7 @@ export const optionsMethods = {
                 if (modelListStateEl) {
                     modelListStateEl.textContent = checkRemote ? 'Checking GitHub...' : 'Loading...';
                 }
-                const response = await api.fetchApi(`/model_resolver/model-list/status${checkRemote ? '?check_remote=1' : ''}`);
-                if (!response.ok) {
-                    throw new Error(`Status failed: ${response.status}`);
-                }
-                const data = await response.json();
+                const data = await this.fetchJson(`/model_resolver/model-list/status${checkRemote ? '?check_remote=1' : ''}`, {}, 'Load model list status');
                 renderModelListStatus(data, checkRemote);
                 return data;
             } catch (error) {
@@ -816,13 +807,9 @@ export const optionsMethods = {
                 setModelListBusy(true);
                 if (modelListStateEl) modelListStateEl.textContent = 'Updating...';
                 if (modelListMessageEl) modelListMessageEl.textContent = 'Downloading latest ComfyUI-Manager model-list.json...';
-                const response = await api.fetchApi('/model_resolver/model-list/update', {
+                const data = await this.fetchJson('/model_resolver/model-list/update', {
                     method: 'POST'
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.error || `Update failed: ${response.status}`);
-                }
+                }, 'Update model list');
                 await this.clearSearchCaches();
                 renderModelListStatus(data, false);
                 if (modelListStateEl) modelListStateEl.textContent = 'Updated';
@@ -873,11 +860,7 @@ export const optionsMethods = {
                 if (baseModelsStateEl) {
                     baseModelsStateEl.textContent = checkRemote ? 'Checking CivitAI...' : 'Loading...';
                 }
-                const response = await api.fetchApi(`/model_resolver/base-models/status${checkRemote ? '?check_remote=1' : ''}`);
-                if (!response.ok) {
-                    throw new Error(`Status failed: ${response.status}`);
-                }
-                const data = await response.json();
+                const data = await this.fetchJson(`/model_resolver/base-models/status${checkRemote ? '?check_remote=1' : ''}`, {}, 'Load base models status');
                 renderBaseModelsStatus(data, checkRemote);
                 return data;
             } catch (error) {
@@ -907,13 +890,9 @@ export const optionsMethods = {
                 setBaseModelsBusy(true);
                 if (baseModelsStateEl) baseModelsStateEl.textContent = 'Updating...';
                 if (baseModelsMessageEl) baseModelsMessageEl.textContent = 'Downloading latest base models from CivitAI...';
-                const response = await api.fetchApi('/model_resolver/base-models/update', {
+                const data = await this.fetchJson('/model_resolver/base-models/update', {
                     method: 'POST'
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.error || `Update failed: ${response.status}`);
-                }
+                }, 'Update base models');
                 await this.clearSearchCaches();
                 // Invalidate the in-memory cache so the base model dropdown
                 // reloads fresh data from the server next time it is opened.
@@ -978,11 +957,7 @@ export const optionsMethods = {
             try {
                 setHfIndexBusy(true);
                 if (hfIndexStateEl) hfIndexStateEl.textContent = 'Loading...';
-                const response = await api.fetchApi('/model_resolver/huggingface/author-index/status');
-                if (!response.ok) {
-                    throw new Error(`Status failed: ${response.status}`);
-                }
-                const data = await response.json();
+                const data = await this.fetchJson('/model_resolver/huggingface/author-index/status', {}, 'Load HuggingFace index status');
                 renderHfIndexStatus(data);
                 return data;
             } catch (error) {
@@ -1000,14 +975,12 @@ export const optionsMethods = {
                 setHfIndexBusy(true);
                 if (hfIndexStateEl) hfIndexStateEl.textContent = 'Refreshing...';
                 if (hfIndexMessageEl) hfIndexMessageEl.textContent = 'Downloading Comfy-Org file index from HuggingFace...';
-                const response = await api.fetchApi('/model_resolver/huggingface/author-index/refresh', {
+                const data = await this.fetchJson('/model_resolver/huggingface/author-index/refresh', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ hf_token: hfInput?.value || '' })
-                });
-                const data = await response.json();
-                if (!response.ok || data.success === false) {
-                    throw new Error(data.error || `Refresh failed: ${response.status}`);
+                }, 'Refresh HuggingFace index');
+                if (data?.success === false) {
+                    throw new Error(data.error || 'Refresh failed');
                 }
                 await this.clearSearchCaches();
                 renderHfIndexStatus(data);
@@ -1328,9 +1301,7 @@ export const optionsMethods = {
             setTemplateDetectStatus('Scanning existing model folders...', 'is-pending');
 
             try {
-                const resp = await api.fetchApi('/model_resolver/path-template-suggestions?force=1');
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const data = await resp.json();
+                const data = await this.fetchJson('/model_resolver/path-template-suggestions?force=1', {}, 'Detect path templates');
                 const categories = data?.categories && typeof data.categories === 'object'
                     ? data.categories
                     : {};
@@ -1675,12 +1646,10 @@ export const optionsMethods = {
                 // 2. Persist to server (survives new browsers / profiles)
                 try {
                     setStatus('Saving…', '');
-                    const resp = await api.fetchApi('/model_resolver/settings', {
+                    await this.fetchJson('/model_resolver/settings', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(newSettings),
-                    });
-                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        body: JSON.stringify(newSettings)
+                    }, 'Save settings');
                     setStatus('Saved on this machine (all browsers).', 'is-saved');
                     this.showNotification('Options saved', 'success');
                 } catch (err) {
@@ -1750,13 +1719,7 @@ export const optionsMethods = {
      */
     async loadSettingsFromServer() {
         try {
-            const resp = await api.fetchApi('/model_resolver/settings');
-            if (!resp.ok) {
-                const tokens = this.getStoredTokens();
-                this.applyFrontendLoggingPreference(tokens.frontend_logs_enabled, tokens.frontend_log_level);
-                return;
-            }
-            const data = await resp.json();
+            const data = await this.fetchJson('/model_resolver/settings', { silent: true }, 'Load settings from server');
             if (!data || typeof data !== 'object') {
                 const tokens = this.getStoredTokens();
                 this.applyFrontendLoggingPreference(tokens.frontend_logs_enabled, tokens.frontend_log_level);
