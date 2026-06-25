@@ -158,7 +158,7 @@ class ModelResolverExtension:
                 )
                 download_available = False
 
-            def json_api_endpoint(error_prefix):
+            def json_api_endpoint(error_prefix, return_success_on_error=False):
                 def decorator(func):
                     from functools import wraps
                     @wraps(func)
@@ -169,7 +169,10 @@ class ModelResolverExtension:
                             self.logger.error(
                                 f"Model Resolver {error_prefix} error: {e}", exc_info=True
                             )
-                            return web.json_response({"error": str(e)}, status=500)
+                            response_data = {"error": str(e)}
+                            if return_success_on_error:
+                                response_data["success"] = False
+                            return web.json_response(response_data, status=500)
                     return wrapper
                 return decorator
 

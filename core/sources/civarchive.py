@@ -17,6 +17,7 @@ import requests
 from ..matcher import (
     calculate_archived_model_confidence,
     calculate_model_title_confidence,
+    has_known_model_extension as _has_known_model_extension,
     normalize_base_model as _normalize_base_model,
     base_model_matches as _base_model_matches,
     base_model_score as _base_model_score,

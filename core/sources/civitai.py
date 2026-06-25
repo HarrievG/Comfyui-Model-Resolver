@@ -15,6 +15,7 @@ from urllib.parse import urlparse, parse_qs, quote
 from ..matcher import (
     calculate_filename_confidence,
     calculate_model_title_confidence,
+    has_known_model_extension as _has_known_model_extension,
     normalize_base_model as _normalize_base_model,
     base_model_matches as _base_model_matches,
     base_model_score as _base_model_score,
