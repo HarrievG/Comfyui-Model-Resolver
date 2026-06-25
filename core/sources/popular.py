@@ -20,7 +20,7 @@ from ..log_system.log_funcs import (
     log_exception,
 )
 
-from ..path_utils import METADATA_DIR, read_json_safe
+from ..path_utils import METADATA_DIR, read_json_safe, write_json_atomic
 POPULAR_MODELS_FILE = os.path.join(METADATA_DIR, "popular-models.json")
 MODEL_ALIASES_FILE = os.path.join(METADATA_DIR, "model-aliases.json")
 BASE_MODELS_FILE = os.path.join(METADATA_DIR, "base-models.json")
@@ -361,23 +361,7 @@ def update_base_models_from_remote() -> Dict[str, Any]:
         shutil.copy2(BASE_MODELS_FILE, f"{BASE_MODELS_FILE}.bak")
         
     # Write atomically
-    fd, tmp_path = tempfile.mkstemp(
-        prefix=f".{os.path.basename(BASE_MODELS_FILE)}.",
-        suffix=".tmp",
-        dir=os.path.dirname(BASE_MODELS_FILE),
-        text=True,
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({"base_models": updated_models}, f, indent=2, ensure_ascii=False)
-            f.write("\n")
-        os.replace(tmp_path, BASE_MODELS_FILE)
-    except Exception:
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
-        raise
+    write_json_atomic(BASE_MODELS_FILE, {"base_models": updated_models}, indent=2)
         
     # Write meta file
     now_str = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -389,23 +373,7 @@ def update_base_models_from_remote() -> Dict[str, Any]:
         "new_models_added_list": new_added_names
     }
     
-    fd_meta, tmp_meta_path = tempfile.mkstemp(
-        prefix=f".{os.path.basename(BASE_MODELS_META_FILE)}.",
-        suffix=".tmp",
-        dir=os.path.dirname(BASE_MODELS_META_FILE),
-        text=True,
-    )
-    try:
-        with os.fdopen(fd_meta, "w", encoding="utf-8") as f:
-            json.dump(meta, f, indent=2, ensure_ascii=False)
-            f.write("\n")
-        os.replace(tmp_meta_path, BASE_MODELS_META_FILE)
-    except Exception:
-        try:
-            os.remove(tmp_meta_path)
-        except OSError:
-            pass
-        raise
+    write_json_atomic(BASE_MODELS_META_FILE, meta, indent=2)
         
     # Force reload database in-memory cache
     reload_databases()

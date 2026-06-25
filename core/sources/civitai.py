@@ -20,7 +20,14 @@ from ..matcher import (
     base_model_matches as _base_model_matches,
     base_model_score as _base_model_score,
 )
-from ..type_utils import first_non_empty, CIVITAI_API_TYPE_MAP
+from ..type_utils import (
+    first_non_empty,
+    CIVITAI_API_TYPE_MAP,
+    select_primary_model_file,
+    parse_size_to_bytes,
+    get_version_sort_key,
+    check_credential_http,
+)
 from ..progress import report_progress
 from ..path_utils import calculate_file_sha256
 from ..log_system.log_funcs import (
@@ -43,18 +50,7 @@ MODEL_TITLE_MATCH_THRESHOLD = 82.0
 
 
 
-CIVITAI_TYPE_MAP = {
-    "checkpoint": "Checkpoint",
-    "checkpoints": "Checkpoint",
-    "lora": "LORA",
-    "loras": "LORA",
-    "vae": "VAE",
-    "controlnet": "Controlnet",
-    "embedding": "TextualInversion",
-    "embeddings": "TextualInversion",
-    "upscaler": "Upscaler",
-    "upscale_models": "Upscaler",
-}
+
 
 
 def clear_search_cache():
@@ -103,65 +99,16 @@ def check_civitai_session_token(session_token: Optional[str]) -> Dict[str, Any]:
         ),
     }
 
-    try:
-        response = requests.get(
-            "https://civitai.com/api/v1/me", headers=headers, timeout=10
-        )
-        if response.status_code == 200:
-            username = ""
-            try:
-                data = response.json()
-                username = (
-                    data.get("username")
-                    or data.get("name")
-                    or data.get("email")
-                    or ""
-                )
-            except Exception:
-                username = ""
+    def get_user(data):
+        return data.get("username") or data.get("name") or data.get("email") or ""
 
-            message = "Session token is valid."
-            if username:
-                message = f"Session token is valid for {username}."
-
-            return {
-                "success": True,
-                "valid": True,
-                "status": "valid",
-                "message": message,
-                "username": username,
-            }
-
-        if response.status_code in {401, 403}:
-            return {
-                "success": True,
-                "valid": False,
-                "status": "invalid",
-                "message": "Session token is not accepted by CivitAI.",
-                "status_code": response.status_code,
-            }
-
-        return {
-            "success": False,
-            "valid": False,
-            "status": "error",
-            "message": f"CivitAI returned HTTP {response.status_code}.",
-            "status_code": response.status_code,
-        }
-    except requests.exceptions.Timeout:
-        return {
-            "success": False,
-            "valid": False,
-            "status": "timeout",
-            "message": "CivitAI did not respond before the timeout.",
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "valid": False,
-            "status": "error",
-            "message": str(e),
-        }
+    return check_credential_http(
+        "https://civitai.com/api/v1/me",
+        headers=headers,
+        success_message="Session token is valid.",
+        get_username=get_user,
+        error_msg_401_403="Session token is not accepted by CivitAI.",
+    )
 
 
 def check_civitai_api_key(api_key: Optional[str]) -> Dict[str, Any]:
@@ -185,65 +132,16 @@ def check_civitai_api_key(api_key: Optional[str]) -> Dict[str, Any]:
         ),
     }
 
-    try:
-        response = requests.get(
-            "https://civitai.com/api/v1/me", headers=headers, timeout=10
-        )
-        if response.status_code == 200:
-            username = ""
-            try:
-                data = response.json()
-                username = (
-                    data.get("username")
-                    or data.get("name")
-                    or data.get("email")
-                    or ""
-                )
-            except Exception:
-                username = ""
+    def get_user(data):
+        return data.get("username") or data.get("name") or data.get("email") or ""
 
-            message = "CivitAI API key is valid."
-            if username:
-                message = f"CivitAI API key is valid for {username}."
-
-            return {
-                "success": True,
-                "valid": True,
-                "status": "valid",
-                "message": message,
-                "username": username,
-            }
-
-        if response.status_code in {401, 403}:
-            return {
-                "success": True,
-                "valid": False,
-                "status": "invalid",
-                "message": "CivitAI API key is not accepted.",
-                "status_code": response.status_code,
-            }
-
-        return {
-            "success": False,
-            "valid": False,
-            "status": "error",
-            "message": f"CivitAI returned HTTP {response.status_code}.",
-            "status_code": response.status_code,
-        }
-    except requests.exceptions.Timeout:
-        return {
-            "success": False,
-            "valid": False,
-            "status": "timeout",
-            "message": "CivitAI did not respond before the timeout.",
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "valid": False,
-            "status": "error",
-            "message": str(e),
-        }
+    return check_credential_http(
+        "https://civitai.com/api/v1/me",
+        headers=headers,
+        success_message="CivitAI API key is valid.",
+        get_username=get_user,
+        error_msg_401_403="CivitAI API key is not accepted.",
+    )
 
 
 def _build_civitai_result_from_version(
@@ -282,37 +180,11 @@ def _build_civitai_result_from_version(
 
 
 def _version_sort_key(version: Dict[str, Any]) -> tuple:
-    timestamp = (
-        version.get("publishedAt")
-        or version.get("updatedAt")
-        or version.get("createdAt")
-        or ""
-    )
-    try:
-        version_id = int(version.get("id") or 0)
-    except (TypeError, ValueError):
-        version_id = 0
-    return (str(timestamp), version_id)
+    return get_version_sort_key(version)
 
 
 def _select_primary_model_file(files: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    valid_files = [f for f in files if isinstance(f, dict) and f.get("name")]
-    if not valid_files:
-        return None
-
-    for file_info in valid_files:
-        if file_info.get("primary") and file_info.get("type") == "Model":
-            return file_info
-
-    for file_info in valid_files:
-        if file_info.get("primary"):
-            return file_info
-
-    for file_info in valid_files:
-        if file_info.get("type") == "Model":
-            return file_info
-
-    return valid_files[0]
+    return select_primary_model_file(files)
 
 
 def _find_model_title_match_in_model(
@@ -539,7 +411,7 @@ def _search_civitai_trpc_candidates(
         },
         "meta": {"values": {"cursor": ["undefined"]}},
     }
-    civitai_type = CIVITAI_TYPE_MAP.get(str(model_type).lower()) if model_type else None
+    civitai_type = CIVITAI_API_TYPE_MAP.get(str(model_type).lower()) if model_type else None
     if civitai_type:
         input_payload["json"]["types"] = [civitai_type]
 
@@ -1730,15 +1602,7 @@ def _first_metadata_value(*values: Any) -> Any:
 
 
 def _metadata_size_to_bytes(value: Any) -> Optional[int]:
-    if value is None or value == "":
-        return None
-
-    try:
-        size = int(float(value))
-    except (TypeError, ValueError):
-        return None
-
-    return size if size >= 0 else None
+    return parse_size_to_bytes(value)
 
 
 def _format_model_location(file_path: str) -> str:

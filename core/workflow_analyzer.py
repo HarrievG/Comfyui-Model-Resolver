@@ -732,14 +732,25 @@ def get_model_widget_category_hints(
         else None
     )
 
-    return _ordered_unique_categories(
-        [
-            indexed_category_hint,
-            widget_category_hint,
-            *dynamic_category_hints,
-            output_widget_category_hint,
-        ]
-    )
+    hints_list = []
+    if indexed_category_hint:
+        hints_list.append(indexed_category_hint)
+    
+    # If the widget category hint is just "diffusion_models", and we have a more specific output hint,
+    # let the output hint take priority.
+    if widget_category_hint == "diffusion_models" and output_widget_category_hint and output_widget_category_hint != "diffusion_models":
+        hints_list.append(output_widget_category_hint)
+        hints_list.append(widget_category_hint)
+    else:
+        if widget_category_hint:
+            hints_list.append(widget_category_hint)
+        for h in dynamic_category_hints:
+            if h:
+                hints_list.append(h)
+        if output_widget_category_hint:
+            hints_list.append(output_widget_category_hint)
+            
+    return _ordered_unique_categories(hints_list)
 
 
 def get_effective_model_category_hint(

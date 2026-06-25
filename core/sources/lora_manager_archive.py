@@ -18,6 +18,7 @@ from ..matcher import (
     base_model_score as _base_model_score,
     calculate_candidate_rank,
 )
+from ..type_utils import select_primary_model_file
 from ..progress import report_progress
 from ..log_system.log_funcs import (
     log_debug,
@@ -189,18 +190,7 @@ def _extract_search_tokens(query: str) -> Dict[str, List[str]]:
 
 
 def _extract_primary_file(files: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not files:
-        return None
-
-    for file_info in files:
-        if file_info.get("primary"):
-            return file_info
-
-    for file_info in files:
-        if str(file_info.get("type", "")).lower() == "model":
-            return file_info
-
-    return files[0]
+    return select_primary_model_file(files)
 
 
 def _load_version_files(

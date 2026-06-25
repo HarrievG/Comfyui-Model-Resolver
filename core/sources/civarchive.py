@@ -23,7 +23,13 @@ from ..matcher import (
     base_model_score as _base_model_score,
     calculate_candidate_rank,
 )
-from ..type_utils import to_int, CIVARCHIVE_API_TYPE_MAP
+from ..type_utils import (
+    to_int,
+    CIVARCHIVE_API_TYPE_MAP,
+    select_primary_model_file,
+    parse_size_to_bytes,
+    get_version_sort_key,
+)
 from ..progress import report_progress
 from ..log_system.log_funcs import (
     log_debug,
@@ -90,69 +96,24 @@ def is_civarchive_available() -> bool:
     return True
 
 
-def _coerce_int(value: Any) -> Optional[int]:
-    return to_int(value)
-
-
-def _size_kb_to_bytes(value: Any) -> Optional[int]:
-    if value is None:
-        return None
-    try:
-        return int(float(value) * 1024)
-    except (TypeError, ValueError):
-        return None
-
-
-def _size_value_to_bytes(value: Any) -> Optional[int]:
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return int(value) if value > 0 else None
-    if not isinstance(value, str):
-        return None
-
-    text = value.strip()
-    if not text:
-        return None
-    match = re.search(r"([\d.,]+)\s*(tb|gb|mb|kb|b)?", text, flags=re.IGNORECASE)
-    if not match:
-        return None
-    try:
-        number = float(match.group(1).replace(",", ""))
-    except ValueError:
-        return None
-    unit = (match.group(2) or "b").lower()
-    multipliers = {
-        "tb": 1024 ** 4,
-        "gb": 1024 ** 3,
-        "mb": 1024 ** 2,
-        "kb": 1024,
-        "b": 1,
-    }
-    return int(number * multipliers.get(unit, 1))
-
-
 def _extract_file_size_bytes(file_info: Dict[str, Any]) -> Optional[int]:
     if not isinstance(file_info, dict):
         return None
 
     for key in ("sizeKB", "size_kb"):
-        size = _size_kb_to_bytes(file_info.get(key))
-        if size:
-            return size
+        val = file_info.get(key)
+        if val is not None and val != "":
+            try:
+                return int(float(val) * 1024)
+            except (TypeError, ValueError):
+                pass
 
-    for key in ("sizeBytes", "size_bytes", "fileSize", "file_size", "bytes"):
-        size = _size_value_to_bytes(file_info.get(key))
-        if size:
-            return size
-
-    raw_size = file_info.get("size")
-    if isinstance(raw_size, str):
-        size = _size_value_to_bytes(raw_size)
-        if size:
-            return size
-    elif isinstance(raw_size, (int, float)) and raw_size > 100_000_000:
-        return int(raw_size)
+    for key in ("sizeBytes", "size_bytes", "fileSize", "file_size", "bytes", "size"):
+        val = file_info.get(key)
+        if val is not None and val != "":
+            size = parse_size_to_bytes(val)
+            if size:
+                return size
 
     mirrors = file_info.get("mirrors") or []
     if not isinstance(mirrors, list):
@@ -575,16 +536,7 @@ def _extract_version_files(
 
 
 def _select_primary_file(files: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not files:
-        return None
-
-    for file_info in files:
-        if file_info.get("primary"):
-            return file_info
-    for file_info in files:
-        if str(file_info.get("type", "")).lower() == "model":
-            return file_info
-    return files[0]
+    return select_primary_model_file(files)
 
 
 def _collect_download_urls(file_info: Dict[str, Any]) -> List[str]:
@@ -900,20 +852,7 @@ def get_civarchive_model_details(
 
 
 def _version_sort_key(version: Dict[str, Any]) -> tuple:
-    timestamp = (
-        version.get("published_at")
-        or version.get("publishedAt")
-        or version.get("updated_at")
-        or version.get("updatedAt")
-        or version.get("created_at")
-        or version.get("createdAt")
-        or ""
-    )
-    try:
-        version_id = int(version.get("id") or 0)
-    except (TypeError, ValueError):
-        version_id = 0
-    return (str(timestamp), version_id)
+    return get_version_sort_key(version)
 
 
 def _collect_normalized_download_urls(file_info: Dict[str, Any]) -> List[str]:
@@ -940,25 +879,9 @@ def _select_primary_model_file(files: List[Dict[str, Any]]) -> Optional[Dict[str
         file_info
         for file_info in files
         if isinstance(file_info, dict)
-        and (file_info.get("name") or file_info.get("filename"))
         and _collect_normalized_download_urls(file_info)
     ]
-    if not valid_files:
-        return None
-
-    for file_info in valid_files:
-        if file_info.get("primary") and str(file_info.get("type", "")).lower() == "model":
-            return file_info
-
-    for file_info in valid_files:
-        if file_info.get("primary"):
-            return file_info
-
-    for file_info in valid_files:
-        if str(file_info.get("type", "")).lower() == "model":
-            return file_info
-
-    return valid_files[0]
+    return select_primary_model_file(valid_files)
 
 
 def _build_result_from_normalized_version(

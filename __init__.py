@@ -940,18 +940,7 @@ class ModelResolverExtension:
                     get_path_abs as get_local_path_abs,
                     get_path_key as get_local_path_key,
                     get_path_identity as get_local_path_identity,
-                )
-
-                def get_comfy_root_path(folder_paths_module):
-                    import os
-
-                    try:
-                        module_file = getattr(folder_paths_module, "__file__", "")
-                        return os.path.dirname(os.path.abspath(module_file))
-                    except Exception:
-                        return ""
-
-                from .core.path_utils import (
+                    get_comfy_root_path,
                     is_path_within as is_local_path_within,
                     prefer_local_base_directory,
                     dedupe_local_base_directories,

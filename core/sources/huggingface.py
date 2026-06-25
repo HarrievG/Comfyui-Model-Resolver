@@ -22,6 +22,7 @@ from ..log_system.log_funcs import (
     log_exception,
 )
 from ..path_utils import write_json_atomic, METADATA_DIR
+from ..type_utils import check_credential_http
 
 HF_API_URL = "https://huggingface.co/api"
 HF_AUTHOR_FALLBACKS = ["Comfy-Org"]
@@ -76,61 +77,26 @@ def check_huggingface_token(token: Optional[str]) -> Dict[str, Any]:
         }
 
     headers = {"Authorization": f"Bearer {value}"}
-    try:
-        response = requests.get(f"{HF_API_URL}/whoami-v2", headers=headers, timeout=10)
-        if response.status_code == 404:
-            response = requests.get(f"{HF_API_URL}/whoami", headers=headers, timeout=10)
 
-        if response.status_code == 200:
-            username = ""
-            try:
-                data = response.json()
-                username = data.get("name") or data.get("user", {}).get("name") or ""
-            except Exception:
-                username = ""
+    def get_user(data):
+        return data.get("name") or data.get("user", {}).get("name") or ""
 
-            message = "HuggingFace token is valid."
-            if username:
-                message = f"HuggingFace token is valid for {username}."
-
-            return {
-                "success": True,
-                "valid": True,
-                "status": "valid",
-                "message": message,
-                "username": username,
-            }
-
-        if response.status_code in {401, 403}:
-            return {
-                "success": True,
-                "valid": False,
-                "status": "invalid",
-                "message": "HuggingFace token is not accepted.",
-                "status_code": response.status_code,
-            }
-
-        return {
-            "success": False,
-            "valid": False,
-            "status": "error",
-            "message": f"HuggingFace returned HTTP {response.status_code}.",
-            "status_code": response.status_code,
-        }
-    except requests.exceptions.Timeout:
-        return {
-            "success": False,
-            "valid": False,
-            "status": "timeout",
-            "message": "HuggingFace did not respond before the timeout.",
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "valid": False,
-            "status": "error",
-            "message": str(e),
-        }
+    result = check_credential_http(
+        f"{HF_API_URL}/whoami-v2",
+        headers=headers,
+        success_message="HuggingFace token is valid.",
+        get_username=get_user,
+        error_msg_401_403="HuggingFace token is not accepted.",
+    )
+    if result.get("status_code") == 404:
+        result = check_credential_http(
+            f"{HF_API_URL}/whoami",
+            headers=headers,
+            success_message="HuggingFace token is valid.",
+            get_username=get_user,
+            error_msg_401_403="HuggingFace token is not accepted.",
+        )
+    return result
 
 
 def check_brave_search_api_key(api_key: Optional[str]) -> Dict[str, Any]:
@@ -146,57 +112,24 @@ def check_brave_search_api_key(api_key: Optional[str]) -> Dict[str, Any]:
 
     headers = {"X-Subscription-Token": key}
     params = {"q": "test", "count": 1}
-    try:
-        response = requests.get(
-            BRAVE_SEARCH_API_URL, headers=headers, params=params, timeout=10
-        )
-        if response.status_code == 200:
-            return {
-                "success": True,
-                "valid": True,
-                "status": "valid",
-                "message": "Brave Search API key is valid.",
-            }
 
-        if response.status_code in {401, 403}:
-            return {
-                "success": True,
-                "valid": False,
-                "status": "invalid",
-                "message": "Brave Search API key is not accepted.",
-                "status_code": response.status_code,
-            }
-
-        if response.status_code == 429:
-            return {
-                "success": False,
-                "valid": False,
-                "status": "limited",
-                "message": "Brave Search rate limit was reached.",
-                "status_code": response.status_code,
-            }
-
+    def custom_429(response):
         return {
             "success": False,
             "valid": False,
-            "status": "error",
-            "message": f"Brave Search returned HTTP {response.status_code}.",
-            "status_code": response.status_code,
+            "status": "limited",
+            "message": "Brave Search rate limit was reached.",
+            "status_code": 429,
         }
-    except requests.exceptions.Timeout:
-        return {
-            "success": False,
-            "valid": False,
-            "status": "timeout",
-            "message": "Brave Search did not respond before the timeout.",
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "valid": False,
-            "status": "error",
-            "message": str(e),
-        }
+
+    return check_credential_http(
+        BRAVE_SEARCH_API_URL,
+        headers=headers,
+        params=params,
+        success_message="Brave Search API key is valid.",
+        error_msg_401_403="Brave Search API key is not accepted.",
+        custom_429_handler=custom_429,
+    )
 
 
 def _author_index_cache_key(author: str, headers: Dict[str, str]) -> str:

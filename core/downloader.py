@@ -23,7 +23,7 @@ from .log_system.log_funcs import (
     log_exception,
 )
 from .resolver import normalize_sha256
-from .path_utils import is_path_within, get_path_identity, write_json_atomic, read_json_safe, calculate_file_sha256 as _calculate_file_sha256
+from .path_utils import is_path_within, get_path_identity, write_json_atomic, read_json_safe, get_comfy_root_path, calculate_file_sha256 as _calculate_file_sha256
 from .type_utils import as_dict, as_list, first_non_empty
 
 try:
@@ -126,16 +126,9 @@ def _json_safe_metadata(value: Any, depth: int = 0) -> Any:
     return str(value)
 
 
-def _as_dict(value: Any) -> Dict[str, Any]:
-    return as_dict(value)
-
-
-def _as_list(value: Any) -> List[Any]:
-    return as_list(value)
-
-
-def _first_present(*values: Any) -> Any:
-    return first_non_empty(*values)
+_as_dict = as_dict
+_as_list = as_list
+_first_present = first_non_empty
 
 
 def _coerce_int_or_value(value: Any) -> Any:
@@ -566,7 +559,7 @@ def get_download_directory(category: str, preferred_base_directory: str = "") ->
         if not paths:
             return None
 
-        comfy_root = os.path.dirname(os.path.abspath(getattr(folder_paths, "__file__", "")))
+        comfy_root = get_comfy_root_path(folder_paths)
 
         def _basename(path_value: str) -> str:
             return os.path.basename(os.path.normpath(path_value)).lower()

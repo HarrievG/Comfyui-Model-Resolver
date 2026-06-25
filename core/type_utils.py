@@ -203,6 +203,9 @@ CIVARCHIVE_API_TYPE_MAP = {
     "workflows": "Workflows",
 }
 
+from typing import Any, Dict, List, Optional, Tuple, Callable
+import re
+
 def normalize_download_category(category: str) -> str:
     """Return the canonical ComfyUI folder_paths key for a download category."""
     token = (
@@ -218,6 +221,173 @@ def normalize_download_category(category: str) -> str:
         token = token.replace("__", "_")
     token = token.strip("_")
     return CATEGORY_MAP.get(token, token or "checkpoints")
+
+
+def select_primary_model_file(files: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """
+    Selects the primary file from a list of model version files.
+    """
+    valid_files = [f for f in files if isinstance(f, dict) and (f.get("name") or f.get("filename"))]
+    if not valid_files:
+        return None
+
+    # 1. Look for file marked primary and of type Model
+    for file_info in valid_files:
+        if file_info.get("primary") and str(file_info.get("type") or "").lower() == "model":
+            return file_info
+
+    # 2. Look for any file marked primary
+    for file_info in valid_files:
+        if file_info.get("primary"):
+            return file_info
+
+    # 3. Look for any file of type Model
+    for file_info in valid_files:
+        if str(file_info.get("type") or "").lower() == "model":
+            return file_info
+
+    # 4. Fallback to the first file
+    return valid_files[0]
+
+
+def parse_size_to_bytes(value: Any) -> Optional[int]:
+    """
+    Parses a size value to bytes.
+    Supports integers, floats, and strings with units (e.g. "1.5 GB", "500 KB").
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return int(value) if value > 0 else None
+    if not isinstance(value, str):
+        return None
+
+    text = value.strip()
+    if not text:
+        return None
+
+    # Check if it's a plain number (e.g., "123456")
+    try:
+        return int(float(text))
+    except ValueError:
+        pass
+
+    match = re.search(r"([\d.,]+)\s*(tb|gb|mb|kb|b)?", text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    try:
+        number = float(match.group(1).replace(",", ""))
+    except ValueError:
+        return None
+    unit = (match.group(2) or "b").lower()
+    multipliers = {
+        "tb": 1024 ** 4,
+        "gb": 1024 ** 3,
+        "mb": 1024 ** 2,
+        "kb": 1024,
+        "b": 1,
+    }
+    return int(number * multipliers.get(unit, 1))
+
+
+def get_version_sort_key(version: Dict[str, Any]) -> Tuple[str, int]:
+    """Helper to get a sorting key tuple (timestamp, version_id) for model versions."""
+    if not isinstance(version, dict):
+        return ("", 0)
+    timestamp = (
+        version.get("published_at")
+        or version.get("publishedAt")
+        or version.get("updated_at")
+        or version.get("updatedAt")
+        or version.get("created_at")
+        or version.get("createdAt")
+        or ""
+    )
+    try:
+        version_id = int(version.get("id") or 0)
+    except (TypeError, ValueError):
+        version_id = 0
+    return (str(timestamp), version_id)
+
+
+def check_credential_http(
+    url: str,
+    headers: Dict[str, str],
+    params: Optional[Dict[str, Any]] = None,
+    timeout: int = 10,
+    success_message: str = "Credential is valid.",
+    get_username: Optional[Callable[[Dict[str, Any]], str]] = None,
+    error_msg_401_403: str = "Credential is not accepted.",
+    custom_429_handler: Optional[Callable[[Any], Dict[str, Any]]] = None,
+    on_success: Optional[Callable[[Any], None]] = None,
+    http_method: str = "GET",
+) -> Dict[str, Any]:
+    """Helper to perform HTTP requests to validate external API credentials."""
+    import requests
+    try:
+        if http_method == "POST":
+            response = requests.post(url, headers=headers, json=params, timeout=timeout)
+        else:
+            response = requests.get(url, headers=headers, params=params, timeout=timeout)
+
+        if response.status_code == 200:
+            username = ""
+            if get_username:
+                try:
+                    data = response.json()
+                    username = get_username(data)
+                except Exception:
+                    pass
+            message = success_message
+            if username:
+                message = f"{success_message.rstrip('.')} for {username}."
+
+            result = {
+                "success": True,
+                "valid": True,
+                "status": "valid",
+                "message": message,
+            }
+            if username:
+                result["username"] = username
+            if on_success:
+                on_success(response)
+            return result
+
+        if response.status_code in {401, 403}:
+            return {
+                "success": True,
+                "valid": False,
+                "status": "invalid",
+                "message": error_msg_401_403,
+                "status_code": response.status_code,
+            }
+
+        if response.status_code == 429 and custom_429_handler:
+            return custom_429_handler(response)
+
+        return {
+            "success": False,
+            "valid": False,
+            "status": "error",
+            "message": f"Server returned HTTP {response.status_code}.",
+            "status_code": response.status_code,
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "timeout",
+            "message": "Server did not respond before the timeout.",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "error",
+            "message": str(e),
+        }
+
 
 
 

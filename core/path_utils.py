@@ -196,3 +196,22 @@ def read_json_safe(file_path: str, default: Any = None) -> Any:
         return default
 
 
+def get_comfy_root_path(folder_paths_module: Optional[Any] = None) -> str:
+    """Return the absolute path to the ComfyUI root directory."""
+    fp = folder_paths_module
+    if fp is None:
+        try:
+            import folder_paths
+            fp = folder_paths
+        except ImportError:
+            return ""
+    try:
+        module_file = getattr(fp, "__file__", "")
+        if module_file:
+            return os.path.dirname(os.path.abspath(module_file))
+    except Exception:
+        pass
+    return ""
+
+
+
