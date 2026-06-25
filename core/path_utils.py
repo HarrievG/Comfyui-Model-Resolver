@@ -6,7 +6,7 @@ and directory matching to be shared across all modules.
 """
 
 import os
-from typing import Any
+from typing import Any, Tuple, Optional
 
 
 def get_path_identity(path: str) -> str:
@@ -114,3 +114,37 @@ def dedupe_local_base_directories(
             by_identity[path_identity] = path_abs
 
     return [by_identity[key] for key in ordered_identities]
+
+
+def write_json_atomic(
+    file_path: str,
+    data: Any,
+    indent: Optional[int] = None,
+    separators: Optional[Tuple[str, str]] = None,
+) -> None:
+    """Safely write data to a JSON file using a temporary file and atomic replace."""
+    import tempfile
+    import json
+    
+    dir_name = os.path.dirname(file_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
+        
+    fd, tmp_path = tempfile.mkstemp(
+        prefix=f".{os.path.basename(file_path)}.",
+        suffix=".tmp",
+        dir=dir_name or None,
+        text=True,
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=indent, separators=separators, ensure_ascii=False)
+            if indent is not None:
+                f.write("\n")
+        os.replace(tmp_path, file_path)
+    except Exception:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise

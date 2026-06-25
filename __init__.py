@@ -766,54 +766,7 @@ class ModelResolverExtension:
                     try:
                         import folder_paths
 
-                        # Map category to folder_paths type
-                        category_map = {
-                            "loras": "loras",
-                            "checkpoints": "checkpoints",
-                            "vae": "vae",
-                            "controlnet": "controlnet",
-                            "clip": "text_encoders",
-                            "clips": "text_encoders",
-                            "text_encoder": "text_encoders",
-                            "text_encoders": "text_encoders",
-                            "diffusion_model": "diffusion_models",
-                            "diffusion_models": "diffusion_models",
-                            "unet": "diffusion_models",
-                            "upscale_models": "upscale_models",
-                            "upscale_model": "upscale_models",
-                            "latent_upscale_model": "latent_upscale_models",
-                            "latent_upscale_models": "latent_upscale_models",
-                            "style_model": "style_models",
-                            "style_models": "style_models",
-                            "gligen": "gligen",
-                            "diffusers": "diffusers",
-                            "vae_approx": "vae_approx",
-                            "sam": "sams",
-                            "sam_model": "sams",
-                            "sam_models": "sams",
-                            "sams": "sams",
-                            "ultralytics": "ultralytics",
-                            "ultralytics_bbox": "ultralytics",
-                            "ultralytics_segm": "ultralytics",
-                            "yolo": "ultralytics",
-                            "audio_encoder": "audio_encoders",
-                            "audio_encoders": "audio_encoders",
-                            "background_removal": "background_removal",
-                            "background_removal_model": "background_removal",
-                            "frame_interpolation": "frame_interpolation",
-                            "frame_interpolation_model": "frame_interpolation",
-                            "geometry_estimation": "geometry_estimation",
-                            "geometry_estimation_model": "geometry_estimation",
-                            "detection": "detection",
-                            "model_patch": "model_patches",
-                            "model_patches": "model_patches",
-                            "photomaker": "photomaker",
-                            "optical_flow": "optical_flow",
-                            "optical_flow_model": "optical_flow",
-                        }
-                        folder_type = category_map.get(
-                            category.lower(), category.lower()
-                        )
+                        folder_type = normalize_download_category(category)
                         file_path = folder_paths.get_full_path(
                             folder_type, filename
                         )

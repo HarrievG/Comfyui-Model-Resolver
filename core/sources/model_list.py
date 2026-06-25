@@ -67,25 +67,11 @@ def _read_json_file(path: str, default: Any) -> Any:
     return default
 
 
+from ..path_utils import write_json_atomic
+
+
 def _write_json_file_atomic(path: str, data: Any):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(
-        prefix=f".{os.path.basename(path)}.",
-        suffix=".tmp",
-        dir=os.path.dirname(path),
-        text=True,
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            f.write("\n")
-        os.replace(tmp_path, path)
-    except Exception:
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
-        raise
+    write_json_atomic(path, data, indent=2)
 
 
 def _read_model_list_file() -> Dict[str, Any]:

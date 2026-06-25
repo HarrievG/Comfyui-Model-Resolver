@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Optional
+from .path_utils import write_json_atomic
 
 
 SETTINGS_FILE = Path(__file__).resolve().parents[1] / "model_resolver_settings.json"
@@ -61,6 +62,10 @@ CATEGORY_MAP = {
     "photomaker": "photomaker",
     "optical_flow": "optical_flow",
     "optical_flow_model": "optical_flow",
+    "clip_vision": "clip_vision",
+    "ipadapter": "ipadapter",
+    "ip_adapter": "ipadapter",
+    "default": "upscale_models",
 }
 
 DEFAULT_DOWNLOAD_PATH_TEMPLATES: Dict[str, str] = {
@@ -263,10 +268,7 @@ def save_settings(payload: Mapping[str, Any]) -> Dict[str, Any]:
     current = _read_settings_file()
     current.update({str(key): value for key, value in payload.items() if key})
     normalized = normalize_settings(current)
-    SETTINGS_FILE.write_text(
-        json.dumps(normalized, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    write_json_atomic(str(SETTINGS_FILE), normalized, indent=2)
     return normalized
 
 

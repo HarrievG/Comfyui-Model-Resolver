@@ -21,6 +21,7 @@ from ..log_system.log_funcs import (
     log_error,
     log_exception,
 )
+from ..path_utils import write_json_atomic
 
 HF_API_URL = "https://huggingface.co/api"
 HF_AUTHOR_FALLBACKS = ["Comfy-Org"]
@@ -235,13 +236,13 @@ def _read_persistent_author_indexes() -> Dict[str, Any]:
 
 def _write_persistent_author_index(author: str, index: Dict[str, Any]) -> None:
     try:
-        os.makedirs(METADATA_DIR, exist_ok=True)
         data = _read_persistent_author_indexes()
         data["authors"][author] = index
-        tmp_path = f"{HF_AUTHOR_INDEX_CACHE_PATH}.tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-        os.replace(tmp_path, HF_AUTHOR_INDEX_CACHE_PATH)
+        write_json_atomic(
+            HF_AUTHOR_INDEX_CACHE_PATH,
+            data,
+            separators=(",", ":"),
+        )
     except Exception as e:
         log_debug(f"Error writing HuggingFace author index cache: {e}")
 

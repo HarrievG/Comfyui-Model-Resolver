@@ -23,7 +23,7 @@ from .log_system.log_funcs import (
     log_exception,
 )
 from .resolver import normalize_sha256
-from .path_utils import is_path_within, get_path_identity
+from .path_utils import is_path_within, get_path_identity, write_json_atomic
 from .type_utils import as_dict, as_list
 
 try:
@@ -41,61 +41,7 @@ SPEED_HISTORY_SIZE = 5  # Number of samples for smoothing
 CHUNK_SIZE = 1024 * 1024  # 1MB chunks for faster downloads
 CLI_LOG_INTERVAL = 5  # Log progress to CLI every N seconds
 
-# Map common category names to folder_paths keys. "unet" and "clip" are legacy
-# in ComfyUI; new files should download into diffusion_models/text_encoders.
-CATEGORY_MAP = {
-    "checkpoint": "checkpoints",
-    "checkpoints": "checkpoints",
-    "lora": "loras",
-    "loras": "loras",
-    "vae": "vae",
-    "controlnet": "controlnet",
-    "clip": "text_encoders",
-    "clips": "text_encoders",
-    "clip_vision": "clip_vision",
-    "upscaler": "upscale_models",
-    "upscale_models": "upscale_models",
-    "embeddings": "embeddings",
-    "embedding": "embeddings",
-    "diffusion_model": "diffusion_models",
-    "diffusion_models": "diffusion_models",
-    "unet": "diffusion_models",
-    "latent_upscale_model": "latent_upscale_models",
-    "latent_upscale_models": "latent_upscale_models",
-    "text_encoders": "text_encoders",
-    "text_encoder": "text_encoders",
-    "style_model": "style_models",
-    "style_models": "style_models",
-    "gligen": "gligen",
-    "diffusers": "diffusers",
-    "vae_approx": "vae_approx",
-    "sam": "sams",
-    "sam_model": "sams",
-    "sam_models": "sams",
-    "sams": "sams",
-    "ultralytics": "ultralytics",
-    "ultralytics_bbox": "ultralytics",
-    "ultralytics_segm": "ultralytics",
-    "yolo": "ultralytics",
-    "audio_encoder": "audio_encoders",
-    "audio_encoders": "audio_encoders",
-    "background_removal": "background_removal",
-    "background_removal_model": "background_removal",
-    "frame_interpolation": "frame_interpolation",
-    "frame_interpolation_model": "frame_interpolation",
-    "geometry_estimation": "geometry_estimation",
-    "geometry_estimation_model": "geometry_estimation",
-    "detection": "detection",
-    "model_patch": "model_patches",
-    "model_patches": "model_patches",
-    "photomaker": "photomaker",
-    "optical_flow": "optical_flow",
-    "optical_flow_model": "optical_flow",
-    "ipadapter": "ipadapter",
-    "ip_adapter": "ipadapter",
-    # Legacy/unsupported categories map to checkpoints as fallback
-    "default": "upscale_models",  # Model list uses "default" for upscalers
-}
+from .settings import CATEGORY_MAP, normalize_download_category
 
 SENSITIVE_METADATA_KEYS = {
     "authorization",
@@ -573,22 +519,14 @@ def write_lora_manager_metadata(
 ) -> Optional[str]:
     """Write the LoRA Manager-compatible sidecar metadata next to a model file."""
     metadata_path = get_metadata_sidecar_path(dest_path)
-    temp_path = f"{metadata_path}.tmp"
 
     try:
         payload = build_lora_manager_metadata(dest_path, metadata, category, source_url)
-        with open(temp_path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, ensure_ascii=False)
-        os.replace(temp_path, metadata_path)
+        write_json_atomic(metadata_path, payload, indent=2)
         log_info(f"Metadata saved: {metadata_path}")
         return metadata_path
     except Exception as e:
         log_warn(f"Could not save metadata sidecar for {dest_path}: {e}")
-        try:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-        except Exception:
-            pass
         return None
 
 
@@ -605,21 +543,7 @@ def format_bytes(bytes_value: int) -> str:
     return f"{bytes_value:.1f} {sizes[i]}"
 
 
-def normalize_download_category(category: str) -> str:
-    """Return the canonical ComfyUI folder_paths key for a download category."""
-    token = (
-        str(category or "")
-        .strip()
-        .lower()
-        .replace("\\", "_")
-        .replace("/", "_")
-        .replace("-", "_")
-        .replace(" ", "_")
-    )
-    while "__" in token:
-        token = token.replace("__", "_")
-    token = token.strip("_")
-    return CATEGORY_MAP.get(token, token or "checkpoints")
+# Imported from .settings
 
 
 def get_download_directory(category: str, preferred_base_directory: str = "") -> Optional[str]:
