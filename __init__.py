@@ -1112,6 +1112,19 @@ class ModelResolverExtension:
                 filename = data.get("filename", "")
                 category = data.get("category", "")
                 resolved_path = data.get("resolved_path", "")
+                local_only = to_bool(data.get("local_only"), False)
+                provided_hash = (
+                    data.get("sha256")
+                    or data.get("hash")
+                    or data.get("file_hash")
+                    or ""
+                )
+                provided_hash = str(provided_hash or "").strip().lower()
+                if not (
+                    len(provided_hash) == 64
+                    and all(ch in "0123456789abcdef" for ch in provided_hash)
+                ):
+                    provided_hash = ""
 
                 if not filename:
                     return web.json_response(
@@ -1155,17 +1168,125 @@ class ModelResolverExtension:
                         except Exception:
                             pass
 
-                # Search CivitAI for the model using hash
-                if download_available and file_path and _os.path.exists(file_path):
+                if file_path and _os.path.exists(file_path):
                     file_location = _os.path.dirname(file_path).replace("\\", "/")
                     if file_location and not file_location.endswith("/"):
                         file_location += "/"
+
+                def infer_model_type_from_category(value):
+                    if not str(value or "").strip():
+                        return ""
+                    normalized = normalize_download_category(value or "")
+                    type_map = {
+                        "checkpoints": "checkpoint",
+                        "loras": "lora",
+                        "vae": "vae",
+                        "text_encoders": "text_encoder",
+                        "clip": "clip",
+                        "clip_vision": "clip_vision",
+                        "controlnet": "controlnet",
+                        "upscale_models": "upscale",
+                        "diffusion_models": "diffusion_model",
+                    }
+                    return type_map.get(normalized, normalized.rstrip("s"))
+
+                def build_info_response(
+                    result=None,
+                    *,
+                    metadata_path="",
+                    metadata_saved=False,
+                    civitai_checked=False,
+                    local_payload=False,
+                ):
+                    result = result or {}
+                    size_value = result.get("size")
+                    if not size_value and file_path and _os.path.exists(file_path):
+                        try:
+                            size_value = _os.path.getsize(file_path)
+                        except Exception:
+                            size_value = None
+
+                    model_type = (
+                        result.get("model_type")
+                        or result.get("type")
+                        or infer_model_type_from_category(category)
+                    )
+
+                    return {
+                        "filename": result.get("filename") or filename,
+                        "category": category,
+                        "file_path": result.get("file_path") or file_path or "",
+                        "resolved_path": result.get("resolved_path") or file_path or "",
+                        "metadata_path": metadata_path
+                        or result.get("metadata_path")
+                        or "",
+                        "metadata_saved": bool(metadata_saved),
+                        "location": result.get("location") or file_location,
+                        "url": result.get("url"),
+                        "version_url": result.get("version_url"),
+                        "model_id": result.get("model_id"),
+                        "model_name": result.get("model_name") or clean_name,
+                        "model_type": model_type,
+                        "version_id": result.get("version_id"),
+                        "version_name": result.get("version_name", ""),
+                        "sha256": result.get("sha256") or provided_hash,
+                        "size": size_value,
+                        "base_model": result.get("base_model"),
+                        "tags": result.get("tags", []),
+                        "trained_words": result.get("trained_words", []),
+                        "images": result.get("images", []),
+                        "clip_skip": result.get("clip_skip"),
+                        "description": result.get("description", ""),
+                        "model_description": result.get("model_description", ""),
+                        "from_metadata": bool(result.get("from_metadata")),
+                        "local_only": bool(local_payload),
+                        "civitai_checked": bool(civitai_checked),
+                    }
+
+                if local_only:
+                    result = None
+                    if download_available and file_path and _os.path.exists(file_path):
+                        try:
+                            from .core.sources.civitai import (
+                                get_model_info_for_file,
+                            )
+
+                            result = get_model_info_for_file(
+                                file_path,
+                                local_only=True,
+                            )
+                        except Exception as e:
+                            self.logger.warning(f"Local model info error: {e}")
+                    return web.json_response(
+                        build_info_response(
+                            result,
+                            local_payload=True,
+                            civitai_checked=False,
+                        )
+                    )
+
+                # Search CivitAI for the model using hash
+                if download_available and file_path and _os.path.exists(file_path):
                     try:
                         from .core.sources.civitai import (
+                            get_model_info_by_hash,
                             get_model_info_for_file,
                         )
 
-                        result = get_model_info_for_file(file_path)
+                        if provided_hash:
+                            result = get_model_info_by_hash(provided_hash)
+                            if result:
+                                result["file_path"] = file_path
+                                result["resolved_path"] = file_path
+                                result["location"] = file_location
+                                if not result.get("size"):
+                                    try:
+                                        result["size"] = _os.path.getsize(file_path)
+                                    except Exception:
+                                        pass
+                        else:
+                            result = get_model_info_for_file(file_path)
+
                         if result and (
                             result.get("url")
                             or result.get("version_url")
@@ -1177,7 +1298,7 @@ class ModelResolverExtension:
                             if not result.get("from_metadata"):
                                 try:
                                     sidecar_path = get_metadata_sidecar_path(file_path)
-                                    if sidecar_path and not _os.path.exists(sidecar_path):
+                                    if sidecar_path:
                                         metadata_payload = {
                                             "source": "civitai",
                                             "details_source": "civitai",
@@ -1190,7 +1311,7 @@ class ModelResolverExtension:
                                             "model_id": result.get("model_id"),
                                             "version_id": result.get("version_id"),
                                             "version_name": result.get("version_name", ""),
-                                            "sha256": result.get("sha256"),
+                                            "sha256": result.get("sha256") or provided_hash,
                                             "size": result.get("size"),
                                             "base_model": result.get("base_model"),
                                             "tags": result.get("tags", []),
@@ -1219,45 +1340,18 @@ class ModelResolverExtension:
                                             or "",
                                         ) or ""
                                         metadata_saved = bool(metadata_path)
-                                    elif sidecar_path:
-                                        metadata_path = sidecar_path
                                 except Exception as metadata_error:
                                     self.logger.warning(
                                         f"CivitAI metadata sidecar save failed: {metadata_error}"
                                     )
 
                             return web.json_response(
-                                {
-                                    "filename": filename,
-                                    "file_path": file_path,
-                                    "resolved_path": file_path,
-                                    "metadata_path": metadata_path,
-                                    "metadata_saved": metadata_saved,
-                                    "location": result.get("location")
-                                    or file_location,
-                                    "url": result.get("url"),
-                                    "version_url": result.get("version_url"),
-                                    "model_id": result.get("model_id"),
-                                    "model_name": result.get(
-                                        "model_name", clean_name
-                                    ),
-                                    "model_type": result.get("model_type", ""),
-                                    "version_id": result.get("version_id"),
-                                    "version_name": result.get("version_name", ""),
-                                    "sha256": result.get("sha256"),
-                                    "size": result.get("size"),
-                                    "base_model": result.get("base_model"),
-                                    "tags": result.get("tags", []),
-                                    "trained_words": result.get(
-                                        "trained_words", []
-                                    ),
-                                    "images": result.get("images", []),
-                                    "clip_skip": result.get("clip_skip"),
-                                    "description": result.get("description", ""),
-                                    "model_description": result.get(
-                                        "model_description", ""
-                                    ),
-                                }
+                                build_info_response(
+                                    result,
+                                    metadata_path=metadata_path,
+                                    metadata_saved=metadata_saved,
+                                    civitai_checked=True,
+                                )
                             )
                     except Exception as e:
                         self.logger.warning(f"CivitAI search error: {e}")
@@ -1275,6 +1369,7 @@ class ModelResolverExtension:
                         if result and result.get("url"):
                             return web.json_response(
                                 {
+                                    "filename": filename,
                                     "url": result["url"],
                                     "file_path": file_path,
                                     "resolved_path": file_path,
@@ -1283,13 +1378,16 @@ class ModelResolverExtension:
                                     "version_id": result.get("version_id"),
                                     "size": result.get("size"),
                                     "tags": result.get("tags", []),
+                                    "civitai_checked": True,
                                 }
                             )
                     except Exception as e:
                         self.logger.warning(f"CivitAI fallback search error: {e}")
 
                 # No result found
-                return web.json_response({"url": None})
+                response = build_info_response(None, civitai_checked=True)
+                response["url"] = None
+                return web.json_response(response)
 
             @routes.post("/model_resolver/model-details")
             @json_api_endpoint("model-details")

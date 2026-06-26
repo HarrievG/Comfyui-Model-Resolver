@@ -264,8 +264,8 @@ export const modelInfoMethods = {
             });
         }
 
-        // Fetch CivitAI info
-        this.fetchModelInfoForDialog(loraName, modelData, dialog);
+        dialog._infoDialogLookup = { loraName, modelData };
+        this.fetchLocalModelInfoForDialog(loraName, modelData, dialog);
     },
 
     /**
@@ -793,14 +793,14 @@ export const modelInfoMethods = {
     async calculateInfoDialogHash(dialog, button) {
         if (button?.dataset.hashCalculating === 'true') {
             await this.cancelInfoDialogHashCalculation(dialog, button);
-            return;
+            return null;
         }
 
         const data = dialog?._infoDialogData || {};
         const filePath = this.getInfoDialogModelFilePath(data);
         if (!filePath) {
             this.showNotification?.('No local file path available', 'error');
-            return;
+            return null;
         }
 
         dialog._hashCalculation = { progressId: '', cancelRequested: false };
@@ -842,7 +842,7 @@ export const modelInfoMethods = {
                 await new Promise(resolve => setTimeout(resolve, 250));
                 if (!dialog.isConnected) {
                     await this.cancelInfoDialogHashCalculation(dialog, button);
-                    return;
+                    return null;
                 }
                 const progress = await this.fetchJson(
                     `/model_resolver/calculate-file-hash/progress/${encodeURIComponent(progressId)}`,
@@ -869,7 +869,7 @@ export const modelInfoMethods = {
                     }
                     dialog._hashCalculation = null;
                     this.showNotification?.('Hash calculation stopped.', 'info');
-                    return;
+                    return null;
                 }
                 if (progress?.status === 'error') {
                     throw new Error(progress.error || progress.message || 'Hash calculation failed');
@@ -895,6 +895,7 @@ export const modelInfoMethods = {
                 result.metadata_updated ? 'Hash calculated and saved to metadata.' : 'Hash calculated.',
                 'success'
             );
+            return updatedData;
         } catch (error) {
             dialog._hashCalculation = null;
             if (button) {
@@ -905,6 +906,7 @@ export const modelInfoMethods = {
             }
             this.hideInfoDialogHashProgress(dialog);
             this.showNotification?.(`Hash calculation failed: ${error?.message || error}`, 'error');
+            return null;
         }
     },
 
@@ -913,6 +915,12 @@ export const modelInfoMethods = {
         dialog.dataset.mlInfoBound = 'true';
 
         dialog.addEventListener('click', async (event) => {
+            const fetchCivitaiButton = event.target.closest('.mr-info-fetch-civitai');
+            if (fetchCivitaiButton && dialog.contains(fetchCivitaiButton)) {
+                await this.fetchCivitaiModelInfoForDialog(dialog, fetchCivitaiButton);
+                return;
+            }
+
             const hashButton = event.target.closest('.mr-info-hash-calculate');
             if (hashButton && dialog.contains(hashButton)) {
                 await this.calculateInfoDialogHash(dialog, hashButton);
@@ -1047,28 +1055,167 @@ export const modelInfoMethods = {
         dialog._infoDialogResizeSaveTimer = resizeSaveTimer;
     },
 
+    getModelInfoResolvedPath(modelData = {}) {
+        return modelData?.resolved_path
+            || modelData?.path
+            || modelData?.full_path
+            || modelData?.folder_path
+            || modelData?.download_directory
+            || '';
+    },
+
+    buildLocalInfoDialogData(loraName, modelData = {}) {
+        const filename = loraName || modelData?.filename || modelData?.name || '';
+        const modelName = String(filename || '').replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
+        const resolvedPath = this.getModelInfoResolvedPath(modelData);
+        const categoryTypeMap = {
+            checkpoints: 'checkpoint',
+            loras: 'lora',
+            vae: 'vae',
+            text_encoders: 'text_encoder',
+            clip: 'clip',
+            clip_vision: 'clip_vision',
+            controlnet: 'controlnet',
+            upscale_models: 'upscale',
+            diffusion_models: 'diffusion_model'
+        };
+        const rawType = modelData?.model_type || modelData?.modelType || modelData?.type || modelData?.category || '';
+        const normalizedType = String(rawType || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+        return {
+            filename,
+            category: modelData?.category || '',
+            file_path: resolvedPath,
+            resolved_path: resolvedPath,
+            location: resolvedPath ? this.formatInfoDialogLocation({ file_path: resolvedPath }) : '',
+            model_name: modelData?.model_name || modelData?.modelName || modelName,
+            model_type: categoryTypeMap[normalizedType] || rawType,
+            sha256: modelData?.sha256 || modelData?.hash || modelData?.hashes?.SHA256 || '',
+            size: modelData?.size || modelData?.file_size || modelData?.fileSize || '',
+            base_model: modelData?.base_model || modelData?.baseModel || '',
+            tags: modelData?.tags || [],
+            trained_words: modelData?.trained_words || modelData?.trainedWords || [],
+            local_only: true,
+            civitai_checked: false
+        };
+    },
+
     /**
-     * Fetch model info and update the dialog
+     * Fetch local model info and update the dialog without querying CivitAI.
      */
-    async fetchModelInfoForDialog(loraName, modelData, dialog) {
+    async fetchLocalModelInfoForDialog(loraName, modelData, dialog) {
+        const requestId = `${Date.now()}_${Math.random()}`;
+        dialog._localInfoRequestId = requestId;
+        const fallbackData = this.buildLocalInfoDialogData(loraName, modelData);
+        this.updateInfoDialogWithData(dialog, fallbackData);
+
         try {
-            const resolvedPath = modelData?.resolved_path
-                || modelData?.path
-                || modelData?.full_path
-                || modelData?.folder_path
-                || modelData?.download_directory
-                || '';
             const data = await this.fetchJson('/model_resolver/civitai-search', {
                 method: 'POST',
                 body: JSON.stringify({
                     filename: loraName,
                     category: modelData?.category || '',
-                    resolved_path: resolvedPath
+                    resolved_path: this.getModelInfoResolvedPath(modelData),
+                    local_only: true
+                })
+            }, 'Fetch local model info');
+            if (
+                dialog._localInfoRequestId !== requestId
+                || dialog._infoDialogCivitaiFetchStarted
+                || dialog._infoDialogData?.civitai_checked
+                || dialog._infoDialogData?.version_url
+                || dialog._infoDialogData?.url
+            ) {
+                return;
+            }
+            this.updateInfoDialogWithData(dialog, { ...fallbackData, ...data, civitai_checked: false });
+        } catch (e) {
+            if (dialog._localInfoRequestId !== requestId || dialog._infoDialogCivitaiFetchStarted) {
+                return;
+            }
+            this.updateInfoDialogWithData(dialog, fallbackData);
+        }
+    },
+
+    async fetchCivitaiModelInfoForDialog(dialog, button = null) {
+        if (!dialog) return;
+        if (button?.dataset.fetchingCivitai === 'true') return;
+
+        const lookup = dialog._infoDialogLookup || {};
+        let data = dialog._infoDialogData || {};
+        const filename = data.filename || lookup.loraName || '';
+        const category = data.category || lookup.modelData?.category || '';
+        const resolvedPath = this.getInfoDialogModelFilePath(data)
+            || this.getModelInfoResolvedPath(lookup.modelData || {});
+
+        if (!filename) {
+            this.showNotification?.('No model filename available', 'error');
+            return;
+        }
+
+        dialog._infoDialogCivitaiFetchStarted = true;
+        const setFetchingState = (isFetching, label = 'Fetch with CivitAI') => {
+            if (!button) return;
+            button.dataset.fetchingCivitai = isFetching ? 'true' : 'false';
+            button.disabled = isFetching;
+            button.innerHTML = isFetching
+                ? `${getSvgIcon('civitai', 'currentColor', 'mr-info-external-link-icon')} Fetching...`
+                : `${getSvgIcon('civitai', 'currentColor', 'mr-info-external-link-icon')} ${this.escapeHtml(label)}`;
+        };
+
+        setFetchingState(true);
+
+        try {
+            let hash = this.getInfoDialogHash(data);
+            if (!hash) {
+                const hashButton = dialog.querySelector('.mr-info-hash-calculate');
+                const hashResult = await this.calculateInfoDialogHash(dialog, hashButton);
+                if (!hashResult) {
+                    setFetchingState(false);
+                    return;
+                }
+                data = dialog._infoDialogData || data;
+                hash = this.getInfoDialogHash(data);
+            }
+
+            if (!hash) {
+                throw new Error('No SHA256 hash available');
+            }
+
+            const result = await this.fetchJson('/model_resolver/civitai-search', {
+                method: 'POST',
+                body: JSON.stringify({
+                    filename,
+                    category,
+                    resolved_path: resolvedPath,
+                    sha256: hash
                 })
             }, 'Fetch CivitAI model info');
-            this.updateInfoDialogWithData(dialog, data);
-        } catch (e) {
-            this.updateInfoDialogError(dialog, 'Error fetching info from CivitAI');
+
+            const merged = {
+                ...data,
+                ...result,
+                filename,
+                category,
+                file_path: result.file_path || data.file_path || resolvedPath,
+                resolved_path: result.resolved_path || data.resolved_path || resolvedPath,
+                sha256: result.sha256 || hash,
+                civitai_checked: true
+            };
+            dialog._infoDialogData = merged;
+            this.updateInfoDialogWithData(dialog, merged);
+            if (merged.url || merged.version_url) {
+                this.showNotification?.('CivitAI info loaded.', 'success');
+            } else {
+                this.showNotification?.('No exact CivitAI match found.', 'info');
+            }
+        } catch (error) {
+            this.showNotification?.(`CivitAI fetch failed: ${error?.message || error}`, 'error');
+            this.updateInfoDialogWithData(dialog, {
+                ...(dialog._infoDialogData || data),
+                civitai_checked: true
+            });
+        } finally {
+            setFetchingState(false);
         }
     },
 
@@ -1092,7 +1239,7 @@ export const modelInfoMethods = {
         // Update title
         const titleEl = dialog.querySelector('.mr-info-dialog-title');
         if (titleEl) {
-            const modelName = data.model_name || data.modelName || 'Unknown Model';
+            const modelName = data.model_name || data.modelName || data.name || data.filename || 'Unknown Model';
             const versionName = data.version_name || data.versionName || '';
             titleEl.innerHTML = this.renderVersionedModelNameHtml(modelName, versionName) || this.escapeHtml(modelName);
         }
@@ -1178,7 +1325,7 @@ export const modelInfoMethods = {
                         ${getSvgIcon('externalLink', 'currentColor', 'mr-info-external-link-icon')}
                     </a>
                 `;
-            } else {
+            } else if (data.civitai_checked || data.civitaiChecked) {
                 const searchName = data.model_name || data.modelName || 'Unknown';
                 civitaiLinkEl.innerHTML = `
                     <span class="mr-info-not-found">Model not found</span>
@@ -1187,6 +1334,15 @@ export const modelInfoMethods = {
                         ${getSvgIcon('externalLink', 'currentColor', 'mr-info-external-link-icon')}
                     </a>
                 `;
+            } else if (this.getInfoDialogModelFilePath(data)) {
+                civitaiLinkEl.innerHTML = `
+                    <button type="button" class="mr-info-link mr-info-fetch-civitai">
+                        ${getSvgIcon('civitai', 'currentColor', 'mr-info-external-link-icon')}
+                        Fetch with CivitAI
+                    </button>
+                `;
+            } else {
+                civitaiLinkEl.innerHTML = '';
             }
         }
 

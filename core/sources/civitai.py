@@ -1783,7 +1783,7 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_model_info_for_file(
-    file_path: str, api_key: Optional[str] = None
+    file_path: str, api_key: Optional[str] = None, local_only: bool = False
 ) -> Optional[Dict[str, Any]]:
     """
     Get model info from CivitAI by computing file hash and looking up by hash.
@@ -1792,6 +1792,8 @@ def get_model_info_for_file(
     Args:
         file_path: Full path to the model file
         api_key: Optional CivitAI API key
+        local_only: If true, never calculate a hash or query CivitAI when
+            metadata is missing. Return only local file information.
 
     Returns:
         Dict with model info from CivitAI, or None if not found
@@ -1825,6 +1827,26 @@ def get_model_info_for_file(
                 f for f in files if "metadata" in f.lower() or f.endswith(".json")
             ]
             log_info(f"Files in {directory}: {metadata_files}")
+
+    if local_only:
+        filename = os.path.basename(file_path)
+        stem = os.path.splitext(filename)[0]
+        result = {
+            "source": "local",
+            "filename": filename,
+            "file_path": file_path,
+            "resolved_path": file_path,
+            "model_name": stem,
+            "model_type": "",
+            "location": _format_model_location(file_path),
+            "from_metadata": False,
+            "local_only": True,
+        }
+        try:
+            result["size"] = os.path.getsize(file_path)
+        except Exception:
+            pass
+        return result
 
     # If no metadata file, compute hash and look up on CivitAI
     file_hash = _get_sha256_hash(file_path)

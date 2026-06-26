@@ -3834,12 +3834,22 @@
     font-weight: 700;
     white-space: nowrap;
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+    cursor: pointer;
 }
 
 .mr-info-link:hover {
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.32);
     color: #ffffff;
+}
+
+button.mr-info-link {
+    font: inherit;
+}
+
+button.mr-info-link:disabled {
+    cursor: wait;
+    opacity: 0.72;
 }
 
 .mr-info-external-link-icon {
