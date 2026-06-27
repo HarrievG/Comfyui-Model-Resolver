@@ -524,18 +524,18 @@ export const missingBrowserMethods = {
                             </button>
                         </div>
                     </div>
-                    <div class="mr-missing-list-head">
-                        <span class="mr-missing-head-select">
-                            <input type="checkbox" class="mr-missing-select-all-check" aria-label="Select or deselect all missing models">
-                        </span>
-                        <span>#</span>
-                        <span>Missing Model</span>
-                        <span>Type</span>
-                        <span>Best Local Match</span>
-                        <span>Match</span>
-                        <span>Sources</span>
-                    </div>
                     <div class="mr-missing-list">
+                        <div class="mr-missing-list-head">
+                            <span class="mr-missing-head-select">
+                                <input type="checkbox" class="mr-missing-select-all-check" aria-label="Select or deselect all missing models">
+                            </span>
+                            <span>#</span>
+                            <span>Missing Model</span>
+                            <span>Type</span>
+                            <span>Best Local Match</span>
+                            <span>Match</span>
+                            <span>Sources</span>
+                        </div>
         `;
 
         missingModels.forEach((missing, index) => {

@@ -1,4 +1,4 @@
-﻿#model-resolver-modal,
+#model-resolver-modal,
 #model-resolver-modal button,
 #model-resolver-modal input,
 #model-resolver-modal select {
@@ -483,7 +483,7 @@
 .mr-missing-list-pane {
     flex: 1 1 auto;
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     border-right: 0;
     background: var(--mr-missing-bg);
 }
@@ -665,9 +665,13 @@
 }
 
 .mr-missing-list-head {
+    position: sticky;
+    top: 0;
+    z-index: 10;
     padding: 10px 12px 10px 8px;
     border-bottom: 1px solid var(--mr-missing-line);
-    background: var(--mr-missing-surface);
+    background-color: var(--mr-missing-bg, #111111);
+    background-image: linear-gradient(var(--mr-missing-surface, rgba(255, 255, 255, 0.03)), var(--mr-missing-surface, rgba(255, 255, 255, 0.03)));
     color: var(--mr-text-muted);
     font-size: 11px;
     font-weight: 700;
@@ -679,6 +683,12 @@
     justify-content: center;
     min-width: 0;
     text-align: center;
+}
+
+.mr-missing-list-head>span:nth-child(3),
+.mr-missing-list-head>span:nth-child(5) {
+    justify-content: flex-start;
+    text-align: left;
 }
 
 .mr-missing-list {
@@ -837,7 +847,7 @@
 }
 
 .mr-missing-row-type {
-    justify-self: start;
+    justify-self: center;
     max-width: 100%;
     min-width: 0;
     padding: 2px 7px;
@@ -855,7 +865,10 @@
 
 .mr-missing-row-match {
     justify-self: center;
-    display: inline-flex;
+    display: flex;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
     align-items: center;
     color: var(--mr-text-muted);
 }
