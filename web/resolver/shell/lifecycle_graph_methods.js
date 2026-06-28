@@ -210,6 +210,7 @@ export const lifecycleGraphMethods = {
                 }
                 await progressPromise;
             }
+            this.applyResolvedSelectionAliasesToAnalysisData?.(data);
             if (this._workflowDataLoadToken === loadToken) {
                 this.cachedWorkflowSignature = workflowSignature;
                 this.cachedAnalysisData = data;

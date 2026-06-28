@@ -7,6 +7,13 @@ export const searchPanelMethods = {
      * Build stable cache key for a missing model entry
      */
     getMissingSearchKey(missing) {
+        if (missing?.missing_search_key) {
+            return String(missing.missing_search_key);
+        }
+        if (missing?.search_key) {
+            return String(missing.search_key);
+        }
+
         const nodeId = missing?.node_id ?? '';
         const widgetIndex = missing?.widget_index ?? '';
         const subgraphId = missing?.subgraph_id ?? '';
@@ -526,14 +533,45 @@ export const searchPanelMethods = {
 
         if (workflowKey === this.getWorkflowScopedQueueKey()) {
             this.searchResultCache.set(missingSearchKey, state);
+            return;
+        }
+
+        const activeWorkflowKey = this.getWorkflowScopedQueueKey();
+        const activeState = this.searchResultCache?.get(missingSearchKey);
+        const runId = state.activeSearchRunId || activeState?.activeSearchRunId;
+        const mirrorsActiveSearch = Boolean(
+            activeState === state
+            || (
+                runId
+                && activeState?.activeSearchRunId === runId
+                && this.hasBackgroundSearchJob(activeWorkflowKey, missingSearchKey, runId)
+            )
+        );
+        if (mirrorsActiveSearch) {
+            this.searchResultCache.set(missingSearchKey, state);
+            this.saveSearchCacheForActiveWorkflow?.();
         }
     },
 
     refreshSearchUiForMissing(missing, state = null, { workflowKey = this.getWorkflowScopedQueueKey() } = {}) {
         if (!missing) return;
-        if (workflowKey && workflowKey !== this.getWorkflowScopedQueueKey()) return;
-
-        const currentState = state || this.searchResultCache.get(this.getMissingSearchKey(missing));
+        const activeWorkflowKey = this.getWorkflowScopedQueueKey();
+        const missingSearchKey = this.getMissingSearchKey(missing);
+        let currentState = state || this.searchResultCache.get(missingSearchKey);
+        if (workflowKey && workflowKey !== activeWorkflowKey) {
+            const activeState = this.searchResultCache.get(missingSearchKey);
+            const runId = currentState?.activeSearchRunId || activeState?.activeSearchRunId;
+            const mirrorsActiveSearch = Boolean(
+                activeState === currentState
+                || (
+                    runId
+                    && activeState?.activeSearchRunId === runId
+                    && this.hasBackgroundSearchJob(activeWorkflowKey, missingSearchKey, runId)
+                )
+            );
+            if (!mirrorsActiveSearch) return;
+            currentState = activeState || currentState;
+        }
         this.refreshMissingSourcesSummary(missing);
         this.updateBatchFooterButtons?.();
 
@@ -1228,8 +1266,13 @@ export const searchPanelMethods = {
             const runId = state.activeSearchRunId;
             if (!runId || !this.hasBackgroundSearchJob(workflowKey, missingSearchKey, runId)) continue;
 
+            const job = this.getBackgroundSearchJob(workflowKey, missingSearchKey);
             for (const [source, progress] of Object.entries(state.sourceProgress || {})) {
                 if (progress?.status !== 'running') continue;
+                const progressId = job?.sourceProgressIds?.get?.(source);
+                if (progressId) {
+                    this.startBackendSearchProgressPolling?.(state, missing, source, runId, progressId, { workflowKey });
+                }
                 this.startEstimatedSearchProgress(state, missing, null, source, runId, { workflowKey });
             }
             this.refreshSearchUiForMissing(missing, state, { workflowKey });

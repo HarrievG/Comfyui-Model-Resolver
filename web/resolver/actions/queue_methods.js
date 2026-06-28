@@ -1762,6 +1762,7 @@ export const queueMethods = {
         const missingKey = this.getMissingModelKey(missing);
         const resolution = {
             missing_key: missingKey,
+            missing_search_key: this.getMissingSearchKey?.(missing),
             node_id: missing.node_id,
             widget_index: missing.widget_index,
             resolved_path: resolvedModel.path,
@@ -1869,6 +1870,7 @@ export const queueMethods = {
                 this.pendingResolutions = remainingSelections;
                 this.rebuildPendingIndex();
                 this.savePendingQueueForActiveWorkflow();
+                this.preserveSearchCacheAcrossNextWorkflowSync = true;
                 this.syncWorkflowScopedQueue?.(data.workflow);
 
                 this.pendingResolutions = remainingSelections;
@@ -2056,6 +2058,7 @@ export const queueMethods = {
             this.appliedResolvedSelectionAliases.set(key, {
                 key,
                 category: selection.category || '',
+                searchKey: selection.missing_search_key || selection.search_key || '',
                 refs: this.getResolvedSelectionRefs(selection),
                 tokens: this.getResolvedSelectionTokenSet(this.getResolvedSelectionPathCandidates(selection))
             });
@@ -2110,6 +2113,9 @@ export const queueMethods = {
                 if (matchedKeys.has(key)) continue;
                 if (!this.doesResolvedModelMatchAlias(model, alias)) continue;
                 model.missing_key = key;
+                if (alias.searchKey) {
+                    model.missing_search_key = alias.searchKey;
+                }
                 matchedKeys.add(key);
                 break;
             }
@@ -2133,6 +2139,9 @@ export const queueMethods = {
         return {
             ...(sourceMissing || {}),
             missing_key: this.getResolutionQueueKey(selection),
+            missing_search_key: selection.missing_search_key
+                || sourceMissing?.missing_search_key
+                || (sourceMissing ? this.getMissingSearchKey?.(sourceMissing) : ''),
             __isOptimisticResolved: true,
             node_id: selection.node_id ?? sourceMissing?.node_id,
             widget_index: selection.widget_index ?? sourceMissing?.widget_index,

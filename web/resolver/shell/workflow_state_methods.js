@@ -560,10 +560,31 @@ export const workflowStateMethods = {
         const nextSignature = this.getWorkflowSignature(currentWorkflow);
         const previousKey = this.getWorkflowScopedQueueKey();
         const nextKey = this.getWorkflowScopedQueueKey(nextRoute, nextSignature);
+        const preserveSearchCache = Boolean(this.preserveSearchCacheAcrossNextWorkflowSync);
+        const previousSearchCache = preserveSearchCache
+            ? this.cloneSearchResultCache(this.searchResultCache, {
+                preserveActive: true,
+                workflowKey: previousKey
+            })
+            : null;
+        const preservedActiveSearchStates = new Map();
+        const preservedActiveSearchMissingModels = [];
+        if (preserveSearchCache && previousKey && nextKey && nextKey !== previousKey) {
+            for (const [missingSearchKey, state] of this.searchResultCache.entries()) {
+                const runId = state?.activeSearchRunId;
+                if (!runId || !this.hasBackgroundSearchJob?.(previousKey, missingSearchKey, runId)) continue;
+                const job = this.getBackgroundSearchJob?.(previousKey, missingSearchKey);
+                preservedActiveSearchStates.set(missingSearchKey, { state, job });
+                if (job?.missing) {
+                    preservedActiveSearchMissingModels.push(job.missing);
+                }
+            }
+        }
 
         if (!nextKey || nextKey === previousKey) {
             this.activeWorkflowRouteKey = nextRoute;
             this.activeWorkflowSignature = nextSignature;
+            this.preserveSearchCacheAcrossNextWorkflowSync = false;
             return;
         }
 
@@ -579,7 +600,32 @@ export const workflowStateMethods = {
         this.restoreAnalysisCacheForActiveWorkflow();
         this.restoreLoadedModelsCacheForActiveWorkflow();
         this.restoreSearchCacheForActiveWorkflow();
+        if (preserveSearchCache && previousSearchCache?.size) {
+            const mergedSearchCache = this.searchResultCache instanceof Map
+                ? this.searchResultCache
+                : new Map();
+            for (const [missingSearchKey, state] of previousSearchCache.entries()) {
+                if (!mergedSearchCache.has(missingSearchKey)) {
+                    mergedSearchCache.set(missingSearchKey, state);
+                }
+            }
+            for (const [missingSearchKey, preserved] of preservedActiveSearchStates.entries()) {
+                mergedSearchCache.set(missingSearchKey, preserved.state);
+                if (preserved.job) {
+                    this.backgroundSearchJobs?.set(
+                        this.getBackgroundSearchJobKey(nextKey, missingSearchKey),
+                        preserved.job
+                    );
+                }
+            }
+            this.searchResultCache = mergedSearchCache;
+            this.saveSearchCacheForActiveWorkflow();
+        }
+        this.preserveSearchCacheAcrossNextWorkflowSync = false;
         this.restoreDownloadTargetSelectionsForActiveWorkflow();
+        if (preservedActiveSearchMissingModels.length) {
+            this.syncSearchProgressAfterResume?.(preservedActiveSearchMissingModels, { workflowKey: nextKey });
+        }
     },
 
     clearWorkflowScopedState() {

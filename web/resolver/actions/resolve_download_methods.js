@@ -29,7 +29,11 @@ export const resolveDownloadMethods = {
             const nodeRefs = missing.all_node_refs || [missing];
             log.debug('nodeRefs count:', nodeRefs?.length, 'is_lora_v2:', nodeRefs?.[0]?.is_lora_v2);
 
+            const missingKey = this.getMissingModelKey?.(missing);
+            const missingSearchKey = this.getMissingSearchKey?.(missing);
             const resolutions = nodeRefs.map(ref => ({
+                missing_key: missingKey,
+                missing_search_key: missingSearchKey,
                 node_id: ref.node_id,
                 widget_index: ref.widget_index,
                 resolved_path: resolvedModel.path,
@@ -61,9 +65,11 @@ export const resolveDownloadMethods = {
                 const count = resolutions.length;
                 const refText = count > 1 ? ` (${count} references)` : '';
                 this.showNotification(`✓ Model linked successfully: ${modelName}${refText}`, 'success');
+                this.rememberAppliedResolvedSelections?.(resolutions);
 
                 // Reload dialog using the updated workflow from API response
                 // This ensures we're analyzing the correct updated workflow
+                this.preserveSearchCacheAcrossNextWorkflowSync = true;
                 await this.loadWorkflowData(data.workflow, { force: true });
             } else {
                 this.showNotification('Failed to resolve model: ' + (data.error || 'Unknown error'), 'error');
@@ -102,6 +108,8 @@ export const resolveDownloadMethods = {
 
                 if (perfectMatch && perfectMatch.model) {
                     resolutions.push({
+                        missing_key: this.getMissingModelKey?.(missing),
+                        missing_search_key: this.getMissingSearchKey?.(missing),
                         node_id: missing.node_id,
                         widget_index: missing.widget_index,
                         resolved_path: perfectMatch.model.path,
@@ -140,9 +148,11 @@ export const resolveDownloadMethods = {
                     `✓ Successfully linked ${resolutions.length} model${resolutions.length > 1 ? 's' : ''}!`,
                     'success'
                 );
+                this.rememberAppliedResolvedSelections?.(resolutions);
 
                 // Reload dialog using the updated workflow from API response (if dialog is visible)
                 if (this.contentElement) {
+                    this.preserveSearchCacheAcrossNextWorkflowSync = true;
                     await this.loadWorkflowData(resolveData.workflow, { force: true });
                 }
 
@@ -2159,6 +2169,11 @@ export const resolveDownloadMethods = {
             const currentJob = this.backgroundSearchJobs?.get(backgroundJobKey);
             if (currentJob?.runId === searchRunId) {
                 this.backgroundSearchJobs.delete(backgroundJobKey);
+            }
+            for (const [jobKey, job] of Array.from(this.backgroundSearchJobs?.entries?.() || [])) {
+                if (job?.runId === searchRunId && job?.missingSearchKey === missingSearchKey) {
+                    this.backgroundSearchJobs.delete(jobKey);
+                }
             }
             if (!completedSearchRun) {
                 this.settleInactiveSearchProgress?.(missing, state, {
