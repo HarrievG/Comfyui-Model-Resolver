@@ -370,6 +370,7 @@ class AzLogsLogger:
     def configure(self, config):
         """Configure the logger"""
         self.config.update(config)
+        self.reset_loggers()
 
         if self.config.get("use_colors"):
             _enable_windows_virtual_terminal_processing()
