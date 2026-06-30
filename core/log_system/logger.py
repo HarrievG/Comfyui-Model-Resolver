@@ -125,6 +125,56 @@ def _get_console_output_stream():
     return None
 
 
+class SafeRotatingFileHandler(RotatingFileHandler):
+    """Rotating file handler that disables itself if a launcher breaks its stream."""
+
+    def __init__(self, *args, **kwargs):
+        self._disabled_by_stream_error = False
+        super().__init__(*args, **kwargs)
+
+    def emit(self, record):
+        if self._disabled_by_stream_error:
+            return
+
+        try:
+            if self.stream is not None and self.maxBytes > 0:
+                tell = getattr(self.stream, "tell", None)
+                if not callable(tell):
+                    raise OSError(
+                        "Log file stream does not support tell(); disabling file logs"
+                    )
+            super().emit(record)
+        except Exception:
+            self.handleError(record)
+
+    def handleError(self, record):
+        self._disabled_by_stream_error = True
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+class DirectConsoleHandler(logging.Handler):
+    """Console handler that writes directly to the original console stream."""
+
+    terminator = "\n"
+
+    def __init__(self, stream=None):
+        super().__init__()
+        self.stream = stream
+
+    def emit(self, record):
+        try:
+            stream = self.stream or _get_console_output_stream()
+            if stream is None:
+                return
+            stream.write(self.format(record) + self.terminator)
+            stream.flush()
+        except Exception:
+            self.handleError(record)
+
+
 class ColoredFormatter(logging.Formatter):
     """Formatter that adds colors to console logs"""
 
@@ -387,7 +437,7 @@ class AzLogsLogger:
             return self.file_handlers[log_file]
 
         os.makedirs(self.config["log_dir"], exist_ok=True)
-        file_handler = RotatingFileHandler(
+        file_handler = SafeRotatingFileHandler(
             log_file,
             maxBytes=self.config["max_file_size_mb"] * 1024 * 1024,
             backupCount=self.config["backup_count"],
@@ -439,7 +489,7 @@ class AzLogsLogger:
             _enable_windows_virtual_terminal_processing()
 
         console_stream = _get_console_output_stream()
-        console_handler = logging.StreamHandler(console_stream)
+        console_handler = DirectConsoleHandler(console_stream)
         console_formatter = ColoredFormatter(
             fmt="[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s",
             datefmt=self.config["timestamp_format"],

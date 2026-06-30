@@ -44,11 +44,7 @@ try:
         {
             "log_to_file": True,
             "log_dir": os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs"),
-            "use_colors": (
-                logger.config["use_colors"]
-                if "AZLOGS_USE_COLORS" in os.environ
-                else USE_COLORS
-            ),
+            "use_colors": USE_COLORS,
         }
     )
 
