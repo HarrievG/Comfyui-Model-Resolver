@@ -674,7 +674,7 @@ export const missingBrowserMethods = {
             const key = row.dataset.missingKey;
             if (!key || key === this.selectedMissingModelKey) return;
             this.selectedMissingModelKey = key;
-            this.displayMissingModels(container, data);
+            this.displayMissingModels(container, data, { selectionOnly: true });
         };
 
         const selectAllCheckbox = container.querySelector('.mr-missing-select-all-check');
@@ -1732,19 +1732,17 @@ export const missingBrowserMethods = {
             populateComboOptions(filterText, options);
         };
 
-        if (comboList) {
-            ensureLocalModelsThenPopulate('');
-        }
-
         if (comboInput) {
             const debouncedFilter = this.debounce(() => {
                 ensureLocalModelsThenPopulate(comboInput.value);
             }, 200);
             comboInput.addEventListener('input', debouncedFilter);
-            comboInput.addEventListener('focus', () => {
+            const focusOrClick = () => {
                 showComboList();
                 ensureLocalModelsThenPopulate(comboInput.value);
-            });
+            };
+            comboInput.addEventListener('focus', focusOrClick);
+            comboInput.addEventListener('click', focusOrClick);
         }
 
         const categoryPriorityEl = getDownloadCategoryElement();
@@ -1825,7 +1823,8 @@ export const missingBrowserMethods = {
     /**
      * Display missing models in the dialog
      */
-    displayMissingModels(container, data) {
+    displayMissingModels(container, data, options = {}) {
+        const selectionOnly = !!options.selectionOnly;
         const listScrollSnapshot = this.getMissingListScrollSnapshot(container);
         const missingModels = (data.missing_models || []).map(missing => {
             let restored = this.restoreDownloadedLocalMatchesForMissing?.(missing) || missing;
@@ -1951,6 +1950,37 @@ export const missingBrowserMethods = {
         }
 
         this.missingModels = sortedMissingModels;
+
+        const existingBrowser = container.querySelector('.mr-missing-browser');
+        const detailPane = existingBrowser?.querySelector('.mr-missing-detail-pane');
+        const listContainer = existingBrowser?.querySelector('.mr-missing-list');
+
+        if (selectionOnly && existingBrowser && detailPane && listContainer) {
+            const rows = listContainer.querySelectorAll('.mr-missing-list-row');
+            rows.forEach(row => {
+                const rowKey = row.dataset.missingKey;
+                const shouldBeSelected = rowKey === this.selectedMissingModelKey;
+                if (row.classList.contains('is-selected') !== shouldBeSelected) {
+                    row.classList.toggle('is-selected', shouldBeSelected);
+                }
+            });
+
+            const selectedMissing = sortedMissingModels.find(missing => this.getMissingModelKey(missing) === this.selectedMissingModelKey);
+            const detailIndex = sortedMissingModels.indexOf(selectedMissing);
+
+            detailPane.innerHTML = selectedMissing
+                ? this.renderMissingModel(selectedMissing, detailIndex)
+                : this.renderStatusMessage('Select a missing model to inspect details.', 'info');
+
+            if (selectedMissing) {
+                this.wireMissingModelDetail(container, selectedMissing, detailIndex);
+            }
+
+            this.reconnectActiveSearchProgress(sortedMissingModels);
+            this.updateBatchFooterButtons();
+            return;
+        }
+
         container.innerHTML = this.renderMissingModelsBrowser(
             sortedMissingModels,
             this.selectedMissingModelKey,
