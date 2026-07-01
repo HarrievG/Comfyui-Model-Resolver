@@ -724,7 +724,6 @@
     min-height: 0;
     overflow-y: auto;
     scrollbar-width: auto;
-    scrollbar-gutter: stable;
     background: var(--mr-missing-bg);
 }
 
