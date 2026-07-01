@@ -1575,7 +1575,7 @@ export const missingBrowserMethods = {
                                 <span class="mr-folder-browser-count">${modelCount}</span>
                             </div>
                             <div class="mr-folder-browser-children ${shouldExpand ? 'is-expanded' : ''}">
-                                ${renderModelTreeNodes(folder, group, expandedSet, filter, selectedIdentity)}
+                                ${shouldExpand ? renderModelTreeNodes(folder, group, expandedSet, filter, selectedIdentity) : ''}
                             </div>
                         </div>
                     `;
@@ -1656,7 +1656,7 @@ export const missingBrowserMethods = {
                             </button>
                             ${group.baseDirectory ? `<div class="mr-folder-browser-root-path">${this.escapeHtml(group.baseDirectory)}</div>` : ''}
                             <div class="mr-folder-browser-tree ${isExpanded ? 'is-expanded' : ''}">
-                                ${renderModelTreeNodes(tree, group, expandedSet, filter, selectedIdentity)}
+                                ${isExpanded ? renderModelTreeNodes(tree, group, expandedSet, filter, selectedIdentity) : ''}
                             </div>
                         </div>
                     `;
