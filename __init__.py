@@ -39,6 +39,88 @@ NODE_CLASS_MAPPINGS = {}
 __all__ = ["WEB_DIRECTORY"]
 
 
+class JobProgressTracker:
+    """Helper class for thread-safe job progress tracking and cancellation management."""
+
+    def __init__(self, default_message="Processing..."):
+        self.lock = threading.Lock()
+        self.progress = {}
+        self.cancelled = set()
+        self.default_message = default_message
+
+    def cleanup(self, max_age_seconds=300):
+        cutoff = time.time() - max_age_seconds
+        with self.lock:
+            expired = [
+                pid
+                for pid, data in self.progress.items()
+                if data.get("updated_at", data.get("created_at", 0)) < cutoff
+            ]
+            for pid in expired:
+                self.progress.pop(pid, None)
+            self.cancelled.difference_update(expired)
+
+    def update(self, progress_id, **payload):
+        if not progress_id:
+            return
+        now = time.time()
+        with self.lock:
+            current = self.progress.get(progress_id, {})
+            
+            # If the job was cancelled, force it to remain cancelled.
+            if progress_id in self.cancelled and payload.get("status") != "cancelled":
+                payload["status"] = "cancelled"
+                payload["stage"] = "cancelled"
+                payload["message"] = "Cancelled"
+                payload["percent"] = 100
+                payload["cancelled"] = True
+
+            # Normalize percent if present
+            if "percent" in payload and payload["percent"] is not None:
+                try:
+                    payload["percent"] = max(0.0, min(100.0, float(payload["percent"])))
+                except (TypeError, ValueError):
+                    pass
+
+            self.progress[progress_id] = {
+                "created_at": now,
+                "message": self.default_message,
+                **current,
+                **payload,
+                "progress_id": progress_id,
+                "updated_at": now,
+            }
+
+    def is_cancelled(self, progress_id) -> bool:
+        if not progress_id:
+            return False
+        with self.lock:
+            return progress_id in self.cancelled
+
+    def mark_cancelled(self, progress_id, cancel_message="Cancelled") -> bool:
+        self.cleanup()
+        with self.lock:
+            current = self.progress.get(progress_id, {})
+            self.cancelled.add(progress_id)
+            self.progress[progress_id] = {
+                "created_at": time.time(),
+                **current,
+                "progress_id": progress_id,
+                "status": "cancelled",
+                "stage": "cancelled",
+                "message": cancel_message,
+                "percent": 100,
+                "cancelled": True,
+                "updated_at": time.time(),
+            }
+            return True
+
+    def get(self, progress_id):
+        with self.lock:
+            val = self.progress.get(progress_id)
+            return dict(val) if val else None
+
+
 class ModelResolverExtension:
     """Main extension class for Model Resolver."""
 
@@ -46,12 +128,8 @@ class ModelResolverExtension:
         self.routes_setup = False
         self.logger = create_module_logger(__name__)
         self.analysis_progress = {}
-        self.search_progress = {}
-        self.hash_progress = {}
-        self.cancelled_search_progress = set()
-        self.cancelled_hash_progress = set()
-        self.search_progress_lock = threading.Lock()
-        self.hash_progress_lock = threading.Lock()
+        self.search_tracker = JobProgressTracker("Searching...")
+        self.hash_tracker = JobProgressTracker("Preparing hash calculation...")
         self.search_result_timestamps = {}
 
     def initialize(self):
@@ -580,52 +658,16 @@ class ModelResolverExtension:
                 return web.json_response({"success": True})
 
             def cleanup_hash_progress(max_age_seconds=300):
-                cutoff = time.time() - max_age_seconds
-                with self.hash_progress_lock:
-                    expired = [
-                        progress_id
-                        for progress_id, progress in self.hash_progress.items()
-                        if progress.get("updated_at", progress.get("created_at", 0)) < cutoff
-                    ]
-                    for progress_id in expired:
-                        self.hash_progress.pop(progress_id, None)
-                    self.cancelled_hash_progress.difference_update(expired)
+                self.hash_tracker.cleanup(max_age_seconds)
 
             def update_hash_progress(progress_id, **payload):
-                if not progress_id:
-                    return
-                with self.hash_progress_lock:
-                    current = self.hash_progress.get(progress_id, {})
-                    self.hash_progress[progress_id] = {
-                        **current,
-                        **payload,
-                        "progress_id": progress_id,
-                        "updated_at": time.time(),
-                    }
+                self.hash_tracker.update(progress_id, **payload)
 
             def is_hash_progress_cancelled(progress_id):
-                if not progress_id:
-                    return False
-                with self.hash_progress_lock:
-                    return progress_id in self.cancelled_hash_progress
+                return self.hash_tracker.is_cancelled(progress_id)
 
             def mark_hash_progress_cancelled(progress_id):
-                if not progress_id:
-                    return False
-                cleanup_hash_progress()
-                with self.hash_progress_lock:
-                    current = self.hash_progress.get(progress_id)
-                    if not current:
-                        return False
-                    self.cancelled_hash_progress.add(progress_id)
-                    self.hash_progress[progress_id] = {
-                        **current,
-                        "status": "cancelling",
-                        "stage": "cancelling",
-                        "message": "Stopping hash calculation...",
-                        "updated_at": time.time(),
-                    }
-                    return True
+                return self.hash_tracker.mark_cancelled(progress_id, "Stopping hash calculation...")
 
             class HashCalculationCancelled(Exception):
                 pass
@@ -820,17 +862,14 @@ class ModelResolverExtension:
 
                 cleanup_hash_progress()
                 progress_id = f"hash_{uuid.uuid4().hex}"
-                with self.hash_progress_lock:
-                    self.hash_progress[progress_id] = {
-                        "progress_id": progress_id,
-                        "status": "queued",
-                        "stage": "queued",
-                        "message": "Preparing hash calculation...",
-                        "percent": 0,
-                        "file_path": normalized_path,
-                        "created_at": time.time(),
-                        "updated_at": time.time(),
-                    }
+                self.hash_tracker.update(
+                    progress_id,
+                    status="queued",
+                    stage="queued",
+                    message="Preparing hash calculation...",
+                    percent=0,
+                    file_path=normalized_path,
+                )
 
                 def run_hash_task():
                     try:
@@ -896,8 +935,7 @@ class ModelResolverExtension:
                 """Return progress for a background SHA256 calculation."""
                 progress_id = request.match_info.get("progress_id", "").strip()
                 cleanup_hash_progress()
-                with self.hash_progress_lock:
-                    progress = dict(self.hash_progress.get(progress_id) or {})
+                progress = self.hash_tracker.get(progress_id)
                 if not progress:
                     return web.json_response(
                         {"error": "progress not found"}, status=404
@@ -2011,47 +2049,16 @@ class ModelResolverExtension:
                 )
 
                 def cleanup_search_progress(max_age_seconds=300):
-                    now = time.time()
-                    with self.search_progress_lock:
-                        expired = [
-                            progress_id
-                            for progress_id, progress in self.search_progress.items()
-                            if now - progress.get(
-                                "updated_at", progress.get("created_at", now)
-                            )
-                            > max_age_seconds
-                        ]
-                        for progress_id in expired:
-                            self.search_progress.pop(progress_id, None)
-                        self.cancelled_search_progress.difference_update(expired)
+                    self.search_tracker.cleanup(max_age_seconds)
 
                 def is_search_progress_cancelled(progress_id):
-                    if not progress_id:
-                        return False
-                    with self.search_progress_lock:
-                        return progress_id in self.cancelled_search_progress
+                    return self.search_tracker.is_cancelled(progress_id)
 
                 def mark_search_progress_cancelled(progress_id, source=""):
-                    if not progress_id:
-                        return False
-                    cleanup_search_progress()
-                    now = time.time()
-                    with self.search_progress_lock:
-                        current = self.search_progress.get(progress_id, {})
-                        self.cancelled_search_progress.add(progress_id)
-                        self.search_progress[progress_id] = {
-                            **current,
-                            "progress_id": progress_id,
-                            "source": source or current.get("source", ""),
-                            "stage": "cancelled",
-                            "message": "Cancelled",
-                            "status": "cancelled",
-                            "percent": 100,
-                            "cancelled": True,
-                            "updated_at": now,
-                            "created_at": current.get("created_at", now),
-                        }
-                    return True
+                    res = self.search_tracker.mark_cancelled(progress_id, "Cancelled")
+                    if res and source:
+                        self.search_tracker.update(progress_id, source=source)
+                    return res
 
                 def update_search_progress(
                     progress_id,
@@ -2062,46 +2069,15 @@ class ModelResolverExtension:
                     status="running",
                     **extra,
                 ):
-                    if not progress_id:
-                        return
-                    cleanup_search_progress()
-                    now = time.time()
-                    with self.search_progress_lock:
-                        current = self.search_progress.get(progress_id, {})
-                        if (
-                            progress_id in self.cancelled_search_progress
-                            and status != "cancelled"
-                        ):
-                            self.search_progress[progress_id] = {
-                                **current,
-                                "progress_id": progress_id,
-                                "source": source or current.get("source", ""),
-                                "stage": "cancelled",
-                                "message": "Cancelled",
-                                "status": "cancelled",
-                                "percent": 100,
-                                "cancelled": True,
-                                "updated_at": now,
-                                "created_at": current.get("created_at", now),
-                            }
-                            return
-                        payload = {
-                            **current,
-                            "progress_id": progress_id,
-                            "source": source or current.get("source", ""),
-                            "stage": stage,
-                            "message": message,
-                            "status": status,
-                            "updated_at": now,
-                            "created_at": current.get("created_at", now),
-                        }
-                        if percent is not None:
-                            try:
-                                payload["percent"] = max(0, min(100, float(percent)))
-                            except (TypeError, ValueError):
-                                pass
-                        payload.update(extra)
-                        self.search_progress[progress_id] = payload
+                    self.search_tracker.update(
+                        progress_id,
+                        source=source,
+                        stage=stage,
+                        message=message,
+                        percent=percent,
+                        status=status,
+                        **extra
+                    )
 
                 @routes.get("/model_resolver/search-progress/{progress_id}")
                 @json_api_endpoint("search-progress")
@@ -2109,8 +2085,7 @@ class ModelResolverExtension:
                     """Return live progress for an in-flight source search."""
                     progress_id = request.match_info.get("progress_id", "")
                     cleanup_search_progress()
-                    with self.search_progress_lock:
-                        progress = dict(self.search_progress.get(progress_id) or {})
+                    progress = self.search_tracker.get(progress_id)
                     if not progress:
                         return web.json_response({"exists": False})
                     return web.json_response({"exists": True, **progress})

@@ -665,6 +665,55 @@ export const modelInfoMethods = {
         }
     },
 
+    async pollHashCalculation(filePath, metadataPath, {
+        onStart = () => {},
+        onProgress = () => {},
+        checkAbort = () => false,
+        onAbort = () => {},
+        silent = true
+    } = {}) {
+        const start = await this.fetchJson('/model_resolver/calculate-file-hash/start', {
+            method: 'POST',
+            silent,
+            body: JSON.stringify({
+                file_path: filePath,
+                metadata_path: metadataPath
+            })
+        }, 'Start model hash calculation');
+
+        const progressId = start?.progress_id;
+        if (!progressId) {
+            throw new Error('No progress id returned');
+        }
+
+        onStart(progressId);
+
+        for (;;) {
+            await new Promise(resolve => setTimeout(resolve, 250));
+            if (checkAbort()) {
+                await onAbort(progressId);
+                throw new Error('Hash calculation cancelled');
+            }
+            const progress = await this.fetchJson(
+                `/model_resolver/calculate-file-hash/progress/${encodeURIComponent(progressId)}`,
+                { silent: true },
+                'Get model hash progress'
+            );
+
+            onProgress(progress?.percent || 0, progress?.message || '');
+
+            if (progress?.status === 'done') {
+                return progress;
+            }
+            if (progress?.status === 'cancelled') {
+                throw new Error('Hash calculation cancelled');
+            }
+            if (progress?.status === 'error') {
+                throw new Error(progress.error || progress.message || 'Hash calculation failed');
+            }
+        }
+    },
+
     async calculateLocalHashCandidatesForCompare(model = {}) {
         const path = this.getLocalHashComparePath(model);
         if (!path) {
@@ -679,48 +728,21 @@ export const modelInfoMethods = {
         );
 
         try {
-            const start = await this.fetchJson('/model_resolver/calculate-file-hash/start', {
-                method: 'POST',
-                silent: true,
-                body: JSON.stringify({
-                    file_path: path,
-                    metadata_path: model.metadata_path || model.metadataPath || ''
-                })
-            }, 'Start model hash calculation');
-
-            const progressId = start?.progress_id;
-            if (!progressId) {
-                throw new Error('No progress id returned');
-            }
-
-            let result = null;
-            for (;;) {
-                await new Promise(resolve => setTimeout(resolve, 250));
-                const progress = await this.fetchJson(
-                    `/model_resolver/calculate-file-hash/progress/${encodeURIComponent(progressId)}`,
-                    { silent: true },
-                    'Get model hash progress'
-                );
-                notification?.updateProgress?.(
-                    progress?.percent || 0,
-                    this.formatHashCompareProgressMessage(
-                        filename,
-                        progress?.percent || 0,
-                        progress?.message || ''
-                    )
-                );
-
-                if (progress?.status === 'done') {
-                    result = progress;
-                    break;
+            const result = await this.pollHashCalculation(
+                path,
+                model.metadata_path || model.metadataPath || '',
+                {
+                    silent: true,
+                    onProgress: (percent, message) => {
+                        notification?.updateProgress?.(
+                            percent,
+                            this.formatHashCompareProgressMessage(filename, percent, message)
+                        );
+                    }
                 }
-                if (progress?.status === 'cancelled') {
-                    throw new Error('Hash calculation cancelled');
-                }
-                if (progress?.status === 'error') {
-                    throw new Error(progress.error || progress.message || 'Hash calculation failed');
-                }
-            }
+            );
+
+            if (!result) return null;
 
             const sha256 = this.normalizeSha256ForCompare(result?.sha256 || result?.hash || '');
             if (!sha256) {
@@ -751,6 +773,10 @@ export const modelInfoMethods = {
             };
         } catch (error) {
             notification?.close?.();
+            if (error.message === 'Hash calculation cancelled') {
+                this.showNotification?.('Hash calculation stopped.', 'info');
+                return null;
+            }
             throw error;
         }
     },
@@ -824,6 +850,7 @@ export const modelInfoMethods = {
         if (!localHashes.length) {
             try {
                 const calculated = await this.calculateLocalHashCandidatesForCompare(model);
+                if (!calculated) return;
                 metadataResult = calculated.data || metadataResult;
                 localHashes = calculated.candidates;
             } catch (error) {
@@ -1549,68 +1576,35 @@ export const modelInfoMethods = {
         this.updateInfoDialogHashProgress(dialog, 0, 'Preparing');
 
         try {
-            const start = await this.fetchJson('/model_resolver/calculate-file-hash/start', {
-                method: 'POST',
-                body: JSON.stringify({
-                    file_path: filePath,
-                    metadata_path: data.metadata_path || data.metadataPath || ''
-                })
-            }, 'Start model hash calculation');
-            const progressId = start?.progress_id;
-            if (!progressId) {
-                throw new Error('No progress id returned');
-            }
-            if (!dialog._hashCalculation) {
-                dialog._hashCalculation = { progressId, cancelRequested: false };
-            }
-            dialog._hashCalculation.progressId = progressId;
-            if (button) {
-                button.dataset.progressId = progressId;
-                button.textContent = 'Stop calculate';
-                button.disabled = false;
-            }
-            if (dialog._hashCalculation.cancelRequested) {
-                await this.cancelInfoDialogHashCalculation(dialog, button);
-            }
-
-            let result = null;
-            for (;;) {
-                await new Promise(resolve => setTimeout(resolve, 250));
-                if (!dialog.isConnected) {
-                    await this.cancelInfoDialogHashCalculation(dialog, button);
-                    return null;
-                }
-                const progress = await this.fetchJson(
-                    `/model_resolver/calculate-file-hash/progress/${encodeURIComponent(progressId)}`,
-                    { silent: true },
-                    'Get model hash progress'
-                );
-                this.updateInfoDialogHashProgress(
-                    dialog,
-                    progress?.percent || 0,
-                    progress?.message || ''
-                );
-
-                if (progress?.status === 'done') {
-                    result = progress;
-                    break;
-                }
-                if (progress?.status === 'cancelled') {
-                    this.hideInfoDialogHashProgress(dialog);
-                    if (button) {
-                        button.disabled = false;
-                        button.textContent = 'Calculate hash';
-                        delete button.dataset.hashCalculating;
-                        delete button.dataset.progressId;
+            const result = await this.pollHashCalculation(
+                filePath,
+                data.metadata_path || data.metadataPath || '',
+                {
+                    silent: false,
+                    onStart: (progressId) => {
+                        if (!dialog._hashCalculation) {
+                            dialog._hashCalculation = { progressId, cancelRequested: false };
+                        }
+                        dialog._hashCalculation.progressId = progressId;
+                        if (button) {
+                            button.dataset.progressId = progressId;
+                            button.textContent = 'Stop calculate';
+                            button.disabled = false;
+                        }
+                    },
+                    onProgress: (percent, message) => {
+                        this.updateInfoDialogHashProgress(dialog, percent, message);
+                    },
+                    checkAbort: () => {
+                        return !dialog.isConnected || (dialog._hashCalculation && dialog._hashCalculation.cancelRequested);
+                    },
+                    onAbort: async (progressId) => {
+                        await this.cancelInfoDialogHashCalculation(dialog, button);
                     }
-                    dialog._hashCalculation = null;
-                    this.showNotification?.('Hash calculation stopped.', 'info');
-                    return null;
                 }
-                if (progress?.status === 'error') {
-                    throw new Error(progress.error || progress.message || 'Hash calculation failed');
-                }
-            }
+            );
+
+            if (!result) return null;
 
             const sha256 = result?.sha256 || result?.hash || '';
             if (!sha256) {
@@ -1633,6 +1627,18 @@ export const modelInfoMethods = {
             );
             return updatedData;
         } catch (error) {
+            if (error.message === 'Hash calculation cancelled') {
+                this.hideInfoDialogHashProgress(dialog);
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = 'Calculate hash';
+                    delete button.dataset.hashCalculating;
+                    delete button.dataset.progressId;
+                }
+                dialog._hashCalculation = null;
+                this.showNotification?.('Hash calculation stopped.', 'info');
+                return null;
+            }
             dialog._hashCalculation = null;
             if (button) {
                 button.disabled = false;

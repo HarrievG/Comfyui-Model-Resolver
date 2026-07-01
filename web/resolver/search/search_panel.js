@@ -13,13 +13,7 @@ export const searchPanelMethods = {
         if (missing?.search_key) {
             return String(missing.search_key);
         }
-
-        const nodeId = missing?.node_id ?? '';
-        const widgetIndex = missing?.widget_index ?? '';
-        const subgraphId = missing?.subgraph_id ?? '';
-        const category = missing?.category ?? '';
-        const modelPath = missing?.original_path || missing?.name || missing?.filename || missing?.urn_string || '';
-        return [nodeId, widgetIndex, subgraphId, category, modelPath].map(value => String(value)).join(':');
+        return this.getMissingModelKey(missing);
     },
 
     /**
