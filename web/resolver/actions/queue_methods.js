@@ -2,6 +2,7 @@ import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
+import { startSplitterDrag } from "../utils/splitter_drag.js";
 export const queueMethods = {
     createContent() {
         // Wrap the body in a two-column layout: left = items, right = queued panel
@@ -1895,162 +1896,139 @@ export const queueMethods = {
             this._splitPreviewCollapsed = !!startCollapsedPreview;
             this._splitEdgeOpen = !!edgeOpen;
             this._splitEdgeOpenedPastThreshold = false;
-            this._onSplitMove = (ev) => this.onSplitDrag(ev);
-            this._onSplitUp = (ev) => this.endSplitDrag(ev);
-            this._splitMoveEvent = e?.type === 'pointerdown' ? 'pointermove' : 'mousemove';
-            this._splitUpEvent = e?.type === 'pointerdown' ? 'pointerup' : 'mouseup';
-            this._splitCancelEvent = e?.type === 'pointerdown' ? 'pointercancel' : null;
-            document.addEventListener(this._splitMoveEvent, this._onSplitMove, true);
-            document.addEventListener(this._splitUpEvent, this._onSplitUp, { once: true, capture: true });
-            if (this._splitCancelEvent) {
-                document.addEventListener(this._splitCancelEvent, this._onSplitUp, { once: true, capture: true });
-            }
+
+            this._splitInteraction = startSplitterDrag(e, {
+                anchor: 'right',
+                startWidth: initialWidth,
+                bounds,
+                onBeforeDrag: (newW) => {
+                    if (newW < bounds.min) newW = bounds.min;
+                    if (newW > bounds.max) newW = bounds.max;
+                    return newW;
+                },
+                onDrag: (width) => {
+                    this._pendingSplitWidth = width;
+                    
+                    if (this._splitEdgeOpen && this._pendingSplitWidth > 140) {
+                        this._splitEdgeOpenedPastThreshold = true;
+                        if (this.queueCollapsed) {
+                            this.queueCollapsed = false;
+                            this.persistQueueCollapsedState(false, 500);
+                            this.updateQueueToggleIcon();
+                        }
+                        if (this._queuePanelDirty) {
+                            this.updateQueuePanel({ force: true });
+                        }
+                    }
+
+                    const previewCollapsed = this._splitEdgeOpen
+                        ? (!this._splitEdgeOpenedPastThreshold || this._pendingSplitWidth <= 140)
+                        : this._pendingSplitWidth <= 140;
+
+                    if (previewCollapsed !== this._splitPreviewCollapsed) {
+                        this._splitPreviewCollapsed = previewCollapsed;
+                        const body = document.getElementById('model-resolver-body');
+                        body?.classList.toggle('mr-queue-preview-collapsed', previewCollapsed);
+                        this.queueElement.style.display = previewCollapsed ? 'none' : '';
+                        if (previewCollapsed) {
+                            const collapsedBounds = this.getQueueSplitBounds(this._splitStart.containerWidth, { edgeOpen: true });
+                            this.applyQueueSplitWidth(0, {
+                                bounds: collapsedBounds,
+                                containerWidth: this._splitStart.containerWidth,
+                                skipIfUnchanged: true
+                            });
+                        }
+                    }
+
+                    if (this._splitPreviewCollapsed) return;
+
+                    this.applyQueueSplitWidth(width, {
+                        bounds: this._splitStart?.bounds || bounds,
+                        containerWidth: this._splitStart?.containerWidth,
+                        skipIfUnchanged: true
+                    });
+                },
+                onEnd: (finalWidth) => {
+                    this._splitDragging = false;
+                    if (this.queueElement && finalWidth && !this._splitPreviewCollapsed) {
+                        this.applyQueueSplitWidth(finalWidth, {
+                            bounds: this._splitStart?.bounds,
+                            containerWidth: this._splitStart?.containerWidth,
+                            skipIfUnchanged: true
+                        });
+                    }
+
+                    const body = this.getQueueSplitBody();
+
+                    if (this._splitEdgeOpen && !this._pendingSplitWidth) {
+                        try {
+                            const restoreWidth = Math.max(240, Math.round(this._splitStart?.startWidth || 320));
+                            this.applyQueueSplitWidth(restoreWidth, {
+                                bounds: this._splitStart?.bounds,
+                                containerWidth: this._splitStart?.containerWidth
+                            });
+                            this.queueElement.style.display = '';
+                            if (this.splitterElement) this.splitterElement.style.display = '';
+                            this.persistQueueSplitWidth(restoreWidth, 500);
+                        } catch (err) { }
+                        this.queueCollapsed = false;
+                        this.persistQueueCollapsedState(false, 500);
+                        this.updateQueueVisibility();
+                        this.updateQueuePanel({ force: true });
+                        this._splitEdgeOpen = false;
+                        this._pendingSplitWidth = null;
+                        this._appliedSplitWidth = null;
+                        this._splitPreviewCollapsed = false;
+                        this.deferQueueSplitReleaseUi(body);
+                        this._splitEdgeOpenedPastThreshold = false;
+                        setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
+                        this._splitInteraction = null;
+                        return;
+                    }
+
+                    const shouldCollapse = !!this._splitPreviewCollapsed;
+                    if (shouldCollapse) {
+                        try {
+                            const restoreWidth = Math.max(240, Math.round(this._splitStart?.startWidth || 320));
+                            this.applyQueueSplitWidth(restoreWidth, {
+                                bounds: this._splitStart?.bounds,
+                                containerWidth: this._splitStart?.containerWidth
+                            });
+                            this.queueElement.style.display = '';
+                            this.persistQueueSplitWidth(restoreWidth);
+                        } catch (err) { }
+                        this._pendingSplitWidth = null;
+                        this._appliedSplitWidth = null;
+                        this._splitPreviewCollapsed = false;
+                        this._splitEdgeOpen = false;
+                        this._splitEdgeOpenedPastThreshold = false;
+                        this.deferQueueSplitReleaseUi(body);
+                        this.setQueueCollapsed(true);
+                        setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
+                        this._splitInteraction = null;
+                        return;
+                    }
+
+                    if (this.queueElement) this.queueElement.style.display = '';
+                    try {
+                        const width = finalWidth
+                            || Number.parseInt(String(this.queueElement.style.width || ''), 10)
+                            || this.getQueuePaneWidth(this.queueElement);
+                        this.persistQueueSplitWidth(width);
+                    } catch (err) { }
+                    this._pendingSplitWidth = null;
+                    this._appliedSplitWidth = null;
+                    this._splitPreviewCollapsed = false;
+                    this._splitEdgeOpen = false;
+                    this._splitEdgeOpenedPastThreshold = false;
+                    this.deferQueueSplitReleaseUi(body);
+                    setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
+                    this._splitInteraction = null;
+                }
+            });
         } catch (err) { /* ignore */ }
     },
 
-    onSplitDrag(e) {
-        if (!this._splitDragging || !this._splitStart || !this.queueElement) return;
-        e?.preventDefault?.();
-        e?.stopPropagation?.();
-        const dx = e.clientX - this._splitStart.x;
-        let newW = this._splitStart.startWidth - dx;
-        const bounds = this._splitStart.bounds || this.getQueueSplitBounds(this._splitStart.containerWidth, { edgeOpen: this._splitEdgeOpen });
-        if (newW < bounds.min) newW = bounds.min;
-        if (newW > bounds.max) newW = bounds.max;
-        this._pendingSplitWidth = Math.round(newW);
-        if (this._splitEdgeOpen && this._pendingSplitWidth > 140) {
-            this._splitEdgeOpenedPastThreshold = true;
-            if (this.queueCollapsed) {
-                this.queueCollapsed = false;
-                this.persistQueueCollapsedState(false, 500);
-                this.updateQueueToggleIcon();
-            }
-            if (this._queuePanelDirty) {
-                this.updateQueuePanel({ force: true });
-            }
-        }
-        const previewCollapsed = this._splitEdgeOpen
-            ? (!this._splitEdgeOpenedPastThreshold || this._pendingSplitWidth <= 140)
-            : this._pendingSplitWidth <= 140;
-        if (previewCollapsed !== this._splitPreviewCollapsed) {
-            this._splitPreviewCollapsed = previewCollapsed;
-            const body = document.getElementById('model-resolver-body');
-            body?.classList.toggle('mr-queue-preview-collapsed', previewCollapsed);
-            this.queueElement.style.display = previewCollapsed ? 'none' : '';
-            if (previewCollapsed) {
-                const collapsedBounds = this.getQueueSplitBounds(this._splitStart.containerWidth, { edgeOpen: true });
-                this.applyQueueSplitWidth(0, {
-                    bounds: collapsedBounds,
-                    containerWidth: this._splitStart.containerWidth,
-                    skipIfUnchanged: true
-                });
-            }
-        }
-        if (this._splitPreviewCollapsed) return;
-
-        if (!this._splitDragFrame) {
-            this._splitDragFrame = requestAnimationFrame(() => {
-                this._splitDragFrame = null;
-                if (!this._splitDragging || this._splitPreviewCollapsed) return;
-                this.applyQueueSplitWidth(this._pendingSplitWidth, {
-                    bounds: this._splitStart?.bounds || bounds,
-                    containerWidth: this._splitStart?.containerWidth,
-                    skipIfUnchanged: true
-                });
-            });
-        }
-    },
-
-    endSplitDrag(e = null) {
-        if (!this._splitDragging) return;
-        e?.preventDefault?.();
-        e?.stopPropagation?.();
-        this._splitDragging = false;
-        if (this._splitDragFrame) {
-            cancelAnimationFrame(this._splitDragFrame);
-            this._splitDragFrame = null;
-        }
-        if (this.queueElement && this._pendingSplitWidth && !this._splitPreviewCollapsed) {
-            this.applyQueueSplitWidth(this._pendingSplitWidth, {
-                bounds: this._splitStart?.bounds,
-                containerWidth: this._splitStart?.containerWidth,
-                skipIfUnchanged: true
-            });
-        }
-        const body = this.getQueueSplitBody();
-        if (this._splitMoveEvent) {
-            document.removeEventListener(this._splitMoveEvent, this._onSplitMove, true);
-        }
-        if (this._splitUpEvent) {
-            document.removeEventListener(this._splitUpEvent, this._onSplitUp, true);
-        }
-        if (this._splitCancelEvent) {
-            document.removeEventListener(this._splitCancelEvent, this._onSplitUp, true);
-        }
-        if (this._splitEdgeOpen && !this._pendingSplitWidth) {
-            try {
-                const restoreWidth = Math.max(240, Math.round(this._splitStart?.startWidth || 320));
-                this.applyQueueSplitWidth(restoreWidth, {
-                    bounds: this._splitStart?.bounds,
-                    containerWidth: this._splitStart?.containerWidth
-                });
-                this.queueElement.style.display = '';
-                if (this.splitterElement) this.splitterElement.style.display = '';
-                this.persistQueueSplitWidth(restoreWidth, 500);
-            } catch (e) { }
-            this.queueCollapsed = false;
-            this.persistQueueCollapsedState(false, 500);
-            this.updateQueueVisibility();
-            this.updateQueuePanel({ force: true });
-            this._splitEdgeOpen = false;
-            this._pendingSplitWidth = null;
-            this._appliedSplitWidth = null;
-            this._splitPreviewCollapsed = false;
-            this.deferQueueSplitReleaseUi(body);
-            this._splitEdgeOpenedPastThreshold = false;
-            setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
-            return;
-        }
-        const shouldCollapse = !!this._splitPreviewCollapsed;
-        if (shouldCollapse) {
-            try {
-                const restoreWidth = Math.max(240, Math.round(this._splitStart?.startWidth || 320));
-                this.applyQueueSplitWidth(restoreWidth, {
-                    bounds: this._splitStart?.bounds,
-                    containerWidth: this._splitStart?.containerWidth
-                });
-                this.queueElement.style.display = '';
-                this.persistQueueSplitWidth(restoreWidth);
-            } catch (e) { }
-            this._pendingSplitWidth = null;
-            this._appliedSplitWidth = null;
-            this._splitPreviewCollapsed = false;
-            this._splitEdgeOpen = false;
-            this._splitEdgeOpenedPastThreshold = false;
-            this.deferQueueSplitReleaseUi(body);
-            this.setQueueCollapsed(true);
-            setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
-            return;
-        }
-        if (this.queueElement) this.queueElement.style.display = '';
-        try {
-            const width = this._pendingSplitWidth
-                || this._appliedSplitWidth
-                || Number.parseInt(String(this.queueElement.style.width || ''), 10)
-                || this.getQueuePaneWidth(this.queueElement);
-            this.persistQueueSplitWidth(width);
-        } catch (e) { }
-        this._pendingSplitWidth = null;
-        this._appliedSplitWidth = null;
-        this._splitPreviewCollapsed = false;
-        this._splitEdgeOpen = false;
-        this._splitEdgeOpenedPastThreshold = false;
-        this.deferQueueSplitReleaseUi(body);
-        this._splitMoveEvent = null;
-        this._splitUpEvent = null;
-        this._splitCancelEvent = null;
-        setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
-    },
 
     /**
      * Queue a resolution for later batch apply
