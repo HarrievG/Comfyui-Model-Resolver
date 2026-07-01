@@ -46,12 +46,12 @@ const LOGGER_STORAGE_KEY = `${STORAGE_PREFIX}_logs`;
 const LOGGER_EXPORT_PREFIX = STORAGE_PREFIX;
 const WINDOW_LOGGER_KEY = `${toPascalCase(LOGGER_NAME)}Logger`;
 export const LogLevel = {
-    DEBUG: 0,
-    INFO: 1,
-    WARN: 2,
-    ERROR: 3,
-    FATAL: 4,
-    NONE: 5
+    DEBUG: 10,
+    INFO: 20,
+    WARN: 30,
+    ERROR: 40,
+    FATAL: 50,
+    NONE: 100
 };
 const DEFAULT_CONFIG = {
     enabled: true,
@@ -142,7 +142,9 @@ class Logger {
             return level;
         }
         if (typeof level === 'string') {
-            const normalized = level.trim().toUpperCase();
+            let normalized = level.trim().toUpperCase();
+            if (normalized === 'WARNING') normalized = 'WARN';
+            if (normalized === 'CRITICAL') normalized = 'FATAL';
             if (Object.prototype.hasOwnProperty.call(LogLevel, normalized)) {
                 return LogLevel[normalized];
             }
@@ -729,6 +731,18 @@ class Logger {
         this.log(module, LogLevel.ERROR, ...args);
     }
     /**
+     * Log at ERROR level with exception stack trace
+     * @param {string} module - Module name
+     * @param {any[]} args - Arguments to log
+     */
+    exception(module, ...args) {
+        const hasError = args.some(arg => arg instanceof Error);
+        if (!hasError) {
+            args.push(new Error("Captured stack trace"));
+        }
+        this.log(module, LogLevel.ERROR, ...args);
+    }
+    /**
      * Log at FATAL level
      * @param {string} module - Module name
      * @param {any[]} args - Arguments to log
@@ -742,6 +756,7 @@ export const debug = (module, ...args) => logger.debug(module, ...args);
 export const info = (module, ...args) => logger.info(module, ...args);
 export const warn = (module, ...args) => logger.warn(module, ...args);
 export const error = (module, ...args) => logger.error(module, ...args);
+export const exception = (module, ...args) => logger.exception(module, ...args);
 export const fatal = (module, ...args) => logger.fatal(module, ...args);
 if (typeof window !== 'undefined') {
     window[WINDOW_LOGGER_KEY] = logger;
