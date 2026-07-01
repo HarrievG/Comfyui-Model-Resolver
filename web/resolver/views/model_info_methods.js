@@ -265,6 +265,124 @@ export const modelInfoMethods = {
         };
     },
 
+    getHashCompareFilename(model = {}) {
+        return model.filename
+            || model.name
+            || String(this.getLocalHashComparePath(model) || '').split(/[\/\\]/).pop()
+            || 'Selected local model';
+    },
+
+    formatHashCompareProgressMessage(filename = '', percent = 0, message = '') {
+        const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+        const status = message || 'Calculating SHA256...';
+        return `Calculating hash for ${filename}...\n${Math.round(safePercent)}% - ${status}`;
+    },
+
+    updateHashCompareModelMetadata(model = {}, result = {}) {
+        const sha256 = this.normalizeSha256ForCompare(result?.sha256 || result?.hash || '');
+        if (!sha256 || !model || typeof model !== 'object') return;
+
+        model.sha256 = sha256;
+        model.hash = sha256;
+        if (!model.hashes || typeof model.hashes !== 'object' || Array.isArray(model.hashes)) {
+            model.hashes = {};
+        }
+        model.hashes.SHA256 = sha256;
+        if (result.metadata_path) {
+            model.metadata_path = result.metadata_path;
+        }
+    },
+
+    async calculateLocalHashCandidatesForCompare(model = {}) {
+        const path = this.getLocalHashComparePath(model);
+        if (!path) {
+            throw new Error('No local file path available');
+        }
+
+        const filename = this.getHashCompareFilename(model);
+        const notification = this.showNotification?.(
+            this.formatHashCompareProgressMessage(filename, 0, 'Preparing hash calculation...'),
+            'info',
+            { manualProgress: true }
+        );
+
+        try {
+            const start = await this.fetchJson('/model_resolver/calculate-file-hash/start', {
+                method: 'POST',
+                silent: true,
+                body: JSON.stringify({
+                    file_path: path,
+                    metadata_path: model.metadata_path || model.metadataPath || ''
+                })
+            }, 'Start model hash calculation');
+
+            const progressId = start?.progress_id;
+            if (!progressId) {
+                throw new Error('No progress id returned');
+            }
+
+            let result = null;
+            for (;;) {
+                await new Promise(resolve => setTimeout(resolve, 250));
+                const progress = await this.fetchJson(
+                    `/model_resolver/calculate-file-hash/progress/${encodeURIComponent(progressId)}`,
+                    { silent: true },
+                    'Get model hash progress'
+                );
+                notification?.updateProgress?.(
+                    progress?.percent || 0,
+                    this.formatHashCompareProgressMessage(
+                        filename,
+                        progress?.percent || 0,
+                        progress?.message || ''
+                    )
+                );
+
+                if (progress?.status === 'done') {
+                    result = progress;
+                    break;
+                }
+                if (progress?.status === 'cancelled') {
+                    throw new Error('Hash calculation cancelled');
+                }
+                if (progress?.status === 'error') {
+                    throw new Error(progress.error || progress.message || 'Hash calculation failed');
+                }
+            }
+
+            const sha256 = this.normalizeSha256ForCompare(result?.sha256 || result?.hash || '');
+            if (!sha256) {
+                throw new Error('No hash returned');
+            }
+
+            this.updateHashCompareModelMetadata(model, result);
+            notification?.updateProgress?.(
+                100,
+                result?.metadata_updated
+                    ? `Hash calculated and saved for ${filename}.`
+                    : `Hash calculated for ${filename}.`
+            );
+            window.setTimeout(() => notification?.close?.(), 900);
+
+            return {
+                data: result,
+                candidates: this.collectHashCandidatesForCompare(
+                    {
+                        ...result,
+                        sha256,
+                        hash: sha256,
+                        hashes: { SHA256: sha256 }
+                    },
+                    'calculated hash',
+                    new Set()
+                )
+            };
+        } catch (error) {
+            notification?.close?.();
+            throw error;
+        }
+    },
+
     markSearchResultHashBadgesForMissing(missing = {}, sha256 = '') {
         const hash = this.normalizeSha256ForCompare(sha256);
         if (!missing || !hash) return false;
@@ -331,16 +449,24 @@ export const modelInfoMethods = {
             }
         }
 
-        const filename = model.filename
-            || model.name
-            || String(this.getLocalHashComparePath(model) || '').split(/[\/\\]/).pop()
-            || 'Selected local model';
+        if (!localHashes.length) {
+            try {
+                const calculated = await this.calculateLocalHashCandidatesForCompare(model);
+                metadataResult = calculated.data || metadataResult;
+                localHashes = calculated.candidates;
+            } catch (error) {
+                this.showNotification?.(`Hash calculation failed: ${error?.message || error}`, 'error');
+                return;
+            }
+        }
+
+        const filename = this.getHashCompareFilename(model);
         if (!localHashes.length) {
             const metadataPath = metadataResult?.metadata_path || model.metadata_path || '';
             this.showNotification?.(
                 metadataPath
-                    ? 'Local metadata exists, but no completed SHA256 hash was found.'
-                    : 'No local SHA256 metadata found for this model.',
+                    ? 'Hash calculation finished, but no completed SHA256 hash was found.'
+                    : 'No local SHA256 hash found for this model.',
                 'warning'
             );
             return;

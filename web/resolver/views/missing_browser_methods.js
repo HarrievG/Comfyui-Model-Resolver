@@ -2189,8 +2189,12 @@ export const missingBrowserMethods = {
      * Show a notification banner (similar to ComfyUI's "Reconnecting" banner)
      */
     showNotification(message, type = 'success', options = {}) {
-        const duration = type === 'success' ? 4000 : (type === 'error' ? 6000 : 3000);
-        showNotificationUtils(message, type, duration, false, options);
+        const duration = options?.duration || (type === 'success' ? 4000 : (type === 'error' ? 6000 : 3000));
+        return showNotificationUtils(message, type, {
+            ...options,
+            duration,
+            deduplicate: options?.deduplicate || false
+        });
     },
 
     refreshMissingListRow(missing, options = {}) {

@@ -1,7 +1,7 @@
 /**
 author: Azornes
 title: AzToast
-version: 1.0.0
+version: 1.0.1
 description: Notification Utilities (Toast System)
 */
 
@@ -66,6 +66,7 @@ const activeNotifications = new Map();
  * 2. showNotification(message, backgroundColor = "#4a6cd4", duration = 3000, type = "info", deduplicate = false)
  *
  * @param message - The message to show
+ * @returns Notification controller with updateProgress/updateMessage/close helpers.
  */
 export function showNotification(message, typeOrBgColor = "info", durationOrOptions = 3000, typeArg = "info", deduplicateArg = false) {
     // Clean any prefix matching the project name (e.g. "[Model Resolver]")
@@ -104,6 +105,7 @@ export function showNotification(message, typeOrBgColor = "info", durationOrOpti
         }
         deduplicate = deduplicateArg;
     }
+    const manualProgress = Boolean(options?.manualProgress);
 
     // If deduplication is enabled, check if this message already exists
     if (deduplicate) {
@@ -154,7 +156,7 @@ export function showNotification(message, typeOrBgColor = "info", durationOrOpti
                 });
             }, duration);
             existingNotification.timeout = newTimeout;
-            return; // Don't create a new notification
+            return existingNotification.controller || null; // Don't create a new notification
         }
     }
 
@@ -291,6 +293,10 @@ export function showNotification(message, typeOrBgColor = "info", durationOrOpti
     // --- Progress Bar ---
     const progressBar = document.createElement('div');
     progressBar.style.cssText = `height: 4px; width: 100%; background: ${config.bg}; box-shadow: 0 0 12px ${config.bg}; transform-origin: left; transform: scaleX(1); transition: none; flex-shrink: 0;`;
+    if (manualProgress) {
+        progressBar.style.transform = 'scaleX(0)';
+        progressBar.style.transition = 'transform 0.18s ease-out';
+    }
 
     // --- Assemble Notification ---
     notification.appendChild(leftBar);
@@ -339,8 +345,11 @@ export function showNotification(message, typeOrBgColor = "info", durationOrOpti
 
     let dismissTimeout = null;
     let progressAnimationFrame = null;
+    let closed = false;
 
     const closeNotification = () => {
+        if (closed) return;
+        closed = true;
         if (dismissTimeout !== null) {
             clearTimeout(dismissTimeout);
             dismissTimeout = null;
@@ -362,6 +371,25 @@ export function showNotification(message, typeOrBgColor = "info", durationOrOpti
                 }
             }
         });
+    };
+
+    const controller = {
+        element: notification,
+        progressBar,
+        messageElement: msgSpan,
+        updateMessage(nextMessage = '') {
+            msgSpan.textContent = String(nextMessage || '');
+        },
+        updateProgress(percent = 0, nextMessage = undefined) {
+            const numericPercent = Number(percent);
+            const safePercent = Math.max(0, Math.min(100, Number.isFinite(numericPercent) ? numericPercent : 0));
+            progressBar.style.transition = 'transform 0.18s ease-out';
+            progressBar.style.transform = `scaleX(${safePercent / 100})`;
+            if (nextMessage !== undefined) {
+                msgSpan.textContent = String(nextMessage || '');
+            }
+        },
+        close: closeNotification
     };
 
     closeBtn.onclick = closeNotification;
@@ -389,6 +417,7 @@ export function showNotification(message, typeOrBgColor = "info", durationOrOpti
     };
 
     const pauseAndRewindTimer = () => {
+        if (manualProgress) return;
         if (dismissTimeout !== null)
             clearTimeout(dismissTimeout);
         dismissTimeout = null;
@@ -417,6 +446,7 @@ export function showNotification(message, typeOrBgColor = "info", durationOrOpti
     });
 
     notification.addEventListener('mouseleave', () => {
+        if (manualProgress) return;
         startDismissTimer();
         // Update stored timeout if deduplicate is enabled
         if (deduplicate) {
@@ -428,14 +458,17 @@ export function showNotification(message, typeOrBgColor = "info", durationOrOpti
         }
     });
 
-    startDismissTimer();
+    if (!manualProgress) {
+        startDismissTimer();
+    }
 
     // Store notification if deduplicate is enabled
     if (deduplicate) {
-        activeNotifications.set(message, { element: notification, timeout: dismissTimeout, animationFrame: progressAnimationFrame });
+        activeNotifications.set(message, { element: notification, timeout: dismissTimeout, animationFrame: progressAnimationFrame, controller });
     }
 
     log.debug(`Notification shown: [${CONFIG.PROJECT_NAME}] ${message}`);
+    return controller;
 }
 
 /**
