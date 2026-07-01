@@ -502,10 +502,13 @@
     --mr-missing-line: rgba(255, 255, 255, 0.075);
     --mr-missing-line-strong: rgba(255, 255, 255, 0.13);
     --mr-missing-radius: 6px;
+    --mr-missing-splitter-track: 10px;
+    --mr-missing-list-track: calc(100% - var(--mr-missing-splitter-track) - var(--mr-missing-detail-track, 42%));
     display: flex;
     gap: 0;
     height: 100%;
     min-height: 0;
+    min-width: 0;
     overflow: hidden;
     border: 1px solid var(--mr-missing-line);
     background: var(--mr-missing-bg);
@@ -517,12 +520,12 @@
     min-width: 0;
     min-height: 0;
     overflow: hidden;
-    contain: layout paint style;
+    contain: size layout paint style;
     background: var(--mr-missing-bg);
 }
 
 .mr-missing-list-pane {
-    flex: 1 1 0;
+    flex: 0 0 var(--mr-missing-list-track);
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     border-right: 0;
@@ -531,9 +534,9 @@
 
 .mr-missing-browser-splitter {
     position: relative;
-    flex: 0 0 10px;
-    min-width: 10px;
-    width: 10px;
+    flex: 0 0 var(--mr-missing-splitter-track);
+    min-width: var(--mr-missing-splitter-track);
+    width: var(--mr-missing-splitter-track);
     cursor: col-resize;
     user-select: none;
     touch-action: none;

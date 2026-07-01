@@ -28,6 +28,7 @@ export const queueMethods = {
         body.appendChild(this.contentElement);
         body.appendChild(this.splitterElement);
         body.appendChild(this.queueElement);
+        this.observeQueueSplitContainer(body);
 
         // Restore saved queue width and wire splitter
         try {
@@ -36,13 +37,16 @@ export const queueMethods = {
                 const w = parseInt(savedSplit, 10);
                 if (!isNaN(w) && w > 0) {
                     this.queueElement.style.width = `${w}px`;
+                    this.queueElement.style.flexBasis = `${w}px`;
+                    this.queueElement.style.flexGrow = '0';
+                    this.queueElement.style.flexShrink = '0';
                 }
             }
         } catch (e) { }
 
         try {
             const onSplitMouseDown = (e) => this.startSplitDrag(e);
-            this.splitterElement.addEventListener('mousedown', onSplitMouseDown);
+            this.splitterElement.addEventListener(typeof PointerEvent === 'function' ? 'pointerdown' : 'mousedown', onSplitMouseDown);
             this._splitterMouseDown = onSplitMouseDown;
         } catch (e) { }
 
@@ -52,9 +56,12 @@ export const queueMethods = {
                 id: "queue-toggle-icon",
                 type: "button",
                 "aria-label": "Toggle queued selections",
-                onclick: (event) => this.onQueueEdgeClick(event),
-                onmousedown: (event) => this.startQueueEdgeDrag(event)
+                onclick: (event) => this.onQueueEdgeClick(event)
             });
+            this.queueToggleIcon.addEventListener(
+                typeof PointerEvent === 'function' ? 'pointerdown' : 'mousedown',
+                (event) => this.startQueueEdgeDrag(event)
+            );
             body.appendChild(this.queueToggleIcon);
             this.updateQueueToggleIcon();
         } catch (e) { }
@@ -62,7 +69,7 @@ export const queueMethods = {
         // Restore queue collapsed state
         try {
             const col = localStorage.getItem('model_resolver_queue_collapsed');
-            if (col === '1') this.setQueueCollapsed(true);
+            if (col === '1') this.setQueueCollapsed(true, { persist: false, updatePanel: false });
         } catch (e) { }
 
         return body;
@@ -105,6 +112,17 @@ export const queueMethods = {
 
         // Scrollable list
         this.queueList = $el("div#queue-list.mr-queue-list");
+        this.queueList.addEventListener('click', (event) => {
+            const button = event.target instanceof Element
+                ? event.target.closest('.mr-queue-remove')
+                : null;
+            if (!(button instanceof HTMLElement)) return;
+            const index = Number.parseInt(button.dataset.queueIndex || '-1', 10);
+            if (!Number.isInteger(index) || index < 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            this.removeQueuedByIndex(index);
+        });
 
         const panel = $el("div.mr-queue-panel", {}, [
             $el("div.mr-queue-stack", {}, [this.queueTabs, this.queueHeader, this.queueList])
@@ -126,16 +144,21 @@ export const queueMethods = {
         this.updateQueuePanel();
     },
 
-    updateQueuePanel() {
+    updateQueuePanel({ force = false } = {}) {
         if (!this.queueList || !this.queueHeader) return;
         if (this._queuePanelUpdateTimer) {
             clearTimeout(this._queuePanelUpdateTimer);
             this._queuePanelUpdateTimer = null;
         }
+        if (!force && !this.isQueuePanelVisible()) {
+            this._queuePanelDirty = true;
+            return;
+        }
+        this._queuePanelDirty = false;
         const list = Array.isArray(this.pendingResolutions) ? this.pendingResolutions : [];
         const downloads = this.getActiveQueuePanelDownloads();
-        const history = this.getDownloadHistory();
         const activeTab = this.queuePanelActiveTab === 'downloads' ? 'downloads' : 'queued';
+        const history = activeTab === 'downloads' ? this.getDownloadHistory() : [];
         const clearBtn = this.queueClearButton || this.queueHeader.querySelector('#queue-clear');
         const showActions = activeTab === 'queued';
         this.queueHeader.style.display = showActions ? '' : 'none';
@@ -150,13 +173,138 @@ export const queueMethods = {
         this.renderQueuedSelections(list);
     },
 
-    requestQueuePanelUpdate(delayMs = 180) {
+    requestQueuePanelUpdate(delayMs = 180, { force = false } = {}) {
         if (!this.queueList || !this.queueHeader) return;
+        if (!force && !this.isQueuePanelVisible()) {
+            this._queuePanelDirty = true;
+            return;
+        }
         if (this._queuePanelUpdateTimer) return;
         this._queuePanelUpdateTimer = setTimeout(() => {
             this._queuePanelUpdateTimer = null;
-            this.updateQueuePanel();
+            this.updateQueuePanel({ force });
         }, delayMs);
+    },
+
+    isQueuePanelVisible() {
+        return Boolean(
+            this.queueElement
+            && this.activeTab === 'missing'
+            && !this.queueCollapsed
+            && this.queueElement.style.display !== 'none'
+        );
+    },
+
+    scheduleQueuePanelOpenUpdate(delayMs = 80) {
+        if (!this.queueElement || !this.queueList || !this.queueHeader) return;
+        if (this._queuePanelOpenFrame) {
+            cancelAnimationFrame(this._queuePanelOpenFrame);
+            this._queuePanelOpenFrame = null;
+        }
+        if (this._queuePanelOpenTimer) {
+            clearTimeout(this._queuePanelOpenTimer);
+            this._queuePanelOpenTimer = null;
+        }
+
+        const runUpdate = () => {
+            this._queuePanelOpenTimer = null;
+            document.getElementById('model-resolver-body')?.classList.remove('mr-queue-opening-layout');
+            this.updateQueuePanel({ force: true });
+            this.queueElement?.classList?.remove('mr-queue-opening');
+            this.stabilizeQueueSplitLayout();
+        };
+        const scheduleTimer = () => {
+            this._queuePanelOpenFrame = null;
+            this._queuePanelOpenTimer = setTimeout(runUpdate, delayMs);
+        };
+
+        this._queuePanelOpenFrame = requestAnimationFrame(scheduleTimer);
+    },
+
+    scheduleQueuePanelReveal() {
+        if (!this.queueElement || !this.queueList || !this.queueHeader) return;
+        this.cancelQueuePanelReveal();
+
+        const reveal = () => {
+            this._queuePanelRevealFrame = null;
+            if (this.queueCollapsed || this.activeTab !== 'missing') return;
+            this.queueElement?.classList?.add('mr-queue-opening');
+            document.getElementById('model-resolver-body')?.classList.add('mr-queue-opening-layout');
+            this.updateQueueVisibility();
+            this.scheduleQueuePanelOpenUpdate();
+        };
+
+        this._queuePanelRevealFrame = requestAnimationFrame(() => {
+            this._queuePanelRevealFrame = requestAnimationFrame(reveal);
+        });
+    },
+
+    cancelQueuePanelReveal() {
+        if (this._queuePanelRevealFrame) {
+            cancelAnimationFrame(this._queuePanelRevealFrame);
+            this._queuePanelRevealFrame = null;
+        }
+    },
+
+    cancelQueuePanelOpenUpdate() {
+        this.cancelQueuePanelReveal();
+        if (this._queuePanelOpenFrame) {
+            cancelAnimationFrame(this._queuePanelOpenFrame);
+            this._queuePanelOpenFrame = null;
+        }
+        if (this._queuePanelOpenTimer) {
+            clearTimeout(this._queuePanelOpenTimer);
+            this._queuePanelOpenTimer = null;
+        }
+        this.queueElement?.classList?.remove('mr-queue-opening');
+        document.getElementById('model-resolver-body')?.classList.remove('mr-queue-opening-layout');
+    },
+
+    clearQueueContentSplitFlex() {
+        if (!(this.contentElement instanceof HTMLElement)) return;
+        this.contentElement.style.removeProperty('flex-basis');
+        this.contentElement.style.removeProperty('flex-grow');
+        this.contentElement.style.removeProperty('flex-shrink');
+    },
+
+    persistQueueCollapsedState(collapsed, delayMs = 250) {
+        if (this._queueCollapsedPersistTimer) {
+            clearTimeout(this._queueCollapsedPersistTimer);
+            this._queueCollapsedPersistTimer = null;
+        }
+        const writeState = () => {
+            this._queueCollapsedPersistTimer = null;
+            try {
+                localStorage.setItem('model_resolver_queue_collapsed', collapsed ? '1' : '0');
+            } catch (e) { }
+        };
+        const delay = Math.max(0, Number(delayMs) || 0);
+        if (delay > 0) {
+            this._queueCollapsedPersistTimer = setTimeout(writeState, delay);
+        } else {
+            writeState();
+        }
+    },
+
+    persistQueueSplitWidth(width, delayMs = 250) {
+        const nextWidth = Math.round(Number(width));
+        if (!Number.isFinite(nextWidth) || nextWidth <= 0) return;
+        if (this._queueSplitPersistTimer) {
+            clearTimeout(this._queueSplitPersistTimer);
+            this._queueSplitPersistTimer = null;
+        }
+        const writeWidth = () => {
+            this._queueSplitPersistTimer = null;
+            try {
+                localStorage.setItem('model_resolver_split_w', String(nextWidth));
+            } catch (e) { }
+        };
+        const delay = Math.max(0, Number(delayMs) || 0);
+        if (delay > 0) {
+            this._queueSplitPersistTimer = setTimeout(writeWidth, delay);
+        } else {
+            writeWidth();
+        }
     },
 
     updateQueuePanelTabs(queueCount, downloadCount, activeTab) {
@@ -194,25 +342,15 @@ export const queueMethods = {
             const label = (r.resolved_model?.relative_path || r.resolved_model?.filename || r.resolved_path || '').toString();
             const nodeLabel = r.node_label || r.node_type || (r.subgraph_id ? 'Subgraph' : 'Node');
             const orig = (r.original_path || '').toString();
-            const rmId = `queue-remove-${i}`;
             html += `<div class="mr-queue-item">`;
             html += `<div class="mr-queue-item-title">${this.escapeHtml(nodeLabel)} #${this.escapeHtml(String(r.node_id))}</div>`;
             html += `<div class="mr-queue-item-meta"><span>Original</span><code>${this.escapeHtml(orig)}</code></div>`;
             html += `<div class="mr-queue-item-selection"><span>Selected</span><code>${this.escapeHtml(label)}</code></div>`;
-            html += `<div class="mr-queue-item-actions"><button id="${rmId}" class="mr-btn mr-btn-danger mr-btn-sm">Remove</button></div>`;
+            html += `<div class="mr-queue-item-actions"><button type="button" class="mr-btn mr-btn-danger mr-btn-sm mr-queue-remove" data-queue-index="${this.escapeHtml(String(i))}">Remove</button></div>`;
             html += `</div>`;
         }
         html += '</div>';
         this.queueList.innerHTML = html;
-
-        // Wire remove buttons
-        for (let i = 0; i < list.length; i++) {
-            const rmId = `queue-remove-${i}`;
-            const btn = this.queueList.querySelector(`#${rmId}`);
-            if (btn) {
-                btn.addEventListener('click', () => this.removeQueuedByIndex(i));
-            }
-        }
     },
 
     getActiveQueuePanelDownloads() {
@@ -1470,15 +1608,34 @@ export const queueMethods = {
         this.setQueueCollapsed(!this.queueCollapsed);
     },
 
-    setQueueCollapsed(collapsed) {
-        this.queueCollapsed = !!collapsed;
-        if (this.queueCollapsed) {
-            try { localStorage.setItem('model_resolver_queue_collapsed', '1'); } catch (e) { }
+    setQueueCollapsed(collapsed, { persist = true, updatePanel = true, deferOpen = false } = {}) {
+        const nextCollapsed = !!collapsed;
+        const wasCollapsed = !!this.queueCollapsed;
+        const opening = wasCollapsed && !nextCollapsed;
+        this.queueCollapsed = nextCollapsed;
+        if (persist) {
+            this.persistQueueCollapsedState(this.queueCollapsed, opening ? 500 : 0);
+        }
+        if (opening && deferOpen) {
+            this.updateQueueToggleIcon();
+            this.scheduleQueuePanelReveal();
+            return;
+        }
+        if (opening) {
+            this.queueElement?.classList?.add('mr-queue-opening');
+            document.getElementById('model-resolver-body')?.classList.add('mr-queue-opening-layout');
         } else {
-            try { localStorage.setItem('model_resolver_queue_collapsed', '0'); } catch (e) { }
+            this.cancelQueuePanelOpenUpdate();
         }
         this.updateQueueVisibility();
-        this.updateQueuePanel();
+        if (!updatePanel) return;
+        if (opening) {
+            this.scheduleQueuePanelOpenUpdate();
+        } else if (this.isQueuePanelVisible()) {
+            this.updateQueuePanel();
+        } else {
+            this._queuePanelDirty = true;
+        }
     },
 
     getResolutionQueueKey(resolution = {}) {
@@ -1555,6 +1712,11 @@ export const queueMethods = {
         if (this.queueElement) {
             this.queueElement.style.display = showQueuePanel ? '' : 'none';
         }
+        if (!showQueuePanel) {
+            this.clearQueueContentSplitFlex();
+        } else if (!this._splitDragging && !this._queuePanelDirty) {
+            this.stabilizeQueueSplitLayout();
+        }
         if (this.splitterElement) {
             this.splitterElement.style.display = showQueuePanel ? '' : 'none';
         }
@@ -1563,6 +1725,11 @@ export const queueMethods = {
         }
 
         this.updateQueueToggleIcon();
+        if (showQueuePanel && this._queuePanelDirty) {
+            this.queueElement?.classList?.add('mr-queue-opening');
+            document.getElementById('model-resolver-body')?.classList.add('mr-queue-opening-layout');
+            this.scheduleQueuePanelOpenUpdate();
+        }
     },
 
     updateQueueToggleIcon() {
@@ -1587,15 +1754,83 @@ export const queueMethods = {
             this._suppressQueueEdgeClick = false;
             return;
         }
-        this.toggleQueueCollapsed();
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        this.setQueueCollapsed(!this.queueCollapsed, { deferOpen: true });
     },
 
     startQueueEdgeDrag(event) {
         if (event.button !== 0 || !this.queueCollapsed || !this.queueElement) return;
 
-        const startX = event.clientX;
-        const previousCursor = document.body.style.cursor;
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        this._suppressQueueEdgeClick = true;
+        this.setQueueCollapsed(false, { deferOpen: true });
+
+        this.clearQueueEdgeDragCandidate();
+        const usingPointerEvents = event.type === 'pointerdown';
+        this._queueEdgeDragCandidate = {
+            startX: event.clientX,
+            startY: event.clientY,
+            previousCursor: document.body.style.cursor,
+            openedOnPointerDown: true
+        };
+        this._onQueueEdgeCandidateMove = (moveEvent) => this.onQueueEdgeDragCandidateMove(moveEvent);
+        this._onQueueEdgeCandidateUp = () => {
+            const shouldClearSuppress = !!this._queueEdgeDragCandidate?.openedOnPointerDown;
+            this.clearQueueEdgeDragCandidate();
+            if (shouldClearSuppress) {
+                setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
+            }
+        };
+        this._queueEdgeCandidateMoveEvent = usingPointerEvents ? 'pointermove' : 'mousemove';
+        this._queueEdgeCandidateUpEvent = usingPointerEvents ? 'pointerup' : 'mouseup';
+        this._queueEdgeCandidateCancelEvent = usingPointerEvents ? 'pointercancel' : null;
+        document.addEventListener(this._queueEdgeCandidateMoveEvent, this._onQueueEdgeCandidateMove, true);
+        document.addEventListener(this._queueEdgeCandidateUpEvent, this._onQueueEdgeCandidateUp, { once: true, capture: true });
+        if (this._queueEdgeCandidateCancelEvent) {
+            document.addEventListener(this._queueEdgeCandidateCancelEvent, this._onQueueEdgeCandidateUp, { once: true, capture: true });
+        }
+    },
+
+    onQueueEdgeDragCandidateMove(event) {
+        const candidate = this._queueEdgeDragCandidate;
+        if (!candidate) return;
+
+        const dx = event.clientX - candidate.startX;
+        const dy = event.clientY - candidate.startY;
+        if ((dx * dx) + (dy * dy) < 16) return;
+
         event.preventDefault();
+        event.stopPropagation();
+        this.clearQueueEdgeDragCandidate();
+        this._suppressQueueEdgeClick = true;
+        this.beginQueueEdgeDrag(candidate.startX, candidate.previousCursor, event);
+        this.onSplitDrag(event);
+    },
+
+    clearQueueEdgeDragCandidate() {
+        if (this._onQueueEdgeCandidateMove && this._queueEdgeCandidateMoveEvent) {
+            document.removeEventListener(this._queueEdgeCandidateMoveEvent, this._onQueueEdgeCandidateMove, true);
+        }
+        if (this._onQueueEdgeCandidateUp && this._queueEdgeCandidateUpEvent) {
+            document.removeEventListener(this._queueEdgeCandidateUpEvent, this._onQueueEdgeCandidateUp, true);
+        }
+        if (this._onQueueEdgeCandidateUp && this._queueEdgeCandidateCancelEvent) {
+            document.removeEventListener(this._queueEdgeCandidateCancelEvent, this._onQueueEdgeCandidateUp, true);
+        }
+        this._queueEdgeDragCandidate = null;
+        this._onQueueEdgeCandidateMove = null;
+        this._onQueueEdgeCandidateUp = null;
+        this._queueEdgeCandidateMoveEvent = null;
+        this._queueEdgeCandidateUpEvent = null;
+        this._queueEdgeCandidateCancelEvent = null;
+    },
+
+    beginQueueEdgeDrag(startX, previousCursor = document.body.style.cursor, sourceEvent = null) {
+        const dragStartX = Number(startX);
+        if (!Number.isFinite(dragStartX)) return;
+        const usePointerEvents = String(sourceEvent?.type || '').startsWith('pointer');
         document.body.style.cursor = 'col-resize';
         this._suppressQueueEdgeClick = true;
         this.splitterElement.style.display = '';
@@ -1603,56 +1838,258 @@ export const queueMethods = {
         this.queueElement.style.display = 'none';
         this.queueElement.style.width = '0px';
         this.startSplitDrag(
-            { clientX: startX, preventDefault: () => {} },
+            {
+                clientX: dragStartX,
+                type: usePointerEvents ? 'pointerdown' : 'mousedown',
+                pointerId: sourceEvent?.pointerId,
+                preventDefault: () => {},
+                stopPropagation: () => {}
+            },
             { startWidth: 0, edgeOpen: true, previousCursor, startCollapsedPreview: true }
         );
+    },
+
+    getQueueSplitBody() {
+        return document.getElementById('model-resolver-body');
+    },
+
+    observeQueueSplitContainer(body = this.getQueueSplitBody()) {
+        if (!(body instanceof HTMLElement)) return;
+
+        const rememberWidth = (width) => {
+            const nextWidth = Number(width);
+            if (!Number.isFinite(nextWidth) || nextWidth <= 0) return;
+            this._queueSplitLastContainerWidth = nextWidth;
+            if (!this._splitDragging && this.isQueuePanelVisible?.() && !this._queuePanelDirty) {
+                this.stabilizeQueueSplitLayout({ containerWidth: nextWidth });
+            }
+        };
+
+        this._queueSplitFallbackContainerWidth = Number(window.innerWidth || 720);
+        if (this._queueSplitResizeObserver) {
+            try { this._queueSplitResizeObserver.disconnect(); } catch (e) { }
+            this._queueSplitResizeObserver = null;
+        }
+
+        if (typeof ResizeObserver === 'function') {
+            this._queueSplitResizeObserver = new ResizeObserver((entries) => {
+                rememberWidth(entries?.[0]?.contentRect?.width);
+            });
+            this._queueSplitResizeObserver.observe(body);
+        }
+
+        requestAnimationFrame(() => {
+            rememberWidth(body.clientWidth || body.getBoundingClientRect().width);
+        });
+    },
+
+    getQueueSplitContainerWidth(body = null, { allowMeasure = false } = {}) {
+        const cached = Number(this._queueSplitLastContainerWidth);
+        if (Number.isFinite(cached) && cached > 0) return cached;
+
+        if (allowMeasure && body instanceof HTMLElement) {
+            const measured = Number(body.clientWidth || body.getBoundingClientRect().width);
+            if (Number.isFinite(measured) && measured > 0) {
+                this._queueSplitLastContainerWidth = measured;
+                return measured;
+            }
+        }
+
+        const width = Number(this._queueSplitFallbackContainerWidth || window.innerWidth || 0);
+        const safeWidth = Number.isFinite(width) && width > 0 ? width : 720;
+        this._queueSplitLastContainerWidth = safeWidth;
+        return safeWidth;
+    },
+
+    getQueueSplitterWidth() {
+        const cached = Number(this._queueSplitterWidth);
+        if (Number.isFinite(cached) && cached > 0) return cached;
+
+        this._queueSplitterWidth = 10;
+        return 10;
+    },
+
+    getQueueSplitBounds(containerWidth, { edgeOpen = false } = {}) {
+        const safeWidth = Math.max(1, Number(containerWidth) || 1);
+        const splitterWidth = this.getQueueSplitterWidth();
+        const available = Math.max(1, safeWidth - splitterWidth);
+        const min = edgeOpen ? 0 : 56;
+        const max = Math.max(min, Math.floor(available - 360));
+        return { min, max, available };
+    },
+
+    getQueuePaneWidth(element, { allowMeasure = false } = {}) {
+        if (!(element instanceof HTMLElement)) return null;
+
+        const flexBasis = String(element.style.flexBasis || '').trim();
+        if (flexBasis.endsWith('px')) {
+            const width = parseFloat(flexBasis);
+            if (Number.isFinite(width) && width >= 0) return width;
+        }
+
+        const inlineWidth = String(element.style.width || '').trim();
+        if (inlineWidth.endsWith('px')) {
+            const width = parseFloat(inlineWidth);
+            if (Number.isFinite(width) && width >= 0) return width;
+        }
+
+        if (!allowMeasure) return null;
+
+        const measured = Number(element.offsetWidth || element.getBoundingClientRect().width || 0);
+        return Number.isFinite(measured) && measured >= 0 ? measured : null;
+    },
+
+    applyQueueSplitWidth(width, { bounds = null, containerWidth = null, skipIfUnchanged = false } = {}) {
+        if (!(this.queueElement instanceof HTMLElement) || !(this.contentElement instanceof HTMLElement)) return false;
+        const resolvedBounds = bounds || this.getQueueSplitBounds(containerWidth || this.getQueueSplitContainerWidth(), {
+            edgeOpen: this._splitEdgeOpen
+        });
+        const nextWidth = Math.round(Math.max(resolvedBounds.min, Math.min(resolvedBounds.max, Number(width) || 0)));
+        const contentWidth = Math.max(1, Math.round(resolvedBounds.available - nextWidth));
+        const queueValue = `${nextWidth}px`;
+        const contentValue = `${contentWidth}px`;
+
+        if (
+            skipIfUnchanged
+            && this.queueElement.style.flexBasis === queueValue
+            && this.contentElement.style.flexBasis === contentValue
+        ) {
+            return false;
+        }
+
+        this.contentElement.style.flexBasis = contentValue;
+        this.contentElement.style.flexGrow = '0';
+        this.contentElement.style.flexShrink = '0';
+        this.queueElement.style.width = queueValue;
+        this.queueElement.style.flexBasis = queueValue;
+        this.queueElement.style.flexGrow = '0';
+        this.queueElement.style.flexShrink = '0';
+        this._appliedSplitWidth = nextWidth;
+        return true;
+    },
+
+    stabilizeQueueSplitLayout({ containerWidth = null } = {}) {
+        if (!this.isQueuePanelVisible() || this._splitDragging) return false;
+        const measuredContainerWidth = Number(containerWidth);
+        this._queueSplitLastContainerWidth = Number.isFinite(measuredContainerWidth) && measuredContainerWidth > 0
+            ? measuredContainerWidth
+            : this.getQueueSplitContainerWidth();
+        const bounds = this.getQueueSplitBounds(this._queueSplitLastContainerWidth);
+        const queueWidth = this.getQueuePaneWidth(this.queueElement) || 320;
+        return this.applyQueueSplitWidth(queueWidth, {
+            bounds,
+            containerWidth: this._queueSplitLastContainerWidth,
+            skipIfUnchanged: true
+        });
+    },
+
+    deferQueueSplitReleaseUi(body, pointerId, previousUserSelect, previousCursor, fallbackCursor) {
+        if (this._queueSplitReleaseCleanupFrame) {
+            cancelAnimationFrame(this._queueSplitReleaseCleanupFrame);
+            this._queueSplitReleaseCleanupFrame = null;
+        }
+
+        const restore = () => {
+            this._queueSplitReleaseCleanupFrame = null;
+            body?.classList?.remove('mr-is-resizing-queue');
+            body?.classList?.remove('mr-queue-preview-collapsed');
+            if (pointerId !== undefined && this.splitterElement?.releasePointerCapture) {
+                try {
+                    this.splitterElement.releasePointerCapture(pointerId);
+                } catch (error) { }
+            }
+            const cursor = previousCursor !== null && previousCursor !== undefined
+                ? previousCursor
+                : (fallbackCursor || '');
+            try {
+                document.body.style.userSelect = previousUserSelect || '';
+                document.body.style.cursor = cursor;
+            } catch (e) { }
+        };
+
+        this._queueSplitReleaseCleanupFrame = requestAnimationFrame(() => {
+            this._queueSplitReleaseCleanupFrame = requestAnimationFrame(restore);
+        });
     },
 
     // Begin split drag for resizable panels
     startSplitDrag(e, { startWidth = null, edgeOpen = false, previousCursor = null, startCollapsedPreview = false } = {}) {
         try {
+            if (e?.button !== undefined && e.button !== 0) return;
             e?.preventDefault?.();
-            if (!this.queueElement) return;
-            const rect = this.queueElement.getBoundingClientRect();
-            const body = document.getElementById('model-resolver-body');
-            const bodyRect = body ? body.getBoundingClientRect() : { width: window.innerWidth };
+            e?.stopPropagation?.();
+            if (!this.queueElement || !this.contentElement) return;
+
+            const body = this.getQueueSplitBody();
+            this.cancelQueuePanelOpenUpdate();
+            this._queueSplitLastContainerWidth = this.getQueueSplitContainerWidth();
+            const bounds = this.getQueueSplitBounds(this._queueSplitLastContainerWidth, { edgeOpen });
+            const currentWidth = this.getQueuePaneWidth(this.queueElement) || 320;
+            const initialWidth = Math.round(Math.max(bounds.min, Math.min(bounds.max, Number.isFinite(startWidth) ? startWidth : currentWidth)));
+
             this._splitDragging = true;
             body?.classList.add('mr-is-resizing-queue');
+            if (!startCollapsedPreview) {
+                this.applyQueueSplitWidth(initialWidth, {
+                    bounds,
+                    containerWidth: this._queueSplitLastContainerWidth,
+                    skipIfUnchanged: true
+                });
+            }
             this._splitStart = {
                 x: e.clientX,
-                startWidth: Number.isFinite(startWidth) ? startWidth : rect.width,
-                containerWidth: bodyRect.width
+                startWidth: initialWidth,
+                containerWidth: this._queueSplitLastContainerWidth,
+                bounds
             };
-            this._lastSplitDragApply = 0;
+            this._pendingSplitWidth = initialWidth;
+            this._appliedSplitWidth = initialWidth;
             this._splitPreviewCollapsed = !!startCollapsedPreview;
             this._splitEdgeOpen = !!edgeOpen;
             this._splitEdgeOpenedPastThreshold = false;
             this._splitPreviousCursor = previousCursor;
             this._prevUserSelect = document.body.style.userSelect;
+            this._prevQueueSplitCursor = document.body.style.cursor;
             document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'col-resize';
+            if (e?.pointerId !== undefined && this.splitterElement?.setPointerCapture) {
+                try {
+                    this.splitterElement.setPointerCapture(e.pointerId);
+                } catch (error) { }
+            }
             this._onSplitMove = (ev) => this.onSplitDrag(ev);
-            this._onSplitUp = () => this.endSplitDrag();
-            document.addEventListener('mousemove', this._onSplitMove);
-            document.addEventListener('mouseup', this._onSplitUp, { once: true });
+            this._onSplitUp = (ev) => this.endSplitDrag(ev);
+            this._splitMoveEvent = e?.type === 'pointerdown' ? 'pointermove' : 'mousemove';
+            this._splitUpEvent = e?.type === 'pointerdown' ? 'pointerup' : 'mouseup';
+            this._splitCancelEvent = e?.type === 'pointerdown' ? 'pointercancel' : null;
+            document.addEventListener(this._splitMoveEvent, this._onSplitMove, true);
+            document.addEventListener(this._splitUpEvent, this._onSplitUp, { once: true, capture: true });
+            if (this._splitCancelEvent) {
+                document.addEventListener(this._splitCancelEvent, this._onSplitUp, { once: true, capture: true });
+            }
         } catch (err) { /* ignore */ }
     },
 
     onSplitDrag(e) {
         if (!this._splitDragging || !this._splitStart || !this.queueElement) return;
+        e?.preventDefault?.();
+        e?.stopPropagation?.();
         const dx = e.clientX - this._splitStart.x;
         let newW = this._splitStart.startWidth - dx;
-        const minW = this._splitEdgeOpen ? 0 : 56;
-        const maxW = Math.max(minW, Math.floor(this._splitStart.containerWidth - 360));
-        if (newW < minW) newW = minW;
-        if (newW > maxW) newW = maxW;
+        const bounds = this._splitStart.bounds || this.getQueueSplitBounds(this._splitStart.containerWidth, { edgeOpen: this._splitEdgeOpen });
+        if (newW < bounds.min) newW = bounds.min;
+        if (newW > bounds.max) newW = bounds.max;
         this._pendingSplitWidth = Math.round(newW);
         if (this._splitEdgeOpen && this._pendingSplitWidth > 140) {
             this._splitEdgeOpenedPastThreshold = true;
             if (this.queueCollapsed) {
                 this.queueCollapsed = false;
-                try { localStorage.setItem('model_resolver_queue_collapsed', '0'); } catch (error) { }
+                this.persistQueueCollapsedState(false, 500);
                 this.updateQueueToggleIcon();
-                this.updateQueuePanel();
+            }
+            if (this._queuePanelDirty) {
+                this.queueElement?.classList?.add('mr-queue-opening');
+                this.scheduleQueuePanelOpenUpdate();
             }
         }
         const previewCollapsed = this._splitEdgeOpen
@@ -1664,50 +2101,69 @@ export const queueMethods = {
             body?.classList.toggle('mr-queue-preview-collapsed', previewCollapsed);
             this.queueElement.style.display = previewCollapsed ? 'none' : '';
         }
-        const now = performance.now();
-        if (this._lastSplitDragApply && now - this._lastSplitDragApply < 33) return;
-        this._lastSplitDragApply = now;
-        if (this._splitDragFrame) return;
-        this._splitDragFrame = requestAnimationFrame(() => {
-            this._splitDragFrame = null;
-            if (!this._splitDragging || !this.queueElement || !this._pendingSplitWidth || this._splitPreviewCollapsed) return;
-            this.queueElement.style.width = `${this._pendingSplitWidth}px`;
+        if (this._splitPreviewCollapsed) return;
+        this.applyQueueSplitWidth(this._pendingSplitWidth, {
+            bounds,
+            containerWidth: this._splitStart.containerWidth,
+            skipIfUnchanged: true
         });
     },
 
-    endSplitDrag() {
+    endSplitDrag(e = null) {
         if (!this._splitDragging) return;
+        e?.preventDefault?.();
+        e?.stopPropagation?.();
+        const releasePointerId = e?.pointerId;
+        const previousUserSelect = this._prevUserSelect;
+        const previousCursor = this._splitPreviousCursor;
+        const fallbackCursor = this._prevQueueSplitCursor;
         this._splitDragging = false;
         if (this._splitDragFrame) {
             cancelAnimationFrame(this._splitDragFrame);
             this._splitDragFrame = null;
         }
         if (this.queueElement && this._pendingSplitWidth && !this._splitPreviewCollapsed) {
-            this.queueElement.style.width = `${this._pendingSplitWidth}px`;
+            this.applyQueueSplitWidth(this._pendingSplitWidth, {
+                bounds: this._splitStart?.bounds,
+                containerWidth: this._splitStart?.containerWidth,
+                skipIfUnchanged: true
+            });
         }
-        const body = document.getElementById('model-resolver-body');
-        body?.classList.remove('mr-is-resizing-queue');
-        body?.classList.remove('mr-queue-preview-collapsed');
-        document.removeEventListener('mousemove', this._onSplitMove);
+        const body = this.getQueueSplitBody();
+        if (this._splitMoveEvent) {
+            document.removeEventListener(this._splitMoveEvent, this._onSplitMove, true);
+        }
+        if (this._splitUpEvent) {
+            document.removeEventListener(this._splitUpEvent, this._onSplitUp, true);
+        }
+        if (this._splitCancelEvent) {
+            document.removeEventListener(this._splitCancelEvent, this._onSplitUp, true);
+        }
         if (this._splitEdgeOpen && !this._pendingSplitWidth) {
             try {
                 const restoreWidth = Math.max(240, Math.round(this._splitStart?.startWidth || 320));
-                this.queueElement.style.width = `${restoreWidth}px`;
+                this.applyQueueSplitWidth(restoreWidth, {
+                    bounds: this._splitStart?.bounds,
+                    containerWidth: this._splitStart?.containerWidth
+                });
                 this.queueElement.style.display = '';
                 if (this.splitterElement) this.splitterElement.style.display = '';
-                localStorage.setItem('model_resolver_split_w', String(restoreWidth));
+                this.persistQueueSplitWidth(restoreWidth, 500);
             } catch (e) { }
             this.queueCollapsed = false;
-            try { localStorage.setItem('model_resolver_queue_collapsed', '0'); } catch (e) { }
+            this.persistQueueCollapsedState(false, 500);
+            this.queueElement?.classList?.add('mr-queue-opening');
+            document.getElementById('model-resolver-body')?.classList.add('mr-queue-opening-layout');
             this.updateQueueVisibility();
-            this.updateQueuePanel();
+            this.scheduleQueuePanelOpenUpdate();
             this._splitEdgeOpen = false;
             this._pendingSplitWidth = null;
-            this._lastSplitDragApply = 0;
+            this._appliedSplitWidth = null;
             this._splitPreviewCollapsed = false;
-            try { document.body.style.userSelect = this._prevUserSelect || ''; } catch (e) { }
-            try { document.body.style.cursor = this._splitPreviousCursor || ''; } catch (e) { }
+            this.deferQueueSplitReleaseUi(body, releasePointerId, previousUserSelect, previousCursor, fallbackCursor);
             this._splitPreviousCursor = null;
+            this._prevQueueSplitCursor = null;
+            this._prevUserSelect = null;
             this._splitEdgeOpenedPastThreshold = false;
             setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
             return;
@@ -1716,37 +2172,46 @@ export const queueMethods = {
         if (shouldCollapse) {
             try {
                 const restoreWidth = Math.max(240, Math.round(this._splitStart?.startWidth || 320));
-                this.queueElement.style.width = `${restoreWidth}px`;
+                this.applyQueueSplitWidth(restoreWidth, {
+                    bounds: this._splitStart?.bounds,
+                    containerWidth: this._splitStart?.containerWidth
+                });
                 this.queueElement.style.display = '';
-                localStorage.setItem('model_resolver_split_w', String(restoreWidth));
+                this.persistQueueSplitWidth(restoreWidth);
             } catch (e) { }
             this._pendingSplitWidth = null;
-            this._lastSplitDragApply = 0;
+            this._appliedSplitWidth = null;
             this._splitPreviewCollapsed = false;
             this._splitEdgeOpen = false;
             this._splitEdgeOpenedPastThreshold = false;
-            try { document.body.style.userSelect = this._prevUserSelect || ''; } catch (e) { }
-            try { document.body.style.cursor = this._splitPreviousCursor || ''; } catch (e) { }
+            this.deferQueueSplitReleaseUi(body, releasePointerId, previousUserSelect, previousCursor, fallbackCursor);
             this._splitPreviousCursor = null;
+            this._prevQueueSplitCursor = null;
+            this._prevUserSelect = null;
             this.setQueueCollapsed(true);
             setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
             return;
         }
         if (this.queueElement) this.queueElement.style.display = '';
         try {
-            const rect = this.queueElement.getBoundingClientRect();
-            localStorage.setItem('model_resolver_split_w', String(Math.round(rect.width)));
+            const width = this._pendingSplitWidth
+                || this._appliedSplitWidth
+                || Number.parseInt(String(this.queueElement.style.width || ''), 10)
+                || this.getQueuePaneWidth(this.queueElement);
+            this.persistQueueSplitWidth(width);
         } catch (e) { }
         this._pendingSplitWidth = null;
-        this._lastSplitDragApply = 0;
+        this._appliedSplitWidth = null;
         this._splitPreviewCollapsed = false;
         this._splitEdgeOpen = false;
         this._splitEdgeOpenedPastThreshold = false;
-        try { document.body.style.userSelect = this._prevUserSelect || ''; } catch (e) { }
-        if (this._splitPreviousCursor !== null) {
-            try { document.body.style.cursor = this._splitPreviousCursor || ''; } catch (e) { }
-            this._splitPreviousCursor = null;
-        }
+        this.deferQueueSplitReleaseUi(body, releasePointerId, previousUserSelect, previousCursor, fallbackCursor);
+        this._splitPreviousCursor = null;
+        this._prevQueueSplitCursor = null;
+        this._prevUserSelect = null;
+        this._splitMoveEvent = null;
+        this._splitUpEvent = null;
+        this._splitCancelEvent = null;
         setTimeout(() => { this._suppressQueueEdgeClick = false; }, 0);
     },
 

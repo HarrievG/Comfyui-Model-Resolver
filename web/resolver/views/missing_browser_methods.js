@@ -531,12 +531,13 @@ export const missingBrowserMethods = {
             ? `--mr-missing-detail-track:${savedDetailWidth}px;`
             : '';
         const listStyle = `--mr-missing-model-col:${listLayout.modelPx}px;--mr-missing-type-col:${listLayout.typePx}px;`;
+        const browserStyle = `${listStyle}${splitStyle}`;
         const titleText = this.showResolvedModels && resolvedCount > 0
             ? `${totalMissing} shown (${missingCount} missing / ${resolvedCount} resolved)`
             : `${totalMissing} missing model${totalMissing === 1 ? '' : 's'}`;
 
         let html = `
-            <div class="mr-missing-browser" style="${listStyle}">
+            <div class="mr-missing-browser" style="${browserStyle}">
                 <section class="mr-missing-list-pane" aria-label="Missing model list">
                     <div class="mr-missing-list-toolbar">
                         <div>
@@ -628,7 +629,7 @@ export const missingBrowserMethods = {
                     </div>
                 </section>
                 <div class="mr-missing-browser-splitter" role="separator" aria-orientation="vertical" aria-label="Resize missing model panes" tabindex="0"></div>
-                <section class="mr-missing-detail-pane" aria-label="Missing model details" style="${splitStyle}">
+                <section class="mr-missing-detail-pane" aria-label="Missing model details">
                     ${detailMissing ? this.renderMissingModel(detailMissing, detailIndex) : this.renderStatusMessage('Select a missing model to inspect details.', 'info')}
                 </section>
             </div>
@@ -760,12 +761,13 @@ export const missingBrowserMethods = {
         const browser = container.querySelector('.mr-missing-browser');
         const splitter = browser?.querySelector('.mr-missing-browser-splitter');
         if (!(browser instanceof HTMLElement) || !(splitter instanceof HTMLElement)) return;
-
-        this.restoreMissingBrowserSplitWidth(browser);
+        const listPane = browser.querySelector('.mr-missing-list-pane');
+        const detailPane = browser.querySelector('.mr-missing-detail-pane');
+        if (!(listPane instanceof HTMLElement) || !(detailPane instanceof HTMLElement)) return;
 
         const startSplitDrag = (event) => {
             if (event.button !== undefined && event.button !== 0) return;
-            this.startMissingBrowserSplitDrag(event, browser, splitter);
+            this.startMissingBrowserSplitDrag(event, browser, splitter, { listPane, detailPane });
         };
         if (typeof PointerEvent === 'function') {
             splitter.addEventListener('pointerdown', startSplitDrag);
@@ -797,23 +799,35 @@ export const missingBrowserMethods = {
         if (typeof ResizeObserver === 'function') {
             this._missingBrowserResizeObserver = new ResizeObserver((entries) => {
                 const observedWidth = Number(entries?.[0]?.contentRect?.width);
-                if (Number.isFinite(observedWidth) && observedWidth > 0) {
-                    this._missingBrowserObservedWidth = observedWidth;
-                    this._missingBrowserLastBrowserWidth = observedWidth;
-                    if (!this._missingBrowserLastDetailWidth) {
-                        this._missingBrowserLastDetailWidth = this.getDefaultMissingBrowserDetailWidth(observedWidth);
-                    }
-                }
+                this.rememberMissingBrowserWidth(observedWidth);
                 const settlingUntil = Number(this._missingBrowserSplitSettlingUntil || 0);
                 const isSettling = typeof performance === 'object'
                     && typeof performance.now === 'function'
                     && performance.now() < settlingUntil;
                 if (!this._missingBrowserSplitDragging && !isSettling) {
-                    this.scheduleMissingBrowserSplitRestore(browser, observedWidth, { useDefault: true });
+                    this.scheduleMissingBrowserSplitRestore(browser, observedWidth, { useDefault: false });
                 }
             });
             this._missingBrowserResizeObserver.observe(browser);
+        } else {
+            this.cancelMissingBrowserPrewarmFrame();
+            this._missingBrowserPrewarmFrame = requestAnimationFrame(() => {
+                this._missingBrowserPrewarmFrame = null;
+                if (!browser.isConnected) return;
+                if (this._missingBrowserSplitDragging) return;
+                const measuredWidth = Number(browser.clientWidth || browser.getBoundingClientRect().width);
+                this.rememberMissingBrowserWidth(measuredWidth);
+                if (!this._missingBrowserSplitDragging) {
+                    this.scheduleMissingBrowserSplitRestore(browser, measuredWidth, { useDefault: false });
+                }
+            });
         }
+    },
+
+    cancelMissingBrowserPrewarmFrame() {
+        if (!this._missingBrowserPrewarmFrame) return;
+        cancelAnimationFrame(this._missingBrowserPrewarmFrame);
+        this._missingBrowserPrewarmFrame = null;
     },
 
     getStoredMissingBrowserSplitWidth() {
@@ -832,23 +846,34 @@ export const missingBrowserMethods = {
         return savedWidth;
     },
 
-    getFastMissingBrowserWidthEstimate(browser = null) {
+    rememberMissingBrowserWidth(width) {
+        const observedWidth = Number(width);
+        if (!Number.isFinite(observedWidth) || observedWidth <= 0) return null;
+        this._missingBrowserObservedWidth = observedWidth;
+        this._missingBrowserLastBrowserWidth = observedWidth;
+        if (!this._missingBrowserLastDetailWidth) {
+            this._missingBrowserLastDetailWidth = this.getDefaultMissingBrowserDetailWidth(observedWidth);
+        }
+        return observedWidth;
+    },
+
+    getFastMissingBrowserWidthEstimate(browser = null, { allowMeasure = false } = {}) {
         const observedWidth = Number(this._missingBrowserObservedWidth);
         if (Number.isFinite(observedWidth) && observedWidth > 0) return observedWidth;
 
         const lastWidth = Number(this._missingBrowserLastBrowserWidth);
         if (Number.isFinite(lastWidth) && lastWidth > 0) return lastWidth;
 
-        if (browser instanceof HTMLElement) {
+        if (allowMeasure && browser instanceof HTMLElement) {
             const clientWidth = Number(browser.clientWidth || browser.offsetWidth);
             if (Number.isFinite(clientWidth) && clientWidth > 0) {
-                this._missingBrowserObservedWidth = clientWidth;
-                this._missingBrowserLastBrowserWidth = clientWidth;
+                this.rememberMissingBrowserWidth(clientWidth);
                 return clientWidth;
             }
         }
 
-        return 720;
+        const fallbackWidth = Number(this._queueSplitLastContainerWidth || window.innerWidth || 720);
+        return Number.isFinite(fallbackWidth) && fallbackWidth > 0 ? fallbackWidth : 720;
     },
 
     getMissingBrowserSplitBoundsForWidth(width) {
@@ -910,23 +935,26 @@ export const missingBrowserMethods = {
         });
     },
 
-    startMissingBrowserSplitDrag(event, browser, splitter = null) {
+    startMissingBrowserSplitDrag(event, browser, splitter = null, panes = {}) {
         if (!(browser instanceof HTMLElement)) return;
 
         event.preventDefault();
         event.stopPropagation?.();
-        if (this._missingBrowserReleaseCleanupFrame) {
-            cancelAnimationFrame(this._missingBrowserReleaseCleanupFrame);
-            this._missingBrowserReleaseCleanupFrame = null;
-        }
+        this.cancelMissingBrowserPrewarmFrame();
+        this.flushMissingBrowserSplitReleaseUi();
 
-        const detailPane = browser.querySelector('.mr-missing-detail-pane');
-        const listPane = browser.querySelector('.mr-missing-list-pane');
+        const detailPane = panes.detailPane instanceof HTMLElement
+            ? panes.detailPane
+            : browser.querySelector('.mr-missing-detail-pane');
+        const listPane = panes.listPane instanceof HTMLElement
+            ? panes.listPane
+            : browser.querySelector('.mr-missing-list-pane');
         if (!(detailPane instanceof HTMLElement) || !(listPane instanceof HTMLElement)) return;
         const browserWidth = this.getFastMissingBrowserWidthEstimate(browser);
         const bounds = this.getMissingBrowserSplitBoundsForWidth(browserWidth);
         const savedWidth = this.getStoredMissingBrowserSplitWidth();
         const detailWidth = Math.round(Math.max(bounds.min, Math.min(bounds.max, this.getMissingBrowserDetailTrackWidth(detailPane)
+            || this._missingBrowserLastDetailWidth
             || savedWidth
             || this.getDefaultMissingBrowserDetailWidth(browserWidth))));
 
@@ -938,12 +966,12 @@ export const missingBrowserMethods = {
         this._pendingMissingBrowserRestoreWidth = null;
         this._pendingMissingBrowserRestoreUseDefault = false;
         this.cancelMissingBrowserSplitWidthPersist();
-        this.applyMissingBrowserDetailWidth(detailPane, detailWidth, {
-            browserWidth,
-            availableWidth: bounds.available,
-            splitBounds: bounds,
-            skipIfUnchanged: true
-        });
+        this._missingBrowserSplitBrowser = browser;
+        this._missingBrowserSplitListPane = listPane;
+        this._missingBrowserSplitDetailPane = detailPane;
+        this._missingBrowserSplitSplitter = splitter instanceof HTMLElement
+            ? splitter
+            : browser.querySelector('.mr-missing-browser-splitter');
         this._missingBrowserSplitDragging = true;
         this._missingBrowserSplitStart = {
             x: event.clientX,
@@ -953,22 +981,7 @@ export const missingBrowserMethods = {
             availableWidth: bounds.available
         };
         this._appliedMissingBrowserSplitWidth = Math.round(this._missingBrowserSplitStart.width);
-        this._missingBrowserSplitBrowser = browser;
-        this._missingBrowserSplitListPane = listPane;
-        this._missingBrowserSplitDetailPane = detailPane;
-        this._missingBrowserSplitSplitter = splitter instanceof HTMLElement
-            ? splitter
-            : browser.querySelector('.mr-missing-browser-splitter');
-        this._missingBrowserPrevUserSelect = document.body.style.userSelect;
-        this._missingBrowserPrevCursor = document.body.style.cursor;
-        document.body.style.userSelect = 'none';
-        document.body.style.cursor = 'col-resize';
-        this._missingBrowserSplitSplitter?.classList?.add('is-resizing');
-        if (event.pointerId !== undefined && this._missingBrowserSplitSplitter?.setPointerCapture) {
-            try {
-                this._missingBrowserSplitSplitter.setPointerCapture(event.pointerId);
-            } catch (e) {}
-        }
+        this._missingBrowserSplitUiActive = false;
 
         this._onMissingBrowserSplitMove = (moveEvent) => this.onMissingBrowserSplitDrag(moveEvent);
         this._onMissingBrowserSplitUp = (upEvent) => this.endMissingBrowserSplitDrag(upEvent);
@@ -982,6 +995,23 @@ export const missingBrowserMethods = {
         }
     },
 
+    activateMissingBrowserSplitUi() {
+        if (this._missingBrowserSplitUiActive) return;
+        this._missingBrowserSplitUiActive = true;
+        if (this._missingBrowserResizeClassFrame) {
+            cancelAnimationFrame(this._missingBrowserResizeClassFrame);
+            this._missingBrowserResizeClassFrame = null;
+        }
+        this._missingBrowserResizeClassFrame = requestAnimationFrame(() => {
+            this._missingBrowserResizeClassFrame = requestAnimationFrame(() => {
+                this._missingBrowserResizeClassFrame = null;
+                if (this._missingBrowserSplitDragging) {
+                    this._missingBrowserSplitSplitter?.classList?.add('is-resizing');
+                }
+            });
+        });
+    },
+
     onMissingBrowserSplitDrag(event) {
         if (!this._missingBrowserSplitDragging || !this._missingBrowserSplitStart || !this._missingBrowserSplitBrowser) return;
 
@@ -992,6 +1022,7 @@ export const missingBrowserMethods = {
         this._pendingMissingBrowserSplitWidth = Math.round(Math.max(bounds.min, Math.min(bounds.max, nextWidth)));
         if (this._pendingMissingBrowserSplitWidth === this._appliedMissingBrowserSplitWidth) return;
         if (!this._missingBrowserSplitDetailPane) return;
+        this.activateMissingBrowserSplitUi();
         this.applyMissingBrowserDetailWidth(this._missingBrowserSplitDetailPane, this._pendingMissingBrowserSplitWidth, {
             browserWidth: this._missingBrowserSplitStart.browserWidth,
             availableWidth: this._missingBrowserSplitStart.availableWidth,
@@ -1011,9 +1042,7 @@ export const missingBrowserMethods = {
             : Date.now();
         this._missingBrowserSplitSettlingUntil = settlingNow + 350;
         const releaseSplitter = this._missingBrowserSplitSplitter;
-        const releasePointerId = event?.pointerId;
-        const previousUserSelect = this._missingBrowserPrevUserSelect;
-        const previousCursor = this._missingBrowserPrevCursor;
+        const wasUiActive = !!this._missingBrowserSplitUiActive;
         const finalWidth = this._pendingMissingBrowserSplitWidth || this._appliedMissingBrowserSplitWidth;
         this._missingBrowserSplitDragging = false;
         if (this._missingBrowserSplitMoveEvent) {
@@ -1042,12 +1071,13 @@ export const missingBrowserMethods = {
         if (finalWidth) {
             this.persistMissingBrowserSplitWidth(finalWidth, { delay: 600 });
         }
-        this.deferMissingBrowserSplitReleaseUi(releaseSplitter, releasePointerId, previousUserSelect, previousCursor);
+        this.deferMissingBrowserSplitReleaseUi(releaseSplitter, wasUiActive);
         this._missingBrowserSplitBrowser = null;
         this._missingBrowserSplitListPane = null;
         this._missingBrowserSplitDetailPane = null;
         this._missingBrowserSplitSplitter = null;
         this._missingBrowserSplitStart = null;
+        this._missingBrowserSplitUiActive = false;
         this._pendingMissingBrowserSplitWidth = null;
         this._appliedMissingBrowserSplitWidth = null;
         this._missingBrowserSplitMoveEvent = null;
@@ -1055,22 +1085,40 @@ export const missingBrowserMethods = {
         this._missingBrowserSplitCancelEvent = null;
     },
 
-    deferMissingBrowserSplitReleaseUi(splitter, pointerId, previousUserSelect, previousCursor) {
+    applyMissingBrowserSplitReleaseCleanup(cleanup) {
+        if (!cleanup) return;
+        cleanup.splitter?.classList?.remove('is-resizing');
+    },
+
+    flushMissingBrowserSplitReleaseUi() {
+        if (this._missingBrowserReleaseCleanupFrame) {
+            cancelAnimationFrame(this._missingBrowserReleaseCleanupFrame);
+            this._missingBrowserReleaseCleanupFrame = null;
+        }
+        const cleanup = this._missingBrowserPendingReleaseCleanup;
+        this._missingBrowserPendingReleaseCleanup = null;
+        this.applyMissingBrowserSplitReleaseCleanup(cleanup);
+    },
+
+    deferMissingBrowserSplitReleaseUi(splitter, shouldCleanup = true) {
+        if (this._missingBrowserResizeClassFrame) {
+            cancelAnimationFrame(this._missingBrowserResizeClassFrame);
+            this._missingBrowserResizeClassFrame = null;
+        }
+        this._missingBrowserPendingReleaseCleanup = {
+            splitter,
+            shouldCleanup
+        };
         const release = () => {
             this._missingBrowserReleaseCleanupFrame = null;
-            if (pointerId !== undefined && splitter?.releasePointerCapture) {
-                try {
-                    splitter.releasePointerCapture(pointerId);
-                } catch (e) {}
-            }
-            splitter?.classList?.remove('is-resizing');
-            try {
-                document.body.style.userSelect = previousUserSelect || '';
-                document.body.style.cursor = previousCursor || '';
-            } catch (e) {}
+            const cleanup = this._missingBrowserPendingReleaseCleanup;
+            this._missingBrowserPendingReleaseCleanup = null;
+            this.applyMissingBrowserSplitReleaseCleanup(cleanup);
         };
         if (typeof requestAnimationFrame === 'function') {
-            this._missingBrowserReleaseCleanupFrame = requestAnimationFrame(release);
+            this._missingBrowserReleaseCleanupFrame = requestAnimationFrame(() => {
+                this._missingBrowserReleaseCleanupFrame = requestAnimationFrame(release);
+            });
         } else {
             release();
         }
@@ -1120,14 +1168,13 @@ export const missingBrowserMethods = {
         }
 
         if (listPane instanceof HTMLElement) {
-            listPane.style.flexBasis = listValue;
-            listPane.style.flexGrow = '0';
-            listPane.style.flexShrink = '0';
+            if (listPane.style.flexBasis !== listValue) listPane.style.flexBasis = listValue;
+            if (listPane.style.flexGrow !== '0') listPane.style.flexGrow = '0';
+            if (listPane.style.flexShrink !== '0') listPane.style.flexShrink = '0';
         }
-        detailPane.style.setProperty('--mr-missing-detail-track', detailValue);
-        detailPane.style.flexBasis = detailValue;
-        detailPane.style.flexGrow = '0';
-        detailPane.style.flexShrink = '0';
+        if (detailPane.style.flexBasis !== detailValue) detailPane.style.flexBasis = detailValue;
+        if (detailPane.style.flexGrow !== '0') detailPane.style.flexGrow = '0';
+        if (detailPane.style.flexShrink !== '0') detailPane.style.flexShrink = '0';
         this._missingBrowserLastDetailWidth = nextWidth;
         return true;
     },
@@ -1215,14 +1262,13 @@ export const missingBrowserMethods = {
         }
     },
 
-    getMissingBrowserSplitBounds(browser, browserWidth = null) {
+    getMissingBrowserSplitBounds(browser, browserWidth = null, { allowMeasure = false } = {}) {
         const measuredWidth = Number(browserWidth);
         const width = Number.isFinite(measuredWidth) && measuredWidth > 0
             ? measuredWidth
-            : browser.getBoundingClientRect().width;
+            : this.getFastMissingBrowserWidthEstimate(browser, { allowMeasure });
         if (Number.isFinite(width) && width > 0) {
-            this._missingBrowserObservedWidth = width;
-            this._missingBrowserLastBrowserWidth = width;
+            this.rememberMissingBrowserWidth(width);
         }
         return this.getMissingBrowserSplitBoundsForWidth(width);
     },
