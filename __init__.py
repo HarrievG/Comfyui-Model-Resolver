@@ -258,6 +258,7 @@ class ModelResolverExtension:
                     search_lora_manager_archive_for_file,
                     clear_search_cache as clear_lora_manager_archive_search_cache,
                 )
+                from .core.sources import clear_all_search_caches
 
                 download_available = True
             except ImportError as e:
@@ -3152,10 +3153,7 @@ class ModelResolverExtension:
                 @json_api_endpoint("Clear search cache")
                 async def clear_search_cache_route(request):
                     """Clear backend search caches after token/settings changes."""
-                    clear_huggingface_search_cache()
-                    clear_civitai_search_cache()
-                    clear_civarchive_search_cache()
-                    clear_lora_manager_archive_search_cache()
+                    clear_all_search_caches()
                     reload_popular_databases()
                     reload_model_list()
                     invalidate_model_files_cache()
@@ -3236,10 +3234,7 @@ class ModelResolverExtension:
                 async def model_list_update_route(request):
                     """Download latest ComfyUI-Manager model-list.json."""
                     result = await asyncio.to_thread(update_model_list_from_remote)
-                    clear_huggingface_search_cache()
-                    clear_civitai_search_cache()
-                    clear_civarchive_search_cache()
-                    clear_lora_manager_archive_search_cache()
+                    clear_all_search_caches()
                     self.search_result_timestamps.clear()
                     return web.json_response(result)
 

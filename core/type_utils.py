@@ -503,3 +503,26 @@ def extract_response_file_size(response: Any) -> Optional[int]:
             return size
 
     return None
+
+
+def parse_civitai_model_path(path: str, query_string: str) -> Optional[Dict[str, int]]:
+    """
+    Common helper to parse `/models/{model_id}?modelVersionId={version_id}` URLs
+    for CivitAI and CivArchive.
+    """
+    import re
+    from urllib.parse import parse_qs
+
+    model_match = re.search(r"/models/(\d+)", path)
+    if model_match:
+        result = {"model_id": int(model_match.group(1))}
+        query = parse_qs(query_string)
+        version_id_list = query.get("modelVersionId")
+        if version_id_list:
+            try:
+                result["version_id"] = int(version_id_list[0])
+            except (ValueError, TypeError):
+                pass
+        return result
+    return None
+

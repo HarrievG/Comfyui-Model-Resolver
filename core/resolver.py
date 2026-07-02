@@ -696,7 +696,7 @@ def extract_workflow_urls(workflow_json: Dict[str, Any]) -> Dict[str, Dict[str, 
     return url_map
 
 
-def parse_huggingface_url(url: str) -> Tuple[Optional[str], Optional[str]]:
+def get_huggingface_repo_and_file_from_url(url: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Extract HuggingFace repo and path from URL.
 

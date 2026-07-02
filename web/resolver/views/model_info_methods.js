@@ -1056,7 +1056,7 @@ export const modelInfoMethods = {
             }
         } catch (e) {
             // Fall back to direct search
-            const searchName = name.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
+            const searchName = this.stripModelExtension(name);
             const searchUrl = `https://civitai.com/search?q=${encodeURIComponent(searchName)}`;
             window.open(searchUrl, '_blank');
         }
@@ -1154,7 +1154,7 @@ export const modelInfoMethods = {
     },
 
     createInfoDialog(loraName, modelData) {
-        const loraDisplayName = loraName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
+        const loraDisplayName = this.stripModelExtension(loraName);
 
         const dialog = document.createElement('div');
         dialog.className = 'mr-info-dialog-backdrop';
@@ -1917,7 +1917,7 @@ export const modelInfoMethods = {
 
     buildLocalInfoDialogData(loraName, modelData = {}) {
         const filename = loraName || modelData?.filename || modelData?.name || '';
-        const modelName = String(filename || '').replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
+        const modelName = this.stripModelExtension(filename);
         const resolvedPath = this.getModelInfoResolvedPath(modelData);
         const categoryTypeMap = {
             checkpoints: 'checkpoint',

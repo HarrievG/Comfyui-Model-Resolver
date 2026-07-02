@@ -12,8 +12,14 @@ from .huggingface import (
     search_huggingface,
     search_huggingface_for_file,
     get_huggingface_download_url,
+    clear_search_cache as clear_huggingface_search_cache,
 )
-from .civitai import search_civitai, search_civitai_for_file, get_civitai_download_url
+from .civitai import (
+    search_civitai,
+    search_civitai_for_file,
+    get_civitai_download_url,
+    clear_search_cache as clear_civitai_search_cache,
+)
 from .civarchive import (
     clear_search_cache as clear_civarchive_search_cache,
     is_civarchive_available,
@@ -29,6 +35,13 @@ from .lora_manager_archive import (
     search_lora_manager_archive,
     search_lora_manager_archive_for_file,
 )
+
+def clear_all_search_caches() -> None:
+    """Clear search caches for all external sources."""
+    clear_huggingface_search_cache()
+    clear_civitai_search_cache()
+    clear_civarchive_search_cache()
+    clear_lora_manager_archive_search_cache()
 
 __all__ = [
     "search_popular_models",
@@ -52,4 +65,5 @@ __all__ = [
     "is_lora_manager_archive_available",
     "search_lora_manager_archive",
     "search_lora_manager_archive_for_file",
+    "clear_all_search_caches",
 ]

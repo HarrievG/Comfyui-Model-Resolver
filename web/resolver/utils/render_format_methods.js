@@ -335,5 +335,26 @@ export const renderFormatMethods = {
 
     normalizePathToBackward(value) {
         return String(value || '').trim().replace(/\//g, '\\');
+    },
+
+    stripModelExtension(value) {
+        return stripModelExtension(value);
+    },
+
+    hasModelExtension(value) {
+        return hasModelExtension(value);
     }
 };
+
+export const MODEL_EXTENSIONS_REGEX = /\.(safetensors|ckpt|pt2?|bin|pth|pkl|sft|onnx|gguf)(?:$|[?#])/i;
+
+export function stripModelExtension(value) {
+    if (!value) return '';
+    return String(value).replace(MODEL_EXTENSIONS_REGEX, '');
+}
+
+export function hasModelExtension(value) {
+    if (!value) return false;
+    return MODEL_EXTENSIONS_REGEX.test(value);
+}
+

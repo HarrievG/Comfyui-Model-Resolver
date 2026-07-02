@@ -150,7 +150,7 @@ export const searchPanelMethods = {
             .split(/[\\/]+/)
             .map(part => part.trim())
             .filter(Boolean);
-        const directoryParts = parts.filter(part => !/\.(safetensors|ckpt|pt|pth|bin|gguf|onnx)$/i.test(part));
+        const directoryParts = parts.filter(part => !this.hasModelExtension(part));
 
         for (const part of directoryParts) {
             const exact = this.resolveBaseModelAliasExact(part);
@@ -311,7 +311,7 @@ export const searchPanelMethods = {
                 if (/^urn:/i.test(value.trim())) {
                     return;
                 }
-                if (/\.(safetensors|ckpt|pt|pth|bin|gguf|onnx)\b/i.test(value) || /model|checkpoint|unet|diffusion/i.test(key)) {
+                if (this.hasModelExtension(value) || /model|checkpoint|unet|diffusion/i.test(key)) {
                     values.push(value);
                 }
                 return;

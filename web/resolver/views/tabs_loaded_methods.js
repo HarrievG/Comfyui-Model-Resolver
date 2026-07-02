@@ -168,6 +168,8 @@ export const tabsLoadedMethods = {
         const activeCount = Object.values(byCategory).reduce((sum, cat) => sum + cat.active.length, 0);
         const inactiveCount = Object.values(byCategory).reduce((sum, cat) => sum + cat.inactive.length, 0);
 
+        const stripModelExtension = (value) => this.stripModelExtension(value || 'Unknown');
+
         const buildCategoryStrings = (filter) => {
             const result = {};
             for (const [category, modelsObj] of Object.entries(byCategory)) {
@@ -175,10 +177,7 @@ export const tabsLoadedMethods = {
                 const models = filter === 'active' ? modelsObj.active : filter === 'inactive' ? modelsObj.inactive : [...modelsObj.active, ...modelsObj.inactive];
                 const parts = models.map(model => {
                     const fullName = model.name || model.original_path?.split(/[\/\\]/).pop() || 'Unknown';
-                    let name = fullName;
-                    if (fullName.match(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i)) {
-                        name = fullName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
-                    }
+                    const name = stripModelExtension(fullName);
                     const strength = model.strength !== null && model.strength !== undefined
                         ? model.strength.toFixed(2)
                         : '1.00';
@@ -194,7 +193,6 @@ export const tabsLoadedMethods = {
         const allString = buildCategoryStrings('all');
 
         const copyIcon = getSvgIcon('copy', 'currentColor', 'mr-copy-btn-icon');
-        const stripModelExtension = (value) => String(value || 'Unknown').replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
         const modelToken = (model, category) => {
             const fullName = model.name || model.original_path?.split(/[\/\\]/).pop() || 'Unknown';
             const name = stripModelExtension(fullName);
@@ -253,7 +251,7 @@ export const tabsLoadedMethods = {
 
                 for (const model of modelsObj.active) {
                     const fullName = model.name || model.original_path?.split(/[\/\\]/).pop() || 'Unknown';
-                    const name = fullName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
+                    const name = this.stripModelExtension(fullName);
                     const strength = model.strength !== null && model.strength !== undefined ? model.strength.toFixed(2) : null;
                     html += `<span class="mr-model-chip"${this.getContextMenuAttrs(model)}>${this.escapeHtml(name)}${strength !== null ? `<span class="mr-model-chip-strength">${this.escapeHtml(strength)}</span>` : ''}</span>`;
                 }
@@ -272,7 +270,7 @@ export const tabsLoadedMethods = {
 
                 for (const model of modelsObj.inactive) {
                     const fullName = model.name || model.original_path?.split(/[\/\\]/).pop() || 'Unknown';
-                    const name = fullName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl|sft|onnx|gguf)$/i, '');
+                    const name = this.stripModelExtension(fullName);
                     const strength = model.strength !== null && model.strength !== undefined ? model.strength.toFixed(2) : null;
                     html += `<span class="mr-model-chip"${this.getContextMenuAttrs(model)}>${this.escapeHtml(name)}${strength !== null ? `<span class="mr-model-chip-strength">${this.escapeHtml(strength)}</span>` : ''}</span>`;
                 }

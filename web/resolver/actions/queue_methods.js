@@ -2296,7 +2296,7 @@ export const queueMethods = {
             text = text.split('/').pop() || text;
         }
         if (stem) {
-            text = text.replace(/\.(safetensors|ckpt|pt|pth|bin|gguf|onnx)$/i, '');
+            text = this.stripModelExtension(text);
         }
         return text;
     },

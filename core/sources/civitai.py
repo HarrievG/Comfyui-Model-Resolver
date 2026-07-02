@@ -28,6 +28,7 @@ from ..type_utils import (
     get_version_sort_key,
     check_credential_http,
     DEFAULT_BROWSER_USER_AGENT,
+    parse_civitai_model_path,
 )
 from ..progress import report_progress, get_progress_reporter
 from ..path_utils import calculate_file_sha256, get_filename_from_path
@@ -684,15 +685,7 @@ def parse_civitai_url(url: str) -> Optional[Dict[str, Any]]:
         if match:
             return {"version_id": int(match.group(1))}
 
-    match = re.search(r"/models/(\d+)", parsed.path)
-    if match:
-        result = {"model_id": int(match.group(1))}
-        query = parse_qs(parsed.query)
-        if "modelVersionId" in query:
-            result["version_id"] = int(query["modelVersionId"][0])
-        return result
-
-    return None
+    return parse_civitai_model_path(parsed.path, parsed.query)
 
 
 def get_civitai_download_url(version_id: int, api_key: Optional[str] = None) -> str:

@@ -34,6 +34,7 @@ from ..type_utils import (
     parse_size_header as _parse_size_header,
     parse_content_range_size as _parse_content_range_size,
     extract_response_file_size as _response_file_size,
+    parse_civitai_model_path,
 )
 from ..progress import report_progress, get_progress_reporter
 from ..log_system.log_funcs import create_module_logger
@@ -509,16 +510,7 @@ def parse_civarchive_url(url: str) -> Optional[Dict[str, Any]]:
     if sha_match:
         return {"sha256": sha_match.group(1).lower()}
 
-    model_match = re.search(r"/models/(\d+)", parsed.path)
-    if model_match:
-        result: Dict[str, Any] = {"model_id": int(model_match.group(1))}
-        query = parse_qs(parsed.query)
-        version_id = query.get("modelVersionId", [None])[0]
-        if version_id:
-            result["version_id"] = _coerce_int(version_id)
-        return result
-
-    return None
+    return parse_civitai_model_path(parsed.path, parsed.query)
 
 
 def _extract_sha256(value: str) -> Optional[str]:
