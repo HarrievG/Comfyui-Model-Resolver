@@ -171,7 +171,6 @@ class ModelResolverExtension:
                     analyze_and_find_matches,
                     apply_resolution,
                     get_local_model_hash_metadata,
-                    normalize_sha256,
                     search_local_matches_by_hash,
                     search_local_matches,
                 )
@@ -182,7 +181,15 @@ class ModelResolverExtension:
                     read_json_safe,
                     write_json_atomic,
                 )
-                from .core.type_utils import first_non_empty, to_int, to_bool, MODEL_EXTENSIONS, format_size_bytes
+                from .core.type_utils import (
+                    first_non_empty,
+                    to_int,
+                    to_bool,
+                    MODEL_EXTENSIONS,
+                    format_size_bytes,
+                    normalize_sha256,
+                    extract_sha256_from_metadata,
+                )
                 from .core.settings import (
                     TEMPLATE_KEY_ALIASES,
                     bool_setting as resolver_bool_setting,
@@ -1321,19 +1328,7 @@ class ModelResolverExtension:
                         "civitai_checked": bool(civitai_checked),
                     }
                 def extract_result_sha256(result):
-                    if not isinstance(result, dict):
-                        return ""
-                    for key in ("sha256", "hash"):
-                        normalized = normalize_sha256(result.get(key))
-                        if normalized:
-                            return normalized
-                    hashes = result.get("hashes")
-                    if isinstance(hashes, dict):
-                        for key in ("SHA256", "sha256", "Sha256"):
-                            normalized = normalize_sha256(hashes.get(key))
-                            if normalized:
-                                return normalized
-                    return ""
+                    return extract_sha256_from_metadata(result)
 
                 def result_filename_matches(result):
                     if not isinstance(result, dict):

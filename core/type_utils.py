@@ -667,3 +667,146 @@ def normalize_model_image(image_data: Dict[str, Any], default_civitai_url: str =
     }
 
 
+import re
+SHA256_PATTERN = re.compile(r"^[a-fA-F0-9]{64}$")
+
+
+def normalize_sha256(value: Any) -> str:
+    """Return a normalized SHA256 hex string or an empty string."""
+    if value is None:
+        return ""
+
+    text = str(value).strip()
+    for prefix in ("sha256:", "sha256="):
+        if text.lower().startswith(prefix):
+            text = text[len(prefix):].strip()
+
+    return text.lower() if SHA256_PATTERN.match(text) else ""
+
+
+def unique_ordered_strings(values: List[Any]) -> List[str]:
+    """Zwraca unikalne, niepuste ciągi znaków z zachowaniem oryginalnej kolejności."""
+    seen = set()
+    unique = []
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        unique.append(text)
+    return unique
+
+
+def extract_sha256_from_metadata(metadata: Any) -> str:
+    """
+    Wyciąga i zwraca pierwszy poprawny znormalizowany hash SHA256 z metadanych.
+    """
+    if not isinstance(metadata, dict):
+        return ""
+
+    for key in ("sha256", "hash", "SHA256", "Sha256"):
+        val = metadata.get(key)
+        if val:
+            normalized = normalize_sha256(val)
+            if normalized:
+                return normalized
+
+    hashes = metadata.get("hashes")
+    if isinstance(hashes, dict):
+        for key in ("SHA256", "sha256", "Sha256", "hash"):
+            val = hashes.get(key)
+            if val:
+                normalized = normalize_sha256(val)
+                if normalized:
+                    return normalized
+
+    # Obsługa zagnieżdżonej listy plików w metadanych Civitai
+    files = metadata.get("files")
+    if isinstance(files, list):
+        for file_info in files:
+            if isinstance(file_info, dict):
+                f_hashes = file_info.get("hashes")
+                if isinstance(f_hashes, dict):
+                    for key in ("SHA256", "sha256", "Sha256", "hash"):
+                        val = f_hashes.get(key)
+                        if val:
+                            normalized = normalize_sha256(val)
+                            if normalized:
+                                return normalized
+
+    return ""
+
+
+def extract_trained_words(*values: Any) -> List[str]:
+    """
+    Parsuje i zwraca znormalizowaną listę unikalnych słów kluczowych 
+    i tagów z przekazanych wartości (słowników wersji, list lub ciągów znaków).
+    """
+    words: List[str] = []
+    seen = set()
+
+    def process_item(item: Any):
+        if isinstance(item, dict):
+            if "trainedWords" in item or "trigger" in item or "model" in item:
+                for sub_val in (item.get("trainedWords"), item.get("trigger")):
+                    if sub_val:
+                        process_item(sub_val)
+                model = item.get("model")
+                if isinstance(model, dict) and "tags" in model:
+                    process_item(model.get("tags"))
+                return
+            else:
+                val = (
+                    item.get("word")
+                    or item.get("name")
+                    or item.get("text")
+                    or item.get("value")
+                )
+                process_item(val)
+                return
+        if isinstance(item, (list, tuple, set)):
+            for sub in item:
+                process_item(sub)
+            return
+
+        text = str(item or "").strip()
+        if not text:
+            return
+        key = text.lower()
+        if key not in seen:
+            seen.add(key)
+            words.append(text)
+
+    for value in values:
+        process_item(value)
+
+    return words
+
+
+_remote_size_cache: Dict[tuple[str, Optional[str]], Optional[int]] = {}
+
+
+def fetch_remote_file_size_cached(
+    url: str,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: int = 15,
+) -> Optional[int]:
+    """
+    Sprawdza rozmiar zdalnego pliku, korzystając ze wspólnej pamięci podręcznej.
+    """
+    auth = headers.get("Authorization") if headers else None
+    cache_key = (url, auth)
+    if cache_key in _remote_size_cache:
+        return _remote_size_cache[cache_key]
+
+    size = fetch_remote_file_size(url, headers=headers, timeout=timeout)
+    _remote_size_cache[cache_key] = size
+    return size
+
+
+def clear_remote_size_cache() -> None:
+    """Czyści cache rozmiarów plików zdalnych."""
+    _remote_size_cache.clear()
+
+
+

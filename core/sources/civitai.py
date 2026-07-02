@@ -30,9 +30,12 @@ from ..type_utils import (
     DEFAULT_BROWSER_USER_AGENT,
     parse_civitai_model_path,
     normalize_model_image,
+    as_dict,
+    as_list,
+    extract_trained_words,
 )
 from ..progress import report_progress, get_progress_reporter
-from ..path_utils import calculate_file_sha256, get_filename_from_path, read_json_safe
+from ..path_utils import calculate_file_sha256, get_filename_from_path, read_json_safe, find_metadata_sidecar_path
 from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
@@ -1405,31 +1408,6 @@ def get_model_info_by_hash(
         return None
 
 
-def _extract_trained_words(version_info: Dict[str, Any]) -> List[str]:
-    """
-    Extract trained words/phrases from model version info.
-    """
-    trained_words = []
-
-    # Try to get from metadata
-    metadata = version_info.get("trainedWords", [])
-    if isinstance(metadata, list):
-        trained_words.extend(metadata)
-    elif isinstance(metadata, str) and metadata:
-        trained_words.append(metadata)
-
-    # Also check metadata field
-    model = version_info.get("model", {})
-    if isinstance(model, dict):
-        model_tags = model.get("tags", [])
-        if isinstance(model_tags, list):
-            for tag in model_tags:
-                if tag not in trained_words:
-                    trained_words.append(tag)
-
-    return trained_words
-
-
 def _extract_model_images(version_info: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Extract images with metadata from model version info.
@@ -1456,43 +1434,6 @@ def _extract_model_images(version_info: Dict[str, Any]) -> List[Dict[str, Any]]:
     return images
 
 
-def _get_metadata_file_path(model_path: str) -> str:
-    """
-    Get the path to the metadata file for a model.
-    For example, for 'model.safetensors', it returns 'model.metadata.json'
-    Also checks for variations without extension or with different extensions.
-    """
-    if not model_path:
-        return ""
-
-    # Get directory and filename
-    directory = os.path.dirname(model_path)
-    filename = get_filename_from_path(model_path)
-
-    # Try different variations of the metadata file name
-    base_name = filename.rsplit(".", 1)[0] if "." in filename else filename
-
-    possible_names = [
-        base_name + ".metadata.json",
-        filename + ".metadata.json",
-        base_name + ".civitai.info",
-        filename + ".civitai.info",
-        base_name + ".json",
-        filename.replace("_", " ").split()[0] + ".metadata.json"
-        if "_" in base_name
-        else None,
-    ]
-
-    for name in possible_names:
-        if name:
-            path = os.path.join(directory, name)
-            if os.path.exists(path):
-                log.info(f"Found metadata file: {path}")
-                return path
-
-    return ""
-
-
 def _read_model_metadata(metadata_path: str) -> Optional[Dict[str, Any]]:
     """
     Read model metadata from a JSON file.
@@ -1503,9 +1444,9 @@ def _read_model_metadata(metadata_path: str) -> Optional[Dict[str, Any]]:
         return None
 
     try:
-        files = _as_metadata_list(data.get("files"))
+        files = as_list(data.get("files"))
         file_hashes = [
-            _as_metadata_dict(file_info).get("hashes")
+            as_dict(file_info).get("hashes")
             for file_info in files
             if isinstance(file_info, dict)
         ]
@@ -1540,28 +1481,6 @@ def _read_model_metadata(metadata_path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _as_metadata_dict(value: Any) -> Dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _as_metadata_list(value: Any) -> List[Any]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return value
-    if isinstance(value, tuple):
-        return list(value)
-    return [value] if value else []
-
-
-def _first_metadata_value(*values: Any) -> Any:
-    return first_non_empty(*values, default=None)
-
-
-def _metadata_size_to_bytes(value: Any) -> Optional[int]:
-    return parse_size_to_bytes(value)
-
-
 def _format_model_location(file_path: str) -> str:
     if not file_path:
         return ""
@@ -1572,36 +1491,12 @@ def _format_model_location(file_path: str) -> str:
     return location
 
 
-def _normalize_metadata_trained_words(*values: Any) -> List[str]:
-    words: List[str] = []
-    seen = set()
-
-    for value in values:
-        for item in _as_metadata_list(value):
-            if isinstance(item, dict):
-                item = (
-                    item.get("word")
-                    or item.get("name")
-                    or item.get("text")
-                    or item.get("value")
-                )
-            text = str(item or "").strip()
-            if not text:
-                continue
-            key = text.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            words.append(text)
-
-    return words
-
 
 def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
     """
     Convert metadata file format to model info format used by our extension.
     """
-    embedded_civitai_data = _as_metadata_dict(metadata.get("civitai"))
+    embedded_civitai_data = as_dict(metadata.get("civitai"))
     looks_like_civitai_version = bool(
         metadata.get("modelId")
         or metadata.get("files")
@@ -1611,10 +1506,10 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
     civitai_data = embedded_civitai_data or (
         metadata if looks_like_civitai_version else {}
     )
-    selected_version = _as_metadata_dict(metadata.get("selected_version"))
+    selected_version = as_dict(metadata.get("selected_version"))
     if not selected_version and looks_like_civitai_version:
         selected_version = civitai_data
-    path_metadata = _as_metadata_dict(metadata.get("path_metadata"))
+    path_metadata = as_dict(metadata.get("path_metadata"))
 
     # Extract images with metadata
     images = []
@@ -1630,7 +1525,7 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
                 images.append(img_info)
 
     # Get trained words from common sidecar shapes, including LoRA Manager metadata.
-    trained_words = _normalize_metadata_trained_words(
+    trained_words = extract_trained_words(
         metadata.get("trained_words"),
         metadata.get("trainedWords"),
         civitai_data.get("trainedWords"),
@@ -1641,11 +1536,11 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     # Get model info
-    model_info = _as_metadata_dict(civitai_data.get("model"))
-    file_infos = _as_metadata_list(civitai_data.get("files"))
-    file_info = _as_metadata_dict(file_infos[0]) if file_infos else {}
-    metadata_hashes = _as_metadata_dict(metadata.get("hashes"))
-    file_hashes = _as_metadata_dict(file_info.get("hashes"))
+    model_info = as_dict(civitai_data.get("model"))
+    file_infos = as_list(civitai_data.get("files"))
+    file_info = as_dict(file_infos[0]) if file_infos else {}
+    metadata_hashes = as_dict(metadata.get("hashes"))
+    file_hashes = as_dict(file_info.get("hashes"))
 
     # Build model_id from CivitAI data
     model_id = (
@@ -1664,7 +1559,7 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
         or metadata.get("metadata_source")
         or "metadata"
     )
-    stored_page_url = _first_metadata_value(
+    stored_page_url = first_non_empty(
         metadata.get("version_url"),
         metadata.get("model_url"),
         metadata.get("page_url"),
@@ -1689,7 +1584,7 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
         "source": details_source,
         "details_source": details_source,
         "model_id": model_id,
-        "model_name": _first_metadata_value(
+        "model_name": first_non_empty(
             metadata.get("model_name"),
             metadata.get("modelName"),
             model_info.get("name"),
@@ -1699,14 +1594,14 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
         or "",
         "model_type": model_info.get("type", "") or civitai_data.get("type", ""),
         "version_id": version_id,
-        "version_name": _first_metadata_value(
+        "version_name": first_non_empty(
             metadata.get("version_name"),
             metadata.get("versionName"),
             selected_version.get("name"),
             civitai_data.get("name"),
         )
         or "",
-        "sha256": _first_metadata_value(
+        "sha256": first_non_empty(
             metadata.get("sha256"),
             metadata.get("hash"),
             metadata_hashes.get("SHA256"),
@@ -1715,8 +1610,8 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
             file_hashes.get("sha256"),
         )
         or "",
-        "size": _metadata_size_to_bytes(
-            _first_metadata_value(
+        "size": parse_size_to_bytes(
+            first_non_empty(
                 metadata.get("size"),
                 metadata.get("file_size"),
                 metadata.get("fileSize"),
@@ -1735,12 +1630,12 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
         "model_url": stored_page_url or civitai_model_url,
         "source_url": stored_page_url,
         "platform_url": metadata.get("platform_url") or path_metadata.get("platform_url"),
-        "download_url": _first_metadata_value(
+        "download_url": first_non_empty(
             metadata.get("download_url"),
             civitai_data.get("downloadUrl"),
             file_info.get("downloadUrl"),
         ),
-        "base_model": _first_metadata_value(
+        "base_model": first_non_empty(
             metadata.get("base_model"),
             metadata.get("baseModel"),
             selected_version.get("base_model"),
@@ -1748,11 +1643,11 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
             civitai_data.get("baseModel"),
         )
         or "",
-        "tags": _as_metadata_list(metadata.get("tags") or model_info.get("tags")),
+        "tags": as_list(metadata.get("tags") or model_info.get("tags")),
         "trained_words": trained_words,
         "images": images,
         "clip_skip": civitai_data.get("clipSkip"),
-        "description": _first_metadata_value(
+        "description": first_non_empty(
             metadata.get("modelDescription"),
             metadata.get("model_description"),
             metadata.get("description"),
@@ -1760,7 +1655,7 @@ def _metadata_to_model_info(metadata: Dict[str, Any]) -> Dict[str, Any]:
             civitai_data.get("description"),
         )
         or "",
-        "model_description": _first_metadata_value(
+        "model_description": first_non_empty(
             metadata.get("modelDescription"),
             metadata.get("model_description"),
             model_info.get("description"),
@@ -1789,7 +1684,7 @@ def get_model_info_for_file(
     log.info(f"get_model_info_for_file called with: {file_path}")
 
     # First check for metadata file
-    metadata_path = _get_metadata_file_path(file_path)
+    metadata_path = find_metadata_sidecar_path(file_path)
     log.info(f"Looking for metadata file, checked: {metadata_path}")
 
     if metadata_path:

@@ -32,9 +32,11 @@ from ..type_utils import (
     get_version_sort_key,
     DEFAULT_BROWSER_USER_AGENT,
     parse_civitai_model_path,
-    fetch_remote_file_size,
     looks_like_model_file,
     normalize_model_image,
+    fetch_remote_file_size_cached,
+    clear_remote_size_cache,
+    extract_trained_words,
 )
 from ..progress import report_progress, get_progress_reporter
 from ..log_system import create_module_logger
@@ -59,7 +61,6 @@ MODEL_TITLE_MATCH_THRESHOLD = 82.0
 
 
 _search_cache: Dict[str, Any] = {}
-_download_size_cache: Dict[str, Optional[int]] = {}
 
 REQUEST_HEADERS = {
     "accept": "application/json,text/html;q=0.9,*/*;q=0.8",
@@ -76,7 +77,7 @@ class CivArchiveSearchError(Exception):
 def clear_search_cache():
     """Clear cached CivArchive search results."""
     _search_cache.clear()
-    _download_size_cache.clear()
+    clear_remote_size_cache()
 
 
 _report_progress = get_progress_reporter("CivArchive progress callback")
@@ -618,12 +619,7 @@ def _fetch_remote_file_size_bytes(url: Any, timeout: int = 15) -> Optional[int]:
     probe_url = _prepare_size_probe_url(url)
     if not probe_url:
         return None
-    if probe_url in _download_size_cache:
-        return _download_size_cache[probe_url]
-
-    size = fetch_remote_file_size(probe_url, headers=REQUEST_HEADERS, timeout=timeout)
-    _download_size_cache[probe_url] = size
-    return size
+    return fetch_remote_file_size_cached(probe_url, headers=REQUEST_HEADERS, timeout=timeout)
 
 
 
@@ -978,11 +974,7 @@ def _normalize_archive_version(
         for image in raw_images
         if isinstance(image, dict) and (image.get("url") or image.get("imageUrl") or image.get("src"))
     ]
-    trained_words = version.get("trainedWords") or version.get("trigger") or []
-    if isinstance(trained_words, str):
-        trained_words = [trained_words]
-    elif not isinstance(trained_words, list):
-        trained_words = []
+    trained_words = extract_trained_words(version.get("trainedWords"), version.get("trigger"))
     return {
         "id": version_id,
         "name": version.get("name") or "",
@@ -1699,11 +1691,7 @@ def _build_result_from_payload(
     if not isinstance(tags, list):
         tags = [tags] if tags else []
 
-    trained_words = version.get("trainedWords") or version.get("trigger") or []
-    if isinstance(trained_words, str):
-        trained_words = [trained_words]
-    elif not isinstance(trained_words, list):
-        trained_words = []
+    trained_words = extract_trained_words(version.get("trainedWords"), version.get("trigger"))
 
     civarchive_url = (
         f"{CIVARCHIVE_BASE_URL}/models/{model_id}?modelVersionId={version_id}"

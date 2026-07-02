@@ -18,7 +18,7 @@ from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
 from ..path_utils import write_json_atomic, METADATA_DIR, read_json_safe
-from ..type_utils import check_credential_http, parse_size_header as _parse_size_header, fetch_remote_file_size
+from ..type_utils import check_credential_http, parse_size_header as _parse_size_header, fetch_remote_file_size, fetch_remote_file_size_cached, clear_remote_size_cache
 
 HF_API_URL = "https://huggingface.co/api"
 HF_AUTHOR_FALLBACKS = ["Comfy-Org"]
@@ -33,7 +33,6 @@ HF_AUTHOR_INDEX_CACHE_PATH = os.path.join(
 # Cache for search results
 _search_cache: Dict[str, Any] = {}
 _author_index_cache: Dict[str, Dict[str, Any]] = {}
-_download_size_cache: Dict[str, Optional[int]] = {}
 _author_index_lock = threading.RLock()
 
 
@@ -41,7 +40,7 @@ def clear_search_cache():
     """Clear cached HuggingFace search results and in-memory indexes."""
     global _search_cache, _author_index_cache
     _search_cache.clear()
-    _download_size_cache.clear()
+    clear_remote_size_cache()
     with _author_index_lock:
         _author_index_cache.clear()
 
@@ -369,16 +368,7 @@ def _fetch_remote_file_size_bytes(
     probe_url = _normalize_huggingface_size_probe_url(url)
     if not probe_url:
         return None
-
-    request_headers = {**(headers or {}), "Accept-Encoding": "identity"}
-    cache_scope = "token" if request_headers.get("Authorization") else "public"
-    cache_key = f"{cache_scope}::{probe_url}"
-    if cache_key in _download_size_cache:
-        return _download_size_cache[cache_key]
-
-    size = fetch_remote_file_size(probe_url, headers=request_headers, timeout=timeout)
-    _download_size_cache[cache_key] = size
-    return size
+    return fetch_remote_file_size_cached(probe_url, headers=headers, timeout=timeout)
 
 
 

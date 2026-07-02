@@ -21,7 +21,7 @@ except ImportError:
     log.warning("Model Resolver: folder_paths not available yet - will retry later")
 
 
-from .type_utils import URN_TYPE_MAP, MODEL_EXTENSIONS
+from .type_utils import URN_TYPE_MAP, MODEL_EXTENSIONS, unique_ordered_strings
 
 URN_REGEX = re.compile(r"^urn:air:([^:]+):([^:]+):([^:]+):(\d+)@(\d+)$")
 
@@ -295,18 +295,6 @@ def normalize_widget_name(value: Any) -> str:
     return re.sub(r"[_\s-]+", "_", str(value or "").strip().lower()).strip("_")
 
 
-def _unique_strings(values: List[Any]) -> List[str]:
-    seen = set()
-    unique = []
-    for value in values:
-        text = str(value or "").strip()
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        unique.append(text)
-    return unique
-
-
 def _widget_item_name_candidates(item: Any) -> List[str]:
     if not isinstance(item, dict):
         return []
@@ -324,7 +312,7 @@ def _widget_item_name_candidates(item: Any) -> List[str]:
     elif widget:
         candidates.append(widget)
 
-    return _unique_strings(candidates)
+    return unique_ordered_strings(candidates)
 
 
 def _has_widget_input(item: Any) -> bool:
@@ -386,7 +374,7 @@ def get_widget_name_candidates(node: Dict[str, Any], widget_index: int) -> List[
     if isinstance(inputs, list) and widget_index < len(inputs):
         candidates.extend(_widget_item_name_candidates(inputs[widget_index]))
 
-    return _unique_strings(candidates)
+    return unique_ordered_strings(candidates)
 
 
 def get_widget_name_hint(node: Dict[str, Any], widget_index: int) -> str:
@@ -402,7 +390,7 @@ def is_workflow_model_widget_candidate(node: Dict[str, Any], widget_index: int) 
 
 
 def _ordered_unique_categories(values: List[Any]) -> List[str]:
-    return _unique_strings([value for value in values if value])
+    return unique_ordered_strings([value for value in values if value])
 
 
 def _merge_category_hints(

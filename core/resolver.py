@@ -23,7 +23,7 @@ from .workflow_analyzer import (
     should_scan_as_model_reference,
 )
 from .matcher import find_matches, strip_known_model_extension
-from .type_utils import as_dict, as_list, MODEL_EXTENSIONS as _MODEL_EXTENSIONS
+from .type_utils import as_dict, as_list, MODEL_EXTENSIONS as _MODEL_EXTENSIONS, unique_ordered_strings, extract_sha256_from_metadata, normalize_sha256
 from .workflow_updater import update_workflow_nodes
 from .sources.civitai import resolve_urn
 from .sources.huggingface import parse_huggingface_url as parse_hf_url
@@ -44,6 +44,7 @@ from .path_utils import (
     dedupe_local_base_directories,
     get_filename_from_path,
     read_json_safe,
+    find_metadata_sidecar_path,
 )
 
 
@@ -275,63 +276,9 @@ def search_local_matches(
     return deduplicated_matches
 
 
-SHA256_PATTERN = re.compile(r"^[a-fA-F0-9]{64}$")
-
-
-def normalize_sha256(value: Any) -> str:
-    """Return a normalized SHA256 hex string or an empty string."""
-    if value is None:
-        return ""
-
-    text = str(value).strip()
-    for prefix in ("sha256:", "sha256="):
-        if text.lower().startswith(prefix):
-            text = text[len(prefix):].strip()
-
-    return text.lower() if SHA256_PATTERN.match(text) else ""
-
-
-def _metadata_sidecar_candidates(model_path: str) -> List[str]:
-    if not model_path:
-        return []
-
-    directory = os.path.dirname(model_path)
-    filename = get_filename_from_path(model_path)
-    stem, _ = os.path.splitext(filename)
-
-    candidates = [
-        os.path.join(directory, f"{stem}.metadata.json"),
-        f"{model_path}.metadata.json",
-        os.path.join(directory, f"{filename}.metadata.json"),
-    ]
-
-    seen = set()
-    unique = []
-    for candidate in candidates:
-        key = os.path.normcase(os.path.abspath(candidate))
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(candidate)
-    return unique
-
-
-
 def _collect_hashes_from_container(value: Any) -> List[str]:
-    container = as_dict(value)
-    hashes = as_dict(container.get("hashes"))
-    return [
-        normalize_sha256(candidate)
-        for candidate in (
-            container.get("sha256"),
-            container.get("hash"),
-            container.get("SHA256"),
-            hashes.get("SHA256"),
-            hashes.get("sha256"),
-            hashes.get("hash"),
-        )
-        if normalize_sha256(candidate)
-    ]
+    h = extract_sha256_from_metadata(value)
+    return [h] if h else []
 
 
 def _metadata_file_matches_model(file_info: Dict[str, Any], model: Dict[str, Any]) -> bool:
@@ -384,19 +331,8 @@ def _extract_model_sha256_from_metadata(
             if isinstance(file_info, dict) and _metadata_file_matches_model(file_info, model):
                 values.extend(_collect_hashes_from_container(file_info))
 
-    return [value for value in _unique_ordered_strings(values) if normalize_sha256(value)]
+    return [value for value in unique_ordered_strings(values) if normalize_sha256(value)]
 
-
-def _unique_ordered_strings(values: List[Any]) -> List[str]:
-    seen = set()
-    unique = []
-    for value in values:
-        text = str(value or "").strip()
-        if not text or text in seen:
-            continue
-        seen.add(text)
-        unique.append(text)
-    return unique
 
 
 def search_local_matches_by_hash(
@@ -432,10 +368,7 @@ def search_local_matches_by_hash(
         if not model_path:
             continue
 
-        metadata_path = next(
-            (candidate for candidate in _metadata_sidecar_candidates(model_path) if os.path.exists(candidate)),
-            "",
-        )
+        metadata_path = find_metadata_sidecar_path(model_path)
         if not metadata_path:
             continue
 
@@ -495,34 +428,25 @@ def get_local_model_hash_metadata(
     model_info.setdefault("filename", get_filename_from_path(normalized_path))
     model_info.setdefault("relative_path", model_info.get("filename", ""))
 
-    first_metadata_path = ""
+    metadata_path = find_metadata_sidecar_path(normalized_path)
     last_hash_status = ""
-    for metadata_path in _metadata_sidecar_candidates(normalized_path):
-        if not os.path.exists(metadata_path):
-            continue
-
-        if not first_metadata_path:
-            first_metadata_path = metadata_path
-
+    if metadata_path:
         metadata = read_json_safe(metadata_path, None)
-        if not isinstance(metadata, dict) or not metadata:
-            log.debug(f"Could not read metadata sidecar for local hash lookup: {metadata_path}")
-            continue
-
-        last_hash_status = str(metadata.get("hash_status") or "").strip()
-        hashes = _extract_model_sha256_from_metadata(metadata, model_info)
-        if hashes:
-            return {
-                "exists": exists,
-                "metadata_path": metadata_path,
-                "hash_status": last_hash_status,
-                "hashes": hashes,
-                "sha256": hashes[0],
-            }
+        if isinstance(metadata, dict) and metadata:
+            last_hash_status = str(metadata.get("hash_status") or "").strip()
+            hashes = _extract_model_sha256_from_metadata(metadata, model_info)
+            if hashes:
+                return {
+                    "exists": exists,
+                    "metadata_path": metadata_path,
+                    "hash_status": last_hash_status,
+                    "hashes": hashes,
+                    "sha256": hashes[0],
+                }
 
     return {
         "exists": exists,
-        "metadata_path": first_metadata_path,
+        "metadata_path": metadata_path,
         "hash_status": last_hash_status,
         "hashes": [],
         "sha256": "",

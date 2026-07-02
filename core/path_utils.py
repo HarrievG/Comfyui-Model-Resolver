@@ -224,4 +224,35 @@ def get_comfy_root_path(folder_paths_module: Optional[Any] = None) -> str:
     return ""
 
 
+def find_metadata_sidecar_path(model_path: str) -> str:
+    """
+    Znajduje istniejący plik metadanych (np. .metadata.json, .civitai.info, .json)
+    powiązany z plikiem modelu i zwraca jego pełną ścieżkę. Zwraca pusty ciąg, jeśli brak.
+    """
+    if not model_path:
+        return ""
 
+    directory = os.path.dirname(model_path)
+    filename = get_filename_from_path(model_path)
+
+    # Base name without extension
+    base_name = filename.rsplit(".", 1)[0] if "." in filename else filename
+
+    # Wzorce nazw na podstawie civitai.py i resolver.py
+    possible_names = [
+        base_name + ".metadata.json",
+        filename + ".metadata.json",
+        base_name + ".civitai.info",
+        filename + ".civitai.info",
+        base_name + ".json",
+        filename + ".json",
+        filename.replace("_", " ").split()[0] + ".metadata.json" if "_" in base_name else None,
+    ]
+
+    for name in possible_names:
+        if name:
+            path = os.path.join(directory, name)
+            if os.path.exists(path):
+                return path
+
+    return ""
