@@ -1,7 +1,7 @@
 /**
 author: Azornes
 title: AzLogs
-version: 1.5.5
+version: 1.5.6
 description: Logging Setup - Central logging system
 
 Features:
