@@ -342,13 +342,9 @@ def calculate_filename_confidence(target_filename: str, candidate_filename: str)
     if target_norm == candidate_norm:
         return 100.0
 
-    similarity = calculate_similarity_with_normalization(
+    best_similarity = calculate_similarity_with_normalization(
         target_filename, candidate_filename
     )
-    similarity_no_ext = calculate_similarity_with_normalization(
-        os.path.splitext(target_filename)[0], os.path.splitext(candidate_filename)[0]
-    )
-    best_similarity = max(similarity, similarity_no_ext)
     
     # Cap similarity at 0.999 for non-exact matches to prevent false 100% scores
     if best_similarity >= 0.999:
@@ -375,12 +371,7 @@ def calculate_archived_model_confidence(
         if query_norm == candidate_norm:
             return 100.0
 
-        similarity = calculate_similarity_with_normalization(query, candidate)
-        similarity_no_ext = calculate_similarity_with_normalization(
-            os.path.splitext(query)[0],
-            os.path.splitext(candidate)[0],
-        )
-        score = max(similarity, similarity_no_ext)
+        score = calculate_similarity_with_normalization(query, candidate)
         if query_norm and candidate_norm and (
             query_norm in candidate_norm or candidate_norm in query_norm
         ):
@@ -401,3 +392,32 @@ def calculate_candidate_rank(
     return matches, confidence + score
 
 
+def build_filename_search_queries(filename: str) -> List[str]:
+    """
+    Build a list of candidate search queries from a filename by stripping
+    extensions and common precision/format suffixes (e.g. fp16, bf16, pruned).
+    """
+    basename = os.path.basename(filename or "").strip()
+    if not basename:
+        return []
+        
+    stem = os.path.splitext(basename)[0].strip()
+    stem_lower = stem.lower()
+    
+    # Pattern to match common precision/format suffixes
+    pattern = r"[-_]?(fp16|fp32|fp8|fp4|bf16|e4m3fn|mixed|scaled|pruned|emaonly|q4|q8)"
+    
+    # 1. Strip suffix followed by any other characters (like clean_filename_for_search)
+    cleaned = re.sub(pattern + r".*$", "", stem, flags=re.IGNORECASE).strip(" -_")
+    cleaned_lower = cleaned.lower()
+    
+    # 2. Strip suffix at the end of the stem (like simplified in search queries)
+    simplified = re.sub(pattern + r"$", "", stem_lower, flags=re.IGNORECASE).strip(" -_")
+    
+    queries = []
+    for query in [basename, stem, stem_lower, cleaned, cleaned_lower, simplified]:
+        query_val = (query or "").strip(" -_")
+        if query_val and query_val not in queries:
+            queries.append(query_val)
+            
+    return queries

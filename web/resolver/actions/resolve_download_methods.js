@@ -4,6 +4,7 @@ import { $el } from "../../../../../scripts/ui.js";
 import { createModuleLogger } from "../../log_system/log_funcs.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
 import { getModelCardUrl } from "../utils/url_utils.js";
+import { getCivitaiModelUrl } from "../globals.js";
 
 const log = createModuleLogger('resolve_download_methods');
 
@@ -2245,7 +2246,7 @@ export const resolveDownloadMethods = {
                     const civitai = data.civitai;
                     const labelHtml = this.renderVersionedModelNameHtml(civitai.name, civitai.version_name)
                         || this.escapeHtml(civitai.filename || 'Model');
-                    const url = modelUrl || `https://civitai.com/models/${modelId}?modelVersionId=${versionId}`;
+                    const url = modelUrl || getCivitaiModelUrl(modelId, versionId);
                     loadingEl.innerHTML = `<a href="${url}" target="_blank" class="mr-inline-civitai-link">${labelHtml}</a>`;
                 } else if (loadingEl) {
                     loadingEl.textContent = 'Not found';
@@ -2684,7 +2685,7 @@ export const resolveDownloadMethods = {
         }
 
         if (civitaiResult && civitaiResult.download_url) {
-            const modelUrl = civitaiResult.url || (civitaiResult.model_id ? `https://civitai.com/models/${civitaiResult.model_id}${civitaiResult.version_id ? `?modelVersionId=${civitaiResult.version_id}` : ''}` : '');
+            const modelUrl = civitaiResult.url || getCivitaiModelUrl(civitaiResult.model_id, civitaiResult.version_id);
             const downloadFilename = civitaiResult.filename || missing.civitai_info?.expected_filename || civitaiResult.name;
             const modelName = civitaiResult.name || missing.civitai_info?.model_name || downloadFilename || 'Model';
             const civitaiCategory = this.getSourceResultDownloadCategory?.(

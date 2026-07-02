@@ -24,7 +24,7 @@ log = create_module_logger(__name__)
 
 from .resolver import normalize_sha256
 from .path_utils import is_path_within, get_path_identity, write_json_atomic, read_json_safe, get_comfy_root_path, calculate_file_sha256 as _calculate_file_sha256, get_filename_from_path
-from .type_utils import as_dict, as_list, first_non_empty, format_size_bytes as format_bytes
+from .type_utils import as_dict, as_list, first_non_empty, format_size_bytes as format_bytes, DEFAULT_BROWSER_USER_AGENT, extract_response_file_size
 
 try:
     import folder_paths
@@ -51,11 +51,7 @@ CHUNK_SIZE = 1024 * 1024  # 1MB chunks for faster downloads
 CLI_LOG_INTERVAL = 5  # Log progress to CLI every N seconds
 ARIA2_RPC_TIMEOUT = (2, 5)  # local JSON-RPC should respond quickly
 ARIA2_IDLE_STOP_SECONDS = 5 * 60
-DOWNLOAD_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/126.0.0.0 Safari/537.36"
-)
+DOWNLOAD_USER_AGENT = DEFAULT_BROWSER_USER_AGENT
 
 from .settings import CATEGORY_MAP, load_settings, normalize_download_backend, normalize_download_category
 
@@ -1464,7 +1460,7 @@ def download_file(
         response.raise_for_status()
 
         # Get total size
-        total_size = int(response.headers.get("content-length", 0))
+        total_size = extract_response_file_size(response) or 0
         total_size_str = format_bytes(total_size) if total_size > 0 else "unknown"
         log.info(f"Size: {total_size_str}")
 

@@ -22,6 +22,7 @@ from ..matcher import (
     base_model_matches as _base_model_matches,
     base_model_score as _base_model_score,
     calculate_candidate_rank,
+    build_filename_search_queries,
 )
 from ..path_utils import get_filename_from_path
 from ..type_utils import (
@@ -2076,20 +2077,8 @@ def _is_hash_verified_exact_match(result: Optional[Dict[str, Any]], confidence: 
 
 
 def _build_search_queries(filename: str) -> List[str]:
-    basename = get_filename_from_path(filename or "").strip()
-    stem = os.path.splitext(basename)[0].strip()
-    simplified = re.sub(
-        r"[-_]?(fp16|fp32|fp8|fp4|bf16|e4m3fn|scaled|pruned|emaonly|mixed|q4|q8)$",
-        "",
-        stem,
-        flags=re.IGNORECASE,
-    ).strip(" -_")
-
-    queries = []
-    for query in [basename, stem, simplified]:
-        if query and query not in queries:
-            queries.append(query)
-    return queries
+    # Wrap the unified query builder helper
+    return build_filename_search_queries(filename)
 
 
 def search_civarchive(

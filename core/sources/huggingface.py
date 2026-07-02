@@ -19,6 +19,7 @@ log = create_module_logger(__name__)
 
 from ..path_utils import write_json_atomic, METADATA_DIR, read_json_safe
 from ..type_utils import check_credential_http, parse_size_header as _parse_size_header, fetch_remote_file_size, fetch_remote_file_size_cached, clear_remote_size_cache
+from ..matcher import build_filename_search_queries
 
 HF_API_URL = "https://huggingface.co/api"
 HF_AUTHOR_FALLBACKS = ["Comfy-Org"]
@@ -558,22 +559,8 @@ def _find_matching_file_in_author_index(
 
 
 def _build_huggingface_search_queries(filename: str) -> List[str]:
-    filename_base = os.path.splitext(os.path.basename(filename))[0].lower()
-    cleaned_base = clean_filename_for_search(filename).lower()
-    simplified_base = re.sub(
-        r"[-_]?(fp16|fp32|fp8|fp4|bf16|e4m3fn|mixed|scaled|pruned|emaonly|q4|q8)$",
-        "",
-        filename_base,
-        flags=re.IGNORECASE,
-    )
-
-    queries = []
-    for query in [filename_base, cleaned_base, simplified_base]:
-        query = (query or "").strip(" -_")
-        if query and query not in queries:
-            queries.append(query)
-
-    return queries
+    # Wrap the unified query builder helper
+    return build_filename_search_queries(filename)
 
 
 def _get_repos_by_author(

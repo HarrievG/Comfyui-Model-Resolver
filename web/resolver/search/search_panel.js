@@ -3,6 +3,7 @@ import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
 import { getModelCardUrl } from "../utils/url_utils.js";
+import { getCivitaiModelUrl } from "../globals.js";
 export const searchPanelMethods = {
     /**
      * Build stable cache key for a missing model entry
@@ -2250,7 +2251,7 @@ export const searchPanelMethods = {
             size: civitai.size,
             model_id: civitai.model_id || ids.modelId,
             version_id: civitai.version_id || ids.versionId,
-            model_url: civitai.url || `https://civitai.com/models/${ids.modelId}?modelVersionId=${ids.versionId}`,
+            model_url: civitai.url || getCivitaiModelUrl(ids.modelId, ids.versionId),
             base_model: civitai.base_model,
             tags: civitai.tags || [],
             searchedAt

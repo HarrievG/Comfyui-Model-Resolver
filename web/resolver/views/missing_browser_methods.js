@@ -5,6 +5,7 @@ import { getSvgIcon } from "../../utils/icon_utils.js";
 import { createFloatingTreePicker } from "../utils/tree_picker.js";
 import { showNotification as showNotificationUtils } from "../../utils/notification_utils.js";
 import { startSplitterDrag } from "../utils/splitter_drag.js";
+import { getCivitaiModelUrl } from "../globals.js";
 
 export const missingBrowserMethods = {
     getMissingFilename(missing = {}) {
@@ -2021,7 +2022,7 @@ export const missingBrowserMethods = {
 
         const modelId = missing.urn_model_id || missing.urn?.model_id;
         const versionId = missing.urn_version_id || missing.urn?.version_id;
-        const modelUrl = missing.is_urn && modelId ? `https://civitai.com/models/${modelId}${versionId ? '?modelVersionId=' + versionId : ''}` : '';
+        const modelUrl = missing.is_urn && modelId ? getCivitaiModelUrl(modelId, versionId) : '';
         const urnLoadingId = `urn-loading-${missing.node_id}-${missing.widget_index}`;
 
         if (missing.is_urn) {

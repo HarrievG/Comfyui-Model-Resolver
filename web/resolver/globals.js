@@ -1,4 +1,4 @@
-﻿export function registerGlobalHelpers() {
+export function registerGlobalHelpers() {
     // Global helper functions for inline onclick handlers
     window.MLToggleHidden = function(id, trigger, collapsedText, expandedText) {
         const element = document.getElementById(id);
@@ -129,4 +129,9 @@
             console.error('Model Resolver: Error opening context menu:', e);
         }
     };
+}
+
+export function getCivitaiModelUrl(modelId, versionId) {
+    if (!modelId) return '';
+    return `https://civitai.com/models/${encodeURIComponent(modelId)}${versionId ? `?modelVersionId=${encodeURIComponent(versionId)}` : ''}`;
 }

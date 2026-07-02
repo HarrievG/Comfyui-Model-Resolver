@@ -28,74 +28,7 @@ URN_REGEX = re.compile(r"^urn:air:([^:]+):([^:]+):([^:]+):(\d+)@(\d+)$")
 # Mapping of common node types to their expected model category
 # This is used as hints but we don't rely solely on this
 # UNETLoader uses 'diffusion_models' category (folder_paths maps 'unet' to 'diffusion_models')
-NODE_TYPE_TO_CATEGORY_HINTS = {
-    "CheckpointLoaderSimple": "checkpoints",
-    "CheckpointLoader": "checkpoints",
-    "DiffusersLoader": "diffusers",
-    "unCLIPCheckpointLoader": "checkpoints",
-    "ImageOnlyCheckpointLoader": "checkpoints",
-    "VAELoader": "vae",
-    "VAELoaderKJ": "vae",
-    "LoraLoader": "loras",
-    "LoraLoaderModelOnly": "loras",
-    "LoraLoaderBypass": "loras",
-    "LoraLoaderBypassModelOnly": "loras",
-    "LoraLoaderV2": "loras",
-    "Lora Loader (LoraManager)": "loras",  # LoraManager custom node
-    "Lora Stacker (LoraManager)": "loras",  # LoraManager Stacker node
-    "Power Lora Loader (rgthree)": "loras",  # rgthree's Power Lora Loader
-    "CreateHookLora": "loras",
-    "CreateHookLoraModelOnly": "loras",
-    "CreateHookModelAsLora": "checkpoints",
-    "CreateHookModelAsLoraModelOnly": "checkpoints",
-    "UNETLoader": "diffusion_models",
-    "LoaderGGUF": "diffusion_models",
-    "LoaderGGUFAdvanced": "diffusion_models",
-    "UnetLoaderGGUF": "diffusion_models",
-    "UnetLoaderGGUFAdvanced": "diffusion_models",
-    "LatentUpscaleModelLoader": "latent_upscale_models",
-    "CLIPLoader": "text_encoders",
-    "DualCLIPLoader": "text_encoders",
-    "CLIPLoaderGGUF": "text_encoders",
-    "ClipLoaderGGUF": "text_encoders",
-    "DualCLIPLoaderGGUF": "text_encoders",
-    "DualClipLoaderGGUF": "text_encoders",
-    "TripleCLIPLoader": "text_encoders",
-    "TripleClipLoader": "text_encoders",
-    "TripleCLIPLoaderGGUF": "text_encoders",
-    "TripleClipLoaderGGUF": "text_encoders",
-    "QuadrupleCLIPLoader": "text_encoders",
-    "QuadrupleClipLoader": "text_encoders",
-    "QuadrupleCLIPLoaderGGUF": "text_encoders",
-    "QuadrupleClipLoaderGGUF": "text_encoders",
-    "ControlNetLoader": "controlnet",
-    "DiffControlNetLoader": "controlnet",
-    "ControlNetLoaderAdvanced": "controlnet",
-    "ACN_ControlNetLoaderAdvanced": "controlnet",
-    "ACN_DiffControlNetLoaderAdvanced": "controlnet",
-    "CLIPVisionLoader": "clip_vision",
-    "StyleModelLoader": "style_models",
-    "GLIGENLoader": "gligen",
-    "UpscaleModelLoader": "upscale_models",
-    "SAMLoader": "sams",
-    "UltralyticsDetectorProvider": "ultralytics",
-    "AudioEncoderLoader": "audio_encoders",
-    "LoadBackgroundRemovalModel": "background_removal",
-    "LoadDA3Model": "geometry_estimation",
-    "FrameInterpolationModelLoader": "frame_interpolation",
-    "LoadMediaPipeFaceLandmarker": "detection",
-    "ModelPatchLoader": "model_patches",
-    "LoadMoGeModel": "geometry_estimation",
-    "PhotoMakerLoader": "photomaker",
-    "OpticalFlowLoader": "optical_flow",
-    "HypernetworkLoader": "hypernetworks",
-    "EmbeddingLoader": "embeddings",
-    # LTX-Video nodes
-    "LTXVAudioVAELoader": "checkpoints",
-    "LowVRAMAudioVAELoader": "checkpoints",
-    "LTXVGemmaCLIPModelLoader": "text_encoders",
-    "LTXAVTextEncoderLoader": "text_encoders",
-}
+NODE_TYPE_TO_CATEGORY_HINTS = {}
 
 # Workflow widget_values do not always include file extensions. ComfyUI still
 # validates these combo widgets against folder_paths by exact value at queue time.
@@ -198,6 +131,22 @@ NODE_TYPE_MODEL_WIDGET_CATEGORIES = {
     "LTXVGemmaCLIPModelLoader": {0: "text_encoders"},
     "LTXAVTextEncoderLoader": {0: "text_encoders", 1: "checkpoints"},
 }
+
+# Mapping of common node types to their expected model category.
+# Derived dynamically from NODE_TYPE_MODEL_WIDGET_CATEGORIES.
+NODE_TYPE_TO_CATEGORY_HINTS = {
+    node_type: widget_map[min(widget_map.keys())]
+    for node_type, widget_map in NODE_TYPE_MODEL_WIDGET_CATEGORIES.items()
+    if widget_map
+}
+
+# Fallbacks and overrides for custom nodes that do not use standard model widget indices
+NODE_TYPE_TO_CATEGORY_HINTS.update({
+    "LoraLoaderV2": "loras",
+    "Lora Loader (LoraManager)": "loras",
+    "Lora Stacker (LoraManager)": "loras",
+    "Power Lora Loader (rgthree)": "loras",
+})
 
 # Model category hints by widget/input name. Workflow JSON does not always preserve
 # widget names, but when it does this catches custom loaders without a node-type entry.

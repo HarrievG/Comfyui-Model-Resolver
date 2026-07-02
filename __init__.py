@@ -189,6 +189,7 @@ class ModelResolverExtension:
                     format_size_bytes,
                     normalize_sha256,
                     extract_sha256_from_metadata,
+                    fetch_remote_file_size_cached,
                 )
                 from .core.settings import (
                     TEMPLATE_KEY_ALIASES,
@@ -426,24 +427,8 @@ class ModelResolverExtension:
                                     else:
                                         source = "workflow"
 
-                                    # Try to get file size with HEAD request (non-blocking, timeout quickly)
-                                    file_size = None
-                                    try:
-                                        import requests
-
-                                        head_response = requests.head(
-                                            workflow_url,
-                                            allow_redirects=True,
-                                            timeout=5,
-                                        )
-                                        if head_response.status_code == 200:
-                                            file_size = int(
-                                                head_response.headers.get(
-                                                    "content-length", 0
-                                                )
-                                            )
-                                    except Exception:
-                                        pass  # Size unknown is fine
+                                    # Try to get file size using cached remote helper
+                                    file_size = fetch_remote_file_size_cached(workflow_url, timeout=5)
 
                                     missing["download_source"] = {
                                         "source": source,

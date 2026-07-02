@@ -4,6 +4,7 @@ import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
 import { escapeHtml, escapeJsString, sanitizeDescriptionHtml } from "../utils/html_utils.js";
 import { getModelCardUrl } from "../utils/url_utils.js";
+import { getCivitaiModelUrl } from "../globals.js";
 export const modelInfoMethods = {
     /**
      * Handle click outside context menu to hide it
@@ -270,7 +271,7 @@ export const modelInfoMethods = {
         const modelId = model?.model_id || model?.modelId || model?.civitai_model_id || model?.civitaiModelId || model?.id || '';
         const versionId = model?.version_id || model?.versionId || model?.modelVersionId || model?.civitai_model_version_id || model?.civitaiModelVersionId || '';
         if (sourceKey === 'civitai' && modelId) {
-            return `https://civitai.com/models/${modelId}${versionId ? `?modelVersionId=${versionId}` : ''}`;
+            return getCivitaiModelUrl(modelId, versionId);
         }
         if (sourceKey === 'civarchive' && modelId) {
             return `https://civarchive.com/models/${modelId}${versionId ? `?modelVersionId=${versionId}` : ''}`;
@@ -1080,7 +1081,7 @@ export const modelInfoMethods = {
         const modelId = model.model_id || model.modelId;
         const versionId = model.version_id || model.versionId;
         if (modelId) {
-            return `https://civitai.com/models/${modelId}${versionId ? `?modelVersionId=${versionId}` : ''}`;
+            return getCivitaiModelUrl(modelId, versionId);
         }
         return '';
     },
@@ -2366,7 +2367,7 @@ export const modelInfoMethods = {
                 const versionId = resource.modelVersionId || resource.versionId || resource.model_version_id;
                 const url = resource.url
                     || resource.modelUrl
-                    || (modelId ? `https://civitai.com/models/${modelId}${versionId ? `?modelVersionId=${versionId}` : ''}` : '');
+                    || getCivitaiModelUrl(modelId, versionId);
                 return {
                     name: resource.name || resource.modelName || resource.model || resource.hash || 'Resource',
                     version: resource.versionName || resource.modelVersionName || resource.version || '',
@@ -2811,7 +2812,7 @@ export const modelInfoMethods = {
             || contextModel.civitaiModelVersionId;
 
         if (modelId) {
-            return `https://civitai.com/models/${encodeURIComponent(modelId)}${versionId ? `?modelVersionId=${encodeURIComponent(versionId)}` : ''}`;
+            return getCivitaiModelUrl(modelId, versionId);
         }
 
         const explicitUrl = selectedVersion.platform_url
