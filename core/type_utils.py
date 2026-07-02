@@ -582,7 +582,7 @@ def looks_like_model_file(url: str, expected_filename: str = "") -> bool:
     from urllib.parse import unquote, urlparse
 
     text = str(url or "").strip()
-    if not text.startswith(("http://", "https://")):
+    if not text.startswith(("http://", "https://", "hf://")):
         return False
     try:
         parsed = urlparse(text)
