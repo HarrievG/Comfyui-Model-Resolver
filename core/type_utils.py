@@ -60,6 +60,29 @@ MODEL_EXTENSIONS = {
 }
 
 
+PRECISION_FORMAT_SUFFIXES = [
+    "fp16",
+    "fp32",
+    "fp8",
+    "fp4",
+    "bf16",
+    "e4m3fn",
+    "mixed",
+    "scaled",
+    "pruned",
+    "emaonly",
+    "q4",
+    "q8",
+]
+
+
+def get_generic_filename_tokens() -> set:
+    """Return a set of generic filename tokens (extensions and suffixes) in lowercase."""
+    dotless_extensions = {ext.lstrip(".") for ext in MODEL_EXTENSIONS}
+    return dotless_extensions | set(PRECISION_FORMAT_SUFFIXES)
+
+
+
 def first_non_empty(*values: Any, default: Any = "") -> Any:
     """
     Return the first value that is not None, not an empty/whitespace-only string,

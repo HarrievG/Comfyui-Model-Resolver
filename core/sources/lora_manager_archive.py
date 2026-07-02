@@ -18,7 +18,7 @@ from ..matcher import (
     base_model_score as _base_model_score,
     calculate_candidate_rank,
 )
-from ..type_utils import select_primary_model_file
+from ..type_utils import select_primary_model_file, get_generic_filename_tokens
 from ..progress import report_progress, get_progress_reporter
 from ..log_system import create_module_logger
 log = create_module_logger(__name__)
@@ -29,22 +29,7 @@ DEFAULT_DB_RELATIVE_PATH = os.path.join("civitai", "civitai.sqlite")
 
 _search_cache: Dict[str, Any] = {}
 _db_path_cache: Optional[str] = None
-GENERIC_FILENAME_TOKENS = {
-    "safetensors",
-    "ckpt",
-    "pt",
-    "pth",
-    "bin",
-    "onnx",
-    "gguf",
-    "fp16",
-    "fp32",
-    "bf16",
-    "e4m3fn",
-    "scaled",
-    "pruned",
-    "emaonly",
-}
+GENERIC_FILENAME_TOKENS = get_generic_filename_tokens()
 
 
 def clear_search_cache():

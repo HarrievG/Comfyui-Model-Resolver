@@ -19,7 +19,7 @@ log = create_module_logger(__name__)
 
 from ..path_utils import write_json_atomic, METADATA_DIR, read_json_safe
 from ..type_utils import check_credential_http, parse_size_header as _parse_size_header, fetch_remote_file_size, fetch_remote_file_size_cached, clear_remote_size_cache, extract_file_size
-from ..matcher import build_filename_search_queries
+from ..matcher import build_filename_search_queries, clean_filename_for_search
 
 HF_API_URL = "https://huggingface.co/api"
 HF_AUTHOR_FALLBACKS = ["Comfy-Org"]
@@ -356,23 +356,6 @@ def _fetch_remote_file_size_bytes(
     if not probe_url:
         return None
     return fetch_remote_file_size_cached(probe_url, headers=headers, timeout=timeout)
-
-
-
-def clean_filename_for_search(filename: str) -> str:
-    """
-    Clean up filename for better search results.
-    Remove common suffixes that might prevent matches.
-    """
-    base = os.path.splitext(filename)[0]
-    # Remove common precision/format suffixes
-    base = re.sub(
-        r"[-_]?(fp16|fp32|fp8|fp4|bf16|e4m3fn|scaled|pruned|emaonly|mixed|q4|q8).*$",
-        "",
-        base,
-        flags=re.IGNORECASE,
-    )
-    return base
 
 
 def _build_huggingface_result(

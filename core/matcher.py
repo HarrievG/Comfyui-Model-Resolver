@@ -284,7 +284,7 @@ def base_model_score(candidate: str, preferred: Optional[str]) -> float:
 
 # ==================== CENTRALIZED MATCHING & CONFIDENCE HELPERS ====================
 
-from .type_utils import MODEL_EXTENSIONS
+from .type_utils import MODEL_EXTENSIONS, PRECISION_FORMAT_SUFFIXES
 MODEL_FILE_EXTENSIONS = MODEL_EXTENSIONS
 
 
@@ -392,6 +392,19 @@ def calculate_candidate_rank(
     return matches, confidence + score
 
 
+def clean_filename_for_search(filename: str) -> str:
+    """
+    Clean up filename for better search results.
+    Remove common suffixes that might prevent matches.
+    """
+    if not filename:
+        return ""
+    basename = os.path.basename(filename).strip()
+    base = os.path.splitext(basename)[0]
+    pattern = r"[-_]?(" + "|".join(PRECISION_FORMAT_SUFFIXES) + r").*$"
+    return re.sub(pattern, "", base, flags=re.IGNORECASE).strip(" -_")
+
+
 def build_filename_search_queries(filename: str) -> List[str]:
     """
     Build a list of candidate search queries from a filename by stripping
@@ -405,7 +418,7 @@ def build_filename_search_queries(filename: str) -> List[str]:
     stem_lower = stem.lower()
     
     # Pattern to match common precision/format suffixes
-    pattern = r"[-_]?(fp16|fp32|fp8|fp4|bf16|e4m3fn|mixed|scaled|pruned|emaonly|q4|q8)"
+    pattern = r"[-_]?(" + "|".join(PRECISION_FORMAT_SUFFIXES) + r")"
     
     # 1. Strip suffix followed by any other characters (like clean_filename_for_search)
     cleaned = re.sub(pattern + r".*$", "", stem, flags=re.IGNORECASE).strip(" -_")
