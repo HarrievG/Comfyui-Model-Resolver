@@ -37,7 +37,7 @@ from ..type_utils import (
     normalize_model_image,
 )
 from ..progress import report_progress, get_progress_reporter
-from ..log_system.log_funcs import create_module_logger
+from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
 
@@ -137,7 +137,7 @@ def _extract_next_data(html_text: str) -> Dict[str, Any]:
     try:
         return json.loads(html.unescape(match.group(1)))
     except Exception as e:
-        log.warn(f"CivArchive search JSON parse failed: {e}")
+        log.warning(f"CivArchive search JSON parse failed: {e}")
         return {}
 
 
@@ -158,7 +158,7 @@ def _request_json(
                 timeout=timeout,
             )
         except Exception as e:
-            log.warn(f"CivArchive API request failed: path={path}, error={e}")
+            log.warning(f"CivArchive API request failed: path={path}, error={e}")
             return None
 
         if response.status_code != 429 or attempt == 1:
@@ -181,7 +181,7 @@ def _request_json(
     try:
         return response.json()
     except Exception as e:
-        log.warn(f"CivArchive API JSON parse failed: path={path}, error={e}")
+        log.warning(f"CivArchive API JSON parse failed: path={path}, error={e}")
         return None
 
 
@@ -211,7 +211,7 @@ def _request_page_text(
             timeout=timeout,
         )
     except Exception as e:
-        log.warn(f"CivArchive page request failed: url={url}, error={e}")
+        log.warning(f"CivArchive page request failed: url={url}, error={e}")
         return None
 
     if response.status_code != 200:
@@ -472,11 +472,11 @@ def _search_page(
             timeout=timeout,
         )
     except Exception as e:
-        log.warn(f"CivArchive search request failed: query={query}, error={e}")
+        log.warning(f"CivArchive search request failed: query={query}, error={e}")
         raise CivArchiveSearchError(str(e)) from e
 
     if response.status_code != 200:
-        log.warn(
+        log.warning(
             f"CivArchive search returned {response.status_code}: query={query}"
         )
         raise CivArchiveSearchError(f"HTTP {response.status_code}")

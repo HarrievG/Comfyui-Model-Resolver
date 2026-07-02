@@ -7,7 +7,7 @@ Updates workflow JSON by replacing model paths in nodes.
 import os
 from typing import Dict, Any, List, Optional
 
-from .log_system.log_funcs import create_module_logger
+from .log_system import create_module_logger
 log = create_module_logger(__name__)
 
 
@@ -201,13 +201,13 @@ def update_model_path(
 
     if not node:
         location = f"subgraph {subgraph_id}" if subgraph_id else "top-level"
-        log.warn(f"Node {node_id} not found in {location}")
+        log.warning(f"Node {node_id} not found in {location}")
         return False
 
     widgets_values = node.get("widgets_values", [])
 
     if widget_index >= len(widgets_values):
-        log.warn(f"Widget index {widget_index} out of range for node {node_id}")
+        log.warning(f"Widget index {widget_index} out of range for node {node_id}")
         return False
 
     # Get category from resolved_model if not provided
@@ -289,12 +289,12 @@ def update_model_path(
                     return True
                 else:
                     # Log the actual lora list for debugging
-                    log.warn(
+                    log.warning(
                         f"Lora '{original_lora_name}' not found in lora list. Available: {[li.get('name') for li in lora_list if isinstance(li, dict)]}"
                     )
                     return False
         else:
-            log.warn(
+            log.warning(
                 f"LoraManager widget_index == 2 but lora_list is not a list: {type(lora_list)}"
             )
             return False
@@ -357,7 +357,7 @@ def update_workflow_nodes(
         resolved_path = mapping.get("resolved_path")
 
         if not all([node_id is not None, widget_index is not None, resolved_path]):
-            log.warn(f"Invalid mapping: {mapping}")
+            log.warning(f"Invalid mapping: {mapping}")
             continue
 
         # Try to get base_directory from resolved_model if provided

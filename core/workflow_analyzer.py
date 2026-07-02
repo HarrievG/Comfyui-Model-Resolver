@@ -9,7 +9,7 @@ import re
 import threading
 from typing import List, Dict, Any, Optional, Set
 
-from .log_system.log_funcs import create_module_logger
+from .log_system import create_module_logger
 log = create_module_logger(__name__)
 
 
@@ -18,7 +18,7 @@ try:
     import folder_paths
 except ImportError:
     folder_paths = None
-    log.warn("Model Resolver: folder_paths not available yet - will retry later")
+    log.warning("Model Resolver: folder_paths not available yet - will retry later")
 
 
 from .type_utils import URN_TYPE_MAP, MODEL_EXTENSIONS
@@ -2012,7 +2012,7 @@ def analyze_workflow_models(
                     )
             all_model_refs.extend(model_refs)
         except Exception as e:
-            log.warn(f"Error analyzing node {node.get('id', 'unknown')}: {e}")
+            log.warning(f"Error analyzing node {node.get('id', 'unknown')}: {e}")
             continue
 
     # Recursively analyze subgraphs (definitions already loaded above)
@@ -2045,7 +2045,7 @@ def analyze_workflow_models(
                     _apply_promoted_widget_locator(ref, promoted_widget_contexts)
                 all_model_refs.extend(model_refs)
             except Exception as e:
-                log.warn(
+                log.warning(
                     f"Error analyzing subgraph node {node.get('id', 'unknown')}: {e}"
                 )
                 continue

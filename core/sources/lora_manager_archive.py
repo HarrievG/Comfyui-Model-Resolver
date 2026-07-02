@@ -20,7 +20,7 @@ from ..matcher import (
 )
 from ..type_utils import select_primary_model_file
 from ..progress import report_progress, get_progress_reporter
-from ..log_system.log_funcs import create_module_logger
+from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
 
@@ -108,7 +108,7 @@ def _connect_readonly() -> Optional[sqlite3.Connection]:
         conn.row_factory = sqlite3.Row
         return conn
     except Exception as e:
-        log.warn(f"Failed to open LoRA Manager archive DB: {e}")
+        log.warning(f"Failed to open LoRA Manager archive DB: {e}")
         return None
 
 

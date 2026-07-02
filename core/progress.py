@@ -5,7 +5,7 @@ Unified utility for reporting progress of asynchronous search and download opera
 """
 
 from typing import Dict, Any, Optional, Callable
-from .log_system.log_funcs import create_module_logger
+from .log_system import create_module_logger
 log = create_module_logger(__name__)
 
 

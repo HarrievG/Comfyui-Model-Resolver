@@ -10,7 +10,7 @@ import json
 from typing import Dict, Any, List, Optional, Tuple, Callable
 from urllib.parse import unquote
 
-from .log_system.log_funcs import create_module_logger
+from .log_system import create_module_logger
 log = create_module_logger(__name__)
 
 from .scanner import get_model_files

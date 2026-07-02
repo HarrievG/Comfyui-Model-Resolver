@@ -19,7 +19,7 @@ from pathlib import Path
 from collections import deque
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
-from .log_system.log_funcs import create_module_logger
+from .log_system import create_module_logger
 log = create_module_logger(__name__)
 
 from .resolver import normalize_sha256
@@ -196,7 +196,7 @@ def _resolve_civitai_download_url_for_aria2(
         log.debug("Resolved CivitAI download redirect for aria2")
         return resolved_url
     except Exception as exc:
-        log.warn(f"Could not pre-resolve CivitAI download URL for aria2: {exc}")
+        log.warning(f"Could not pre-resolve CivitAI download URL for aria2: {exc}")
         return url
     finally:
         if response is not None:
@@ -628,7 +628,7 @@ def write_lora_manager_metadata(
         log.info(f"Metadata saved: {metadata_path}")
         return metadata_path
     except Exception as e:
-        log.warn(f"Could not save metadata sidecar for {dest_path}: {e}")
+        log.warning(f"Could not save metadata sidecar for {dest_path}: {e}")
         return None
 
 
@@ -1149,7 +1149,7 @@ def _delete_partial_download_files(dest_path: str) -> None:
             if path and os.path.exists(path):
                 os.remove(path)
         except Exception as exc:
-            log.warn(f"Could not delete incomplete download file {path}: {exc}")
+            log.warning(f"Could not delete incomplete download file {path}: {exc}")
 
 
 def download_file_with_aria2(
@@ -1561,7 +1561,7 @@ def download_file(
                 else:
                     log.info(f"Cancelled: {filename} - no file to delete")
             except Exception as e:
-                log.warn(f"Could not delete incomplete file {dest_path}: {e}")
+                log.warning(f"Could not delete incomplete file {dest_path}: {e}")
                 # Try harder on Windows - sometimes the file handle takes a moment to release
                 try:
                     time.sleep(0.5)  # time is already imported at module level
@@ -1722,7 +1722,7 @@ def download_model(
                 error_msg = (
                     f"File already exists and its SHA256 could not be verified: {dest_path}"
                 )
-                log.warn(f"{error_msg} ({e})")
+                log.warning(f"{error_msg} ({e})")
                 return {
                     "success": False,
                     "download_id": download_id,
@@ -1778,7 +1778,7 @@ def download_model(
                 "File already exists, but its SHA256 does not match the selected "
                 f"source: {dest_path}"
             )
-            log.warn(
+            log.warning(
                 f"{error_msg} (existing={existing_sha256}, expected={expected_sha256})"
             )
             return {
@@ -1823,7 +1823,7 @@ def _force_remove_aria2_transfer(download_id: str, gid: str) -> None:
     try:
         _aria2_rpc("aria2.forceRemove", [gid])
     except Exception as exc:
-        log.warn(f"Could not cancel aria2 download {download_id}: {exc}")
+        log.warning(f"Could not cancel aria2 download {download_id}: {exc}")
 
 
 def _get_aria2_action_lock(download_id: str) -> threading.Lock:
@@ -1884,7 +1884,7 @@ def _run_aria2_desired_state_worker(download_id: str) -> None:
             if _aria2_action_error_is_ok(desired_status, str(exc)):
                 _set_download_progress_status(download_id, desired_status, speed=0 if desired_status == "paused" else download_progress.get(download_id, {}).get("speed", 0))
             else:
-                log.warn(f"aria2 {desired_status} action failed for {download_id}: {exc}")
+                log.warning(f"aria2 {desired_status} action failed for {download_id}: {exc}")
 
         with aria2_lock:
             latest = aria2_desired_states.get(download_id)

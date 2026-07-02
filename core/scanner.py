@@ -8,7 +8,7 @@ import os
 import time
 from typing import List, Dict, Tuple, Optional
 
-from .log_system.log_funcs import create_module_logger
+from .log_system import create_module_logger
 log = create_module_logger(__name__)
 
 
@@ -20,7 +20,7 @@ try:
     import folder_paths
 except ImportError:
     folder_paths = None
-    log.warn("Model Resolver: folder_paths not available yet - will retry later")
+    log.warning("Model Resolver: folder_paths not available yet - will retry later")
 
 _MODEL_FILES_CACHE: Optional[List[Dict[str, str]]] = None
 _MODEL_FILES_CACHE_AT: float = 0.0
@@ -192,7 +192,7 @@ def scan_directory(
                         }
                     )
     except (OSError, PermissionError) as e:
-        log.warn(f"Error scanning directory {directory}: {e}")
+        log.warning(f"Error scanning directory {directory}: {e}")
 
     return models
 
@@ -242,7 +242,7 @@ def scan_all_directories() -> List[Dict[str, str]]:
             elif raw_exts:
                 extensions = {str(raw_exts).lower()}
         except Exception as e:
-            log.warn(f"Error interpreting folder_paths entry for {category}: {e}")
+            log.warning(f"Error interpreting folder_paths entry for {category}: {e}")
             continue
 
         for directory_path in paths:
@@ -268,7 +268,7 @@ def scan_all_directories() -> List[Dict[str, str]]:
                     all_models.append(model)
                 #log.debug(f"Found {len(models)} models in {category}/{directory_path}")
             except Exception as e:
-                log.warn(f"Error scanning {category} directory {directory_path}: {e}")
+                log.warning(f"Error scanning {category} directory {directory_path}: {e}")
 
     return all_models
 

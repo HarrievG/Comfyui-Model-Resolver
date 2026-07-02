@@ -12,7 +12,7 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 
-from ..log_system.log_funcs import create_module_logger
+from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
 
@@ -285,7 +285,7 @@ def get_base_models_status(check_remote: bool = False) -> Dict[str, Any]:
                     "update_available": new_models_found
                 })
         except Exception as e:
-            log.warn(f"Error checking remote base models: {e}")
+            log.warning(f"Error checking remote base models: {e}")
             
     return status
 

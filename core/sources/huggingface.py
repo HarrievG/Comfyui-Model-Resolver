@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional, List, Callable
 from urllib.parse import urlparse, quote
 
 from ..progress import report_progress, get_progress_reporter
-from ..log_system.log_funcs import create_module_logger
+from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
 from ..path_utils import write_json_atomic, METADATA_DIR
@@ -255,7 +255,7 @@ def _get_author_index(
             return fresh_index
 
         if persistent_index:
-            log.warn(
+            log.warning(
                 f"Using stale HuggingFace author index for author={author}; refresh failed"
             )
             _author_index_cache[cache_key] = persistent_index
@@ -642,7 +642,7 @@ def _search_brave_for_huggingface_candidates(
             BRAVE_SEARCH_API_URL, headers=headers, params=params, timeout=15
         )
         if response.status_code != 200:
-            log.warn(
+            log.warning(
                 f"Brave search returned {response.status_code} for query={query}"
             )
             return []
@@ -760,7 +760,7 @@ def search_huggingface_for_file(
                 search_url = f"{HF_API_URL}/models?search={quote(search_query)}&limit=20"
                 response = requests.get(search_url, headers=headers, timeout=10)
                 if response.status_code != 200:
-                    log.warn(
+                    log.warning(
                         f"HuggingFace API status={response.status_code} query={search_query}"
                     )
                     continue

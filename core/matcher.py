@@ -10,7 +10,7 @@ import heapq
 from typing import List, Dict, Tuple, Optional
 from difflib import SequenceMatcher
 
-from .log_system.log_funcs import create_module_logger
+from .log_system import create_module_logger
 log = create_module_logger(__name__)
 
 try:

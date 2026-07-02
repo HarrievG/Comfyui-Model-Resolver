@@ -33,7 +33,7 @@ from ..type_utils import (
 )
 from ..progress import report_progress, get_progress_reporter
 from ..path_utils import calculate_file_sha256, get_filename_from_path
-from ..log_system.log_funcs import create_module_logger
+from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
 
@@ -408,7 +408,7 @@ def _search_civitai_trpc_candidates(
     try:
         response = requests.get(url, headers=headers, timeout=timeout)
     except Exception as e:
-        log.warn(f"CivitAI tRPC request failed for filename={filename}: {e}")
+        log.warning(f"CivitAI tRPC request failed for filename={filename}: {e}")
         return []
 
     text_preview = response.text[:800].replace("\n", " ").replace("\r", " ")
@@ -422,7 +422,7 @@ def _search_civitai_trpc_candidates(
     try:
         payload = response.json()
     except Exception as e:
-        log.warn(f"CivitAI tRPC JSON parse failed for filename={filename}: {e}")
+        log.warning(f"CivitAI tRPC JSON parse failed for filename={filename}: {e}")
         return []
 
     candidates = _extract_trpc_model_candidates(payload, limit=limit)
@@ -441,7 +441,7 @@ def _search_civitai_red_candidates(
 
     response = requests.get(search_url, timeout=timeout)
     if response.status_code != 200:
-        log.warn(
+        log.warning(
             f"CivitAI.red search returned {response.status_code} for filename={filename}"
         )
         return []
@@ -536,7 +536,7 @@ def _find_civitai_file_in_model(
         f"{CIVITAI_API_URL}/models/{model_id}", headers=headers, timeout=15
     )
     if response.status_code != 200:
-        log.warn(f"CivitAI model lookup returned {response.status_code} for model_id={model_id}")
+        log.warning(f"CivitAI model lookup returned {response.status_code} for model_id={model_id}")
         return None
 
     data = response.json()
@@ -986,7 +986,7 @@ def get_civitai_model_details(
         timeout=20,
     )
     if response.status_code != 200:
-        log.warn(f"CivitAI model details returned {response.status_code}: model_id={model_id}")
+        log.warning(f"CivitAI model details returned {response.status_code}: model_id={model_id}")
         return None
 
     data = response.json()
@@ -1162,7 +1162,7 @@ def resolve_urn(
         response = requests.get(url, headers=headers, params=params, timeout=15)
 
         if response.status_code != 200:
-            log.warn(f"CivitAI URN resolve failed: {response.status_code}")
+            log.warning(f"CivitAI URN resolve failed: {response.status_code}")
             _urn_cache[cache_key] = None
             return None
 
@@ -1170,7 +1170,7 @@ def resolve_urn(
         versions = data.get("modelVersions", [])
 
         if not versions:
-            log.warn(f"No versions found for model {model_id}/version {version_id}")
+            log.warning(f"No versions found for model {model_id}/version {version_id}")
             _urn_cache[cache_key] = None
             return None
 
@@ -1182,7 +1182,7 @@ def resolve_urn(
                 break
 
         if not target_version:
-            log.warn(f"Version {version_id} not found in model {model_id}")
+            log.warning(f"Version {version_id} not found in model {model_id}")
             _urn_cache[cache_key] = None
             return None
 
@@ -1199,7 +1199,7 @@ def resolve_urn(
             primary_file = files[0]  # Fallback to first
 
         if not primary_file:
-            log.warn(f"No files found for version {version_id}")
+            log.warning(f"No files found for version {version_id}")
             _urn_cache[cache_key] = None
             return None
 
@@ -1322,7 +1322,7 @@ def get_model_info_by_hash(
             _hash_cache[cache_key] = None
             return None
         else:
-            log.warn(
+            log.warning(
                 f"CivitAI hash lookup returned {response.status_code} for {file_hash}"
             )
             return None
@@ -1395,7 +1395,7 @@ def get_model_info_by_hash(
             _hash_cache[cache_key] = None
             return None
         else:
-            log.warn(
+            log.warning(
                 f"CivitAI hash lookup returned {response.status_code} for {file_hash}"
             )
             return None

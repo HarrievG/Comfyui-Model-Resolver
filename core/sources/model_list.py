@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 
 from ..matcher import normalize_filename, calculate_similarity
 
-from ..log_system.log_funcs import create_module_logger
+from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
 
@@ -67,7 +67,7 @@ def _get_local_model_list_sha() -> str:
         header = f"blob {len(content)}\0".encode("utf-8")
         return hashlib.sha1(header + content).hexdigest()
     except Exception as e:
-        log.warn(f"Error calculating model-list.json SHA: {e}")
+        log.warning(f"Error calculating model-list.json SHA: {e}")
         return ""
 
 

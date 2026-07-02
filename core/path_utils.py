@@ -18,7 +18,7 @@ def _get_log():
     """Return a lazily-created module logger (avoids circular imports)."""
     global _log
     if _log is None:
-        from .log_system.log_funcs import create_module_logger
+        from .log_system import create_module_logger
         _log = create_module_logger(__name__)
     return _log
 

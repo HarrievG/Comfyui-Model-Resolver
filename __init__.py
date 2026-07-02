@@ -25,9 +25,8 @@ if not __package__ or __package__ == "":
         sys.modules[package_name] = current_module
         if not hasattr(current_module, "__path__"):
             current_module.__path__ = [this_dir]
-from .core.log_system.log_funcs import create_module_logger
+from .core.log_system import LogLevel, create_module_logger, logger as backend_log_controller
 from .core.log_system.config import LOG_LEVEL as BACKEND_DEFAULT_LOG_LEVEL
-from .core.log_system.logger import LogLevel, logger as backend_log_controller
 
 # Web directory for JavaScript interface
 WEB_DIRECTORY = "./web"
