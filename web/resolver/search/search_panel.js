@@ -2,6 +2,7 @@ import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
+import { getModelCardUrl } from "../utils/url_utils.js";
 export const searchPanelMethods = {
     /**
      * Build stable cache key for a missing model entry
@@ -1701,7 +1702,7 @@ export const searchPanelMethods = {
         const rawModelUrl = downloadSource.model_url
             || downloadSource.workflow_model_url
             || downloadSource.url;
-        const modelUrl = this.getModelCardUrl(rawModelUrl) || rawModelUrl;
+        const modelUrl = getModelCardUrl(rawModelUrl) || rawModelUrl;
         const versionName = downloadSource.version_name || missing.civitai_info?.version_name || '';
         const modelParts = this.getModelVersionParts(
             downloadSource.name || missing.civitai_info?.model_name || '',

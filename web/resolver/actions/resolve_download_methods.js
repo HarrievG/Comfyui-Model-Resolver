@@ -3,6 +3,7 @@ import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { createModuleLogger } from "../../log_system/log_funcs.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
+import { getModelCardUrl } from "../utils/url_utils.js";
 
 const log = createModuleLogger('resolve_download_methods');
 
@@ -293,7 +294,7 @@ export const resolveDownloadMethods = {
                 url,
                 filename: result[candidate.filenameKey] || missing.civitai_info?.expected_filename || filename,
                 directory: result[candidate.categoryKey] || result.directory || result.category || missing.category || 'checkpoints',
-                model_url: this.getModelCardUrl(rawModelUrl) || rawModelUrl,
+                model_url: getModelCardUrl(rawModelUrl) || rawModelUrl,
                 name: result.name || result.repo_id || result.repo || result.filename || filename,
                 size: result.size,
                 type: result.type || missing.category
@@ -2571,7 +2572,7 @@ export const resolveDownloadMethods = {
                 downloadUrl: popular.url,
                 downloadFilename: popularFilename,
                 category: popular.directory || missingCategory,
-                openUrl: this.getModelCardUrl(popular.url),
+                openUrl: getModelCardUrl(popular.url),
                 searchedAt: this.getSearchResultTimestamp(popular)
             });
         }
@@ -2589,14 +2590,14 @@ export const resolveDownloadMethods = {
                 downloadUrl: modelListResult.url,
                 downloadFilename: modelListResult.filename,
                 category: modelListResult.directory || missingCategory,
-                openUrl: this.getModelCardUrl(modelListResult.url),
+                openUrl: getModelCardUrl(modelListResult.url),
                 searchedAt: this.getSearchResultTimestamp(modelListResult)
             });
         }
 
         if (hfResult && hfResult.url) {
             const hfRepo = hfResult.repo_id || hfResult.repo || '';
-            const hfModelUrl = hfRepo ? `https://huggingface.co/${hfRepo}` : this.getModelCardUrl(hfResult.url);
+            const hfModelUrl = hfRepo ? `https://huggingface.co/${hfRepo}` : getModelCardUrl(hfResult.url);
             const missingCategory = this.getMissingDownloadCategory?.(missing, 'checkpoints') || missing.category || 'checkpoints';
             addRow({
                 sourceKey: 'huggingface',
@@ -2670,7 +2671,7 @@ export const resolveDownloadMethods = {
                 downloadUrl: loraManagerArchiveResult.download_url || '',
                 downloadFilename: archiveFilename,
                 category: archiveCategory,
-                openUrl: loraManagerArchiveResult.url || this.getModelCardUrl(loraManagerArchiveResult.download_url),
+                openUrl: loraManagerArchiveResult.url || getModelCardUrl(loraManagerArchiveResult.download_url),
                 searchedAt: this.getSearchResultTimestamp(loraManagerArchiveResult),
                 detailsContext: {
                     ...loraManagerArchiveResult,
