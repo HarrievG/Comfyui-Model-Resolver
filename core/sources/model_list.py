@@ -19,7 +19,7 @@ from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
 
-from ..path_utils import METADATA_DIR, read_json_safe, write_json_atomic
+from ..path_utils import METADATA_DIR, read_json_safe, write_json_atomic, save_catalog_with_backup
 MODEL_LIST_FILE = os.path.join(METADATA_DIR, "model-list.json")
 MODEL_LIST_META_FILE = os.path.join(METADATA_DIR, "model-list.meta.json")
 MODEL_LIST_SOURCE_URL = (
@@ -152,10 +152,6 @@ def update_model_list_from_remote() -> Dict[str, Any]:
     if not isinstance(models, list) or not models:
         raise ValueError("Downloaded model-list.json does not contain a non-empty models list")
 
-    if os.path.exists(MODEL_LIST_FILE):
-        shutil.copy2(MODEL_LIST_FILE, f"{MODEL_LIST_FILE}.bak")
-
-    write_json_atomic(MODEL_LIST_FILE, data, indent=2)
     meta = {
         "source": "Comfy-Org/ComfyUI-Manager",
         "source_url": MODEL_LIST_SOURCE_URL,
@@ -166,7 +162,7 @@ def update_model_list_from_remote() -> Dict[str, Any]:
         "model_count": len(models),
         "updated_at": _utc_now_iso(),
     }
-    write_json_atomic(MODEL_LIST_META_FILE, meta, indent=2)
+    save_catalog_with_backup(MODEL_LIST_FILE, data, MODEL_LIST_META_FILE, meta, indent=2)
     reload_model_list()
 
     return {

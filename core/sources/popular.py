@@ -349,17 +349,6 @@ def update_base_models_from_remote() -> Dict[str, Any]:
             new_added_count += 1
             new_added_names.append(name)
             
-    # Write updated models to base-models.json atomically
-    os.makedirs(METADATA_DIR, exist_ok=True)
-    
-    # Backup existing
-    if os.path.exists(BASE_MODELS_FILE):
-        shutil.copy2(BASE_MODELS_FILE, f"{BASE_MODELS_FILE}.bak")
-        
-    # Write atomically
-    write_json_atomic(BASE_MODELS_FILE, {"base_models": updated_models}, indent=2)
-        
-    # Write meta file
     now_str = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     meta = {
         "updated_at": now_str,
@@ -368,10 +357,7 @@ def update_base_models_from_remote() -> Dict[str, Any]:
         "new_models_added": new_added_count,
         "new_models_added_list": new_added_names
     }
-    
-    write_json_atomic(BASE_MODELS_META_FILE, meta, indent=2)
-        
-    # Force reload database in-memory cache
+    save_catalog_with_backup(BASE_MODELS_FILE, {"base_models": updated_models}, BASE_MODELS_META_FILE, meta, indent=2)
     reload_databases()
     
     return {

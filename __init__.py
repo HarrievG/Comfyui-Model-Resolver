@@ -724,8 +724,7 @@ class ModelResolverExtension:
 
             # cleanup_hash_progress, update_hash_progress, is_hash_progress_cancelled, and mark_hash_progress_cancelled removed
 
-            class HashCalculationCancelled(Exception):
-                pass
+            from .core.path_utils import HashCalculationCancelled
 
             def resolve_hash_file_request(data):
                 import os as _os
@@ -799,14 +798,10 @@ class ModelResolverExtension:
                 return resolved_metadata_path, metadata_updated
 
             def calculate_sha256_with_progress(normalized_path, progress_id=""):
-                import hashlib
                 import os as _os
+                from .core.path_utils import calculate_file_sha256 as _calculate_file_sha256_core
 
                 total_bytes = max(0, _os.path.getsize(normalized_path))
-                bytes_read = 0
-                sha256_hash = hashlib.sha256()
-                last_update = 0.0
-                chunk_size = 1024 * 1024 * 4
 
                 self.hash_tracker.update(
                     progress_id,
@@ -818,45 +813,52 @@ class ModelResolverExtension:
                     total_bytes=total_bytes,
                 )
 
-                with open(normalized_path, "rb") as handle:
-                    for chunk in iter(lambda: handle.read(chunk_size), b""):
-                        if not chunk:
-                            continue
-                        sha256_hash.update(chunk)
-                        bytes_read += len(chunk)
-                        if self.hash_tracker.is_cancelled(progress_id):
-                            percent = 0 if total_bytes <= 0 else min(
-                                98,
-                                (bytes_read / total_bytes) * 98,
-                            )
-                            self.hash_tracker.update(
-                                progress_id,
-                                status="cancelled",
-                                stage="cancelled",
-                                message="Hash calculation cancelled",
-                                percent=percent,
-                                bytes_read=bytes_read,
-                                total_bytes=total_bytes,
-                            )
-                            raise HashCalculationCancelled()
-                        now = time.time()
-                        if now - last_update >= 0.15 or bytes_read >= total_bytes:
-                            percent = 98 if total_bytes <= 0 else min(
-                                98,
-                                (bytes_read / total_bytes) * 98,
-                            )
-                            self.hash_tracker.update(
-                                progress_id,
-                                status="running",
-                                stage="hashing",
-                                message="Calculating SHA256...",
-                                percent=percent,
-                                bytes_read=bytes_read,
-                                total_bytes=total_bytes,
-                            )
-                            last_update = now
+                _bytes_read = [0]
+                _last_update = [0.0]
 
-                return sha256_hash.hexdigest()
+                def on_progress(bytes_read, total_bytes):
+                    _bytes_read[0] = bytes_read
+                    now = time.time()
+                    if now - _last_update[0] >= 0.15 or bytes_read >= total_bytes:
+                        percent = 98 if total_bytes <= 0 else min(
+                            98,
+                            (bytes_read / total_bytes) * 98,
+                        )
+                        self.hash_tracker.update(
+                            progress_id,
+                            status="running",
+                            stage="hashing",
+                            message="Calculating SHA256...",
+                            percent=percent,
+                            bytes_read=bytes_read,
+                            total_bytes=total_bytes,
+                        )
+                        _last_update[0] = now
+
+                def is_cancelled():
+                    if self.hash_tracker.is_cancelled(progress_id):
+                        percent = 0 if total_bytes <= 0 else min(
+                            98,
+                            (_bytes_read[0] / total_bytes) * 98,
+                        )
+                        self.hash_tracker.update(
+                            progress_id,
+                            status="cancelled",
+                            stage="cancelled",
+                            message="Hash calculation cancelled",
+                            percent=percent,
+                            bytes_read=_bytes_read[0],
+                            total_bytes=total_bytes,
+                        )
+                        return True
+                    return False
+
+                return _calculate_file_sha256_core(
+                    normalized_path,
+                    chunk_size=1024 * 1024 * 4,
+                    on_progress=on_progress,
+                    is_cancelled=is_cancelled,
+                )
 
             @routes.post("/model_resolver/calculate-file-hash")
             @json_api_endpoint("calculate-file-hash")

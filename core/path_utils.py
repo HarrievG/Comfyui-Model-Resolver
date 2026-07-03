@@ -8,7 +8,7 @@ and directory matching to be shared across all modules.
 import os
 import json
 import hashlib
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, Callable
 
 
 _log = None
@@ -178,20 +178,60 @@ METADATA_DIR = os.path.join(
 )
 
 
-def calculate_file_sha256(file_path: str, chunk_size: int = 131072) -> Optional[str]:
-    """Calculate SHA256 hex digest for an existing local file safely."""
+class HashCalculationCancelled(Exception):
+    """Exception raised when file SHA256 calculation is cancelled by the caller."""
+    pass
+
+
+def calculate_file_sha256(
+    file_path: str,
+    chunk_size: int = 131072,
+    on_progress: Optional[Callable[[int, int], None]] = None,
+    is_cancelled: Optional[Callable[[], bool]] = None,
+) -> Optional[str]:
+    """Calculate SHA256 hex digest for an existing local file safely, supporting progress callbacks and cancellation check."""
     if not file_path or not os.path.exists(file_path):
         return None
     sha256_hash = hashlib.sha256()
     try:
+        total_bytes = os.path.getsize(file_path) if on_progress else 0
+        bytes_read = 0
         with open(file_path, "rb") as f:
             for byte_block in iter(lambda: f.read(chunk_size), b""):
+                if is_cancelled and is_cancelled():
+                    raise HashCalculationCancelled("Hash calculation cancelled")
                 if byte_block:
                     sha256_hash.update(byte_block)
+                    bytes_read += len(byte_block)
+                    if on_progress:
+                        on_progress(bytes_read, total_bytes)
         return sha256_hash.hexdigest()
+    except HashCalculationCancelled:
+        raise
     except Exception as e:
         _get_log().error(f"Error computing hash for {file_path}: {e}")
         return None
+
+
+def save_catalog_with_backup(
+    data_path: str, data: Any, meta_path: str, meta: Any, indent: int = 2
+) -> None:
+    """Backup an existing catalog file to .bak, then atomically write the new data and its metadata."""
+    import shutil
+    # Ensure directory exists
+    dir_name = os.path.dirname(data_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
+    
+    # Backup existing data file
+    if os.path.exists(data_path):
+        shutil.copy2(data_path, f"{data_path}.bak")
+            
+    # Write data file atomically
+    write_json_atomic(data_path, data, indent=indent)
+    
+    # Write metadata file atomically
+    write_json_atomic(meta_path, meta, indent=indent)
 
 
 def read_json_safe(file_path: str, default: Any = None) -> Any:
