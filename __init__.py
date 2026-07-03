@@ -2424,11 +2424,15 @@ class ModelResolverExtension:
                         )
                         # Handle both boolean and string forms
                         is_urn_raw = data.get("is_urn", False)
+                        civitai_key = data.get("civitai_key", "")
                         civitai_session_token = data.get("civitai_session_token", "")
                         hf_token = data.get("hf_token", "")
                         brave_search_api_key = data.get("brave_search_api_key", "")
                         civitai_use_trpc_search = data.get(
                             "civitai_use_trpc_search", True
+                        )
+                        civitai_use_api_search = data.get(
+                            "civitai_use_api_search", True
                         )
                         civitai_use_html_fallback = data.get(
                             "civitai_use_html_fallback", True
@@ -2443,6 +2447,7 @@ class ModelResolverExtension:
                         is_urn = to_bool(is_urn_raw, False)
                         hf_use_api_search = to_bool(hf_use_api_search, True)
                         civitai_use_trpc_search = to_bool(civitai_use_trpc_search, True)
+                        civitai_use_api_search = to_bool(civitai_use_api_search, True)
                         civitai_use_html_fallback = to_bool(civitai_use_html_fallback, True)
                         hf_use_comfy_org_fallback = to_bool(hf_use_comfy_org_fallback, True)
                         hf_use_brave_fallback = to_bool(hf_use_brave_fallback, True)
@@ -3119,11 +3124,13 @@ class ModelResolverExtension:
                                         "civitai",
                                         lambda base_ctx, cb: search_civitai_for_file(
                                             filename,
+                                            api_key=civitai_key or None,
                                             model_type=category,
                                             base_model_context=base_ctx,
                                             session_token=civitai_session_token or None,
                                             candidate_limit=civitai_candidate_limit,
                                             use_trpc_search=civitai_use_trpc_search,
+                                            use_api_search=civitai_use_api_search,
                                             use_html_fallback=civitai_use_html_fallback,
                                             progress_callback=cb,
                                         ),

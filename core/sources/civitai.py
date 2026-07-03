@@ -10,7 +10,7 @@ import json
 import hashlib
 import requests
 from typing import Dict, Any, Optional, List, Callable
-from urllib.parse import urlparse, parse_qs, quote
+from urllib.parse import urlparse, parse_qs, quote, urlencode
 
 from ..matcher import (
     calculate_filename_confidence,
@@ -66,6 +66,14 @@ def clear_search_cache():
 _report_progress = get_progress_reporter("CivitAI progress callback")
 
 
+def build_civitai_session_cookie(session_token: Optional[str]) -> str:
+    """Build a CivitAI session cookie header value accepted by current and older endpoints."""
+    token = str(session_token or "").strip()
+    if not token:
+        return ""
+    return f"__Secure-civ-token={token}; __Secure-civitai-token={token}"
+
+
 def check_civitai_session_token(session_token: Optional[str]) -> Dict[str, Any]:
     """Check whether a CivitAI browser session token is accepted by civitai.com."""
     token = (session_token or "").strip()
@@ -79,7 +87,7 @@ def check_civitai_session_token(session_token: Optional[str]) -> Dict[str, Any]:
 
     headers = {
         "accept": "application/json",
-        "Cookie": f"__Secure-civitai-token={token}",
+        "Cookie": build_civitai_session_cookie(token),
         "user-agent": DEFAULT_BROWSER_USER_AGENT,
     }
 
@@ -224,6 +232,18 @@ def _find_model_title_match_in_model(
     return None
 
 
+def _filename_base_partial_match(target_base: str, candidate_base: str) -> bool:
+    """Return True for meaningful filename-base containment matches."""
+    target_base = str(target_base or "").strip().lower()
+    candidate_base = str(candidate_base or "").strip().lower()
+    if not target_base or not candidate_base:
+        return False
+    shorter = min(target_base, candidate_base, key=len)
+    if len(shorter) < 4:
+        return False
+    return target_base in candidate_base or candidate_base in target_base
+
+
 
 def _find_matching_file_in_versions(
     versions: List[Dict[str, Any]],
@@ -254,9 +274,7 @@ def _find_matching_file_in_versions(
             if file_name_lower == filename_lower:
                 return {"version": version, "file_info": file_info, "match_type": "exact"}
 
-            if not exact_only and (
-                filename_base in file_base or file_base in filename_base
-            ):
+            if not exact_only and _filename_base_partial_match(filename_base, file_base):
                 return {
                     "version": version,
                     "file_info": file_info,
@@ -353,46 +371,8 @@ def _search_civitai_trpc_candidates(
     limit: int = 5,
 ) -> List[Dict[str, Optional[int]]]:
     """Try CivitAI.red tRPC search endpoint and log the raw outcome for diagnostics."""
-    input_payload = {
-        "json": {
-            "period": "Month",
-            "periodMode": "stats",
-            "sort": "Highest Rated",
-            "query": filename,
-            "pending": False,
-            "browsingLevel": 28,
-            "excludedTagIds": [
-                415792,
-                426772,
-                5351,
-                5161,
-                5162,
-                5188,
-                5249,
-                306619,
-                5351,
-                154326,
-                161829,
-                163032,
-                130818,
-                130820,
-                133182,
-            ],
-            "disablePoi": True,
-            "disableMinor": True,
-            "limit": limit,
-            "authed": True,
-        },
-        "meta": {"values": {"cursor": ["undefined"]}},
-    }
     civitai_type = CIVITAI_API_TYPE_MAP.get(str(model_type).lower()) if model_type else None
-    if civitai_type:
-        input_payload["json"]["types"] = [civitai_type]
 
-    url = (
-        "https://civitai.red/api/trpc/model.getAll?input="
-        + quote(json.dumps(input_payload, separators=(",", ":")))
-    )
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
@@ -402,48 +382,114 @@ def _search_civitai_trpc_candidates(
         "x-client-version": "5.0.1657",
     }
     if session_token:
-        headers["Cookie"] = f"__Secure-civitai-token={session_token}"
+        headers["Cookie"] = build_civitai_session_cookie(session_token)
 
-    log.info(
-        f"CivitAI tRPC search start: filename={filename}, model_type={model_type}, session_token={'yes' if session_token else 'no'}, url={url}"
-    )
+    def build_url(type_filter: Optional[str]) -> str:
+        input_payload = {
+            "json": {
+                "period": "Month",
+                "periodMode": "stats",
+                "sort": "Highest Rated",
+                "query": filename,
+                "pending": False,
+                "browsingLevel": 28,
+                "excludedTagIds": [
+                    415792,
+                    426772,
+                    5351,
+                    5161,
+                    5162,
+                    5188,
+                    5249,
+                    306619,
+                    5351,
+                    154326,
+                    161829,
+                    163032,
+                    130818,
+                    130820,
+                    133182,
+                ],
+                "disablePoi": True,
+                "disableMinor": True,
+                "limit": limit,
+                "authed": True,
+            },
+            "meta": {"values": {"cursor": ["undefined"]}},
+        }
+        if type_filter:
+            input_payload["json"]["types"] = [type_filter]
+        return (
+            "https://civitai.red/api/trpc/model.getAll?input="
+            + quote(json.dumps(input_payload, separators=(",", ":")))
+        )
 
-    try:
-        response = requests.get(url, headers=headers, timeout=timeout)
-    except Exception as e:
-        log.warning(f"CivitAI tRPC request failed for filename={filename}: {e}")
-        return []
+    type_filters = [civitai_type] if civitai_type else [None]
+    if civitai_type:
+        type_filters.append(None)
 
-    text_preview = response.text[:800].replace("\n", " ").replace("\r", " ")
-    log.info(
-        f"CivitAI tRPC response: status={response.status_code}, content_type={response.headers.get('content-type')}, text_preview={text_preview}"
-    )
+    for type_filter in type_filters:
+        url = build_url(type_filter)
+        log.info(
+            f"CivitAI tRPC search start: filename={filename}, model_type={model_type}, type_filter={type_filter or 'none'}, session_token={'yes' if session_token else 'no'}, url={url}"
+        )
 
-    if response.status_code != 200:
-        return []
+        try:
+            response = requests.get(url, headers=headers, timeout=timeout)
+        except Exception as e:
+            log.warning(f"CivitAI tRPC request failed for filename={filename}: {e}")
+            return []
 
-    try:
-        payload = response.json()
-    except Exception as e:
-        log.warning(f"CivitAI tRPC JSON parse failed for filename={filename}: {e}")
-        return []
+        text_preview = response.text[:800].replace("\n", " ").replace("\r", " ")
+        log.info(
+            f"CivitAI tRPC response: status={response.status_code}, content_type={response.headers.get('content-type')}, text_preview={text_preview}"
+        )
 
-    candidates = _extract_trpc_model_candidates(payload, limit=limit)
-    log.info(
-        f"CivitAI tRPC extracted {len(candidates)} candidates for filename={filename}: {candidates}"
-    )
-    return candidates
+        if response.status_code != 200:
+            return []
+
+        try:
+            payload = response.json()
+        except Exception as e:
+            log.warning(f"CivitAI tRPC JSON parse failed for filename={filename}: {e}")
+            return []
+
+        candidates = _extract_trpc_model_candidates(payload, limit=limit)
+        log.info(
+            f"CivitAI tRPC extracted {len(candidates)} candidates for filename={filename}: {candidates}"
+        )
+        if candidates or not type_filter:
+            return candidates
+
+    return []
 
 
 def _search_civitai_red_candidates(
-    filename: str, timeout: int = 15, limit: int = 5
+    filename: str,
+    model_type: Optional[str] = None,
+    session_token: Optional[str] = None,
+    timeout: int = 15,
+    limit: int = 5,
 ) -> List[Dict[str, int]]:
     """Search civitai.red by full filename and return model/version candidates."""
-    search_url = f"https://civitai.red/models?query={quote(filename)}"
+    params = {
+        "sortBy": "models_v9",
+        "query": filename,
+    }
+    civitai_type = CIVITAI_API_TYPE_MAP.get(str(model_type).lower()) if model_type else None
+    if civitai_type:
+        params["modelType"] = civitai_type
+
+    search_url = "https://civitai.red/search/models?" + urlencode(params)
+    headers = {"user-agent": DEFAULT_BROWSER_USER_AGENT}
+    if session_token:
+        headers["Cookie"] = build_civitai_session_cookie(session_token)
     log.info(f"CivitAI.red search start: filename={filename}, url={search_url}")
 
-    response = requests.get(search_url, timeout=timeout)
+    response = requests.get(search_url, headers=headers, timeout=timeout)
     if response.status_code != 200:
+        if response.status_code in {401, 403}:
+            return []
         log.warning(
             f"CivitAI.red search returned {response.status_code} for filename={filename}"
         )
@@ -452,6 +498,107 @@ def _search_civitai_red_candidates(
     candidates = _extract_civitai_red_candidates(response.text, limit=limit)
     log.info(
         f"CivitAI.red search extracted {len(candidates)} candidates for filename={filename}"
+    )
+    return candidates
+
+
+def _extract_public_api_model_candidates(
+    payload: Any, limit: int = 5
+) -> List[Dict[str, Optional[int]]]:
+    """Extract model/version candidates from the public CivitAI /models API."""
+    candidates: List[Dict[str, Optional[int]]] = []
+    seen = set()
+    items = payload.get("items", []) if isinstance(payload, dict) else []
+    if not isinstance(items, list):
+        return candidates
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        model_id = item.get("id")
+        if not isinstance(model_id, int):
+            continue
+
+        version_id = None
+        versions = item.get("modelVersions") or []
+        if isinstance(versions, list):
+            for version in versions:
+                if isinstance(version, dict) and isinstance(version.get("id"), int):
+                    version_id = version.get("id")
+                    break
+
+        key = (model_id, version_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append({"model_id": model_id, "version_id": version_id})
+        if len(candidates) >= limit:
+            break
+
+    return candidates
+
+
+def _search_civitai_public_api_candidates(
+    filename: str,
+    model_type: Optional[str] = None,
+    api_key: Optional[str] = None,
+    session_token: Optional[str] = None,
+    timeout: int = 15,
+    limit: int = 5,
+) -> List[Dict[str, Optional[int]]]:
+    """Search the public CivitAI API by model name and return model/version candidates."""
+    params = {
+        "query": filename,
+        "limit": max(1, min(int(limit), MAX_CIVITAI_CANDIDATE_LIMIT)),
+        "sort": "Highest Rated",
+        "period": "AllTime",
+    }
+    civitai_type = CIVITAI_API_TYPE_MAP.get(str(model_type).lower()) if model_type else None
+    if civitai_type:
+        params["types"] = civitai_type
+
+    headers = {
+        "accept": "application/json",
+        "user-agent": DEFAULT_BROWSER_USER_AGENT,
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    if session_token:
+        headers["Cookie"] = build_civitai_session_cookie(session_token)
+
+    log.info(
+        f"CivitAI public API search start: filename={filename}, model_type={model_type}, api_key={'yes' if api_key else 'no'}, session_token={'yes' if session_token else 'no'}"
+    )
+
+    try:
+        response = requests.get(
+            f"{CIVITAI_API_URL}/models",
+            params=params,
+            headers=headers,
+            timeout=timeout,
+        )
+    except Exception as e:
+        log.warning(f"CivitAI public API request failed for filename={filename}: {e}")
+        return []
+
+    text_preview = response.text[:800].replace("\n", " ").replace("\r", " ")
+    log.info(
+        f"CivitAI public API response: status={response.status_code}, content_type={response.headers.get('content-type')}, text_preview={text_preview}"
+    )
+
+    if response.status_code != 200:
+        return []
+
+    try:
+        payload = response.json()
+    except Exception as e:
+        log.warning(f"CivitAI public API JSON parse failed for filename={filename}: {e}")
+        return []
+
+    candidates = _extract_public_api_model_candidates(payload, limit=limit)
+    log.info(
+        f"CivitAI public API extracted {len(candidates)} candidates for filename={filename}: {candidates}"
     )
     return candidates
 
@@ -514,9 +661,7 @@ def _find_civitai_file_in_model(
         )
         if expected_filename == filename_lower:
             return True
-        if not exact_only and (
-            filename_base in expected_base or expected_base in filename_base
-        ):
+        if not exact_only and _filename_base_partial_match(filename_base, expected_base):
             return True
         return False
 
@@ -671,6 +816,7 @@ def search_civitai_for_file(
     session_token: Optional[str] = None,
     candidate_limit: int = DEFAULT_CIVITAI_CANDIDATE_LIMIT,
     use_trpc_search: bool = True,
+    use_api_search: bool = True,
     use_html_fallback: bool = True,
     progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> Optional[Dict[str, Any]]:
@@ -693,7 +839,11 @@ def search_civitai_for_file(
     session_key = "session" if session_token else "anon"
     model_type_key = str(model_type or "").lower()
     base_model_key = _normalize_base_model(base_model_context or "")
-    methods_key = f"trpc{int(bool(use_trpc_search))}_html{int(bool(use_html_fallback))}"
+    methods_key = (
+        f"trpc{int(bool(use_trpc_search))}"
+        f"_api{int(bool(use_api_search))}"
+        f"_html{int(bool(use_html_fallback))}"
+    )
     cache_key = (
         f"civit_{filename}_exact{exact_only}_type{model_type_key}_base{base_model_key}_session{session_key}_limit{candidate_limit}_{methods_key}"
     )
@@ -749,7 +899,7 @@ def search_civitai_for_file(
 
         add_candidates(trpc_candidates)
 
-        if use_html_fallback and len(candidates_to_check) < candidate_limit:
+        if use_html_fallback and not candidates_to_check:
             _report_progress(
                 progress_callback,
                 "html",
@@ -757,7 +907,10 @@ def search_civitai_for_file(
                 50,
             )
             html_candidates = _search_civitai_red_candidates(
-                filename, limit=candidate_limit
+                filename,
+                model_type=model_type,
+                session_token=session_token,
+                limit=candidate_limit,
             )
             add_candidates(html_candidates)
         else:
@@ -769,11 +922,35 @@ def search_civitai_for_file(
             58,
             candidate_count=len(html_candidates),
         )
+        if use_api_search and not candidates_to_check:
+            _report_progress(
+                progress_callback,
+                "api",
+                "Searching CivitAI API",
+                58,
+            )
+            api_candidates = _search_civitai_public_api_candidates(
+                filename,
+                model_type=model_type,
+                api_key=api_key,
+                session_token=session_token,
+                limit=candidate_limit,
+            )
+            add_candidates(api_candidates)
+        else:
+            api_candidates = []
+        _report_progress(
+            progress_callback,
+            "api_candidates",
+            f"CivitAI API candidates: {len(api_candidates)}",
+            60,
+            candidate_count=len(api_candidates),
+        )
         _report_progress(
             progress_callback,
             "candidates",
             f"CivitAI candidates to check: {len(candidates_to_check)}",
-            60,
+            62,
             candidate_count=len(candidates_to_check),
             candidate_limit=candidate_limit,
         )
@@ -852,11 +1029,12 @@ def search_civitai_for_file(
             92,
             trpc_candidate_count=len(trpc_candidates),
             html_candidate_count=len(html_candidates),
+            api_candidate_count=len(api_candidates),
             checked_candidate_count=len(candidates_to_check),
             candidate_limit=candidate_limit,
         )
         log.info(
-            f"CivitAI search no result: filename={filename}, trpc_candidates={len(trpc_candidates)}, html_candidates={len(html_candidates)}, checked_candidates={len(candidates_to_check)}, candidate_limit={candidate_limit}"
+            f"CivitAI search no result: filename={filename}, trpc_candidates={len(trpc_candidates)}, html_candidates={len(html_candidates)}, api_candidates={len(api_candidates)}, checked_candidates={len(candidates_to_check)}, candidate_limit={candidate_limit}"
         )
         return None
 

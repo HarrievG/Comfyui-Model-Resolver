@@ -8,6 +8,7 @@ const SETTINGS_MAP = [
     { serverKey: 'civitai_key', localKey: 'ModelResolver.civitaiApiKey', type: 'string', default: '' },
     { serverKey: 'civitai_session_token', localKey: 'ModelResolver.civitaiSessionToken', type: 'string', default: '' },
     { serverKey: 'civitai_use_trpc_search', localKey: 'ModelResolver.civitaiUseTrpcSearch', type: 'boolean', default: true },
+    { serverKey: 'civitai_use_api_search', localKey: 'ModelResolver.civitaiUseApiSearch', type: 'boolean', default: true },
     { serverKey: 'civitai_use_html_fallback', localKey: 'ModelResolver.civitaiUseHtmlFallback', type: 'boolean', default: true },
     { serverKey: 'hf_token', localKey: 'ModelResolver.huggingFaceToken', type: 'string', default: '' },
     { serverKey: 'brave_search_api_key', localKey: 'ModelResolver.braveSearchApiKey', type: 'string', default: '' },
@@ -483,6 +484,7 @@ export const optionsMethods = {
                             </div>
                             <div class="mr-options-grid">
                                 <div class="mr-options-panel">
+                                    <div class="mr-options-panel-title">Search Methods</div>
                                     <div class="mr-options-toggle-list">
                                         <label class="mr-options-toggle-row">
                                             <div class="mr-options-toggle-copy">
@@ -493,10 +495,41 @@ export const optionsMethods = {
                                                 <span class="mr-options-switch"></span>
                                             </span>
                                         </label>
+                                        <label class="mr-options-toggle-row">
+                                            <div class="mr-options-toggle-copy">
+                                                <span class="mr-options-toggle-title">Use CivitAI HTML fallback <span class="mr-tooltip-badge" data-tooltip="Backup CivitAI search. It mirrors the CivitAI web page more closely than the public API.">?</span></span>
+                                            </div>
+                                            <span class="mr-options-toggle-control">
+                                                <input id="mr-options-civitai-use-html-fallback" class="mr-options-switch-input" type="checkbox" ${tokens.civitai_use_html_fallback ? 'checked' : ''}>
+                                                <span class="mr-options-switch"></span>
+                                            </span>
+                                        </label>
+                                        <label class="mr-options-toggle-row">
+                                            <div class="mr-options-toggle-copy">
+                                                <span class="mr-options-toggle-title">Use CivitAI API search <span class="mr-tooltip-badge" data-tooltip="Last fallback that searches CivitAI's public models API by name. It can help when tRPC and HTML search return no candidates.">?</span></span>
+                                            </div>
+                                            <span class="mr-options-toggle-control">
+                                                <input id="mr-options-civitai-use-api-search" class="mr-options-switch-input" type="checkbox" ${tokens.civitai_use_api_search ? 'checked' : ''}>
+                                                <span class="mr-options-switch"></span>
+                                            </span>
+                                        </label>
+                                        <div class="mr-options-dependent-block">
+                                            <div class="mr-options-number-row">
+                                                <div class="mr-options-number-copy">
+                                                    <span class="mr-options-label">CivitAI Models To Inspect <span class="mr-tooltip-badge" data-tooltip="How many CivitAI results to check for the exact file. Higher values may find more matches, but searches can take longer. Range: 1-20.">?</span></span>
+                                                </div>
+                                                <input id="mr-options-civitai-limit" class="mr-options-input" type="number" min="1" max="20" step="1" value="${tokens.civitai_candidate_limit}">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mr-options-panel">
+                                    <div class="mr-options-panel-title">Account Access</div>
+                                    <div class="mr-options-toggle-list">
                                         <div class="mr-options-dependent-block">
                                             <div class="mr-options-field">
                                                 <div class="mr-options-input-row">
-                                                    <label for="mr-options-civitai" class="mr-options-label">CivitAI API Key <a href="https://civitai.com/user/account" target="_blank" rel="noopener noreferrer" class="mr-options-inline-link">Get key</a> <span class="mr-tooltip-badge" data-tooltip="Optional. Used when downloading from CivitAI requires your account. Add this if CivitAI downloads fail or need access to models available to your account.">?</span></label>
+                                                    <label for="mr-options-civitai" class="mr-options-label">CivitAI API Key <a href="https://civitai.com/user/account" target="_blank" rel="noopener noreferrer" class="mr-options-inline-link">Get key</a> <span class="mr-tooltip-badge" data-tooltip="Optional. Used by CivitAI API search, model details, and downloads that require your account.">?</span></label>
                                                     <input id="mr-options-civitai" class="mr-options-input" type="password" placeholder="Paste CivitAI API key" value="${tokens.civitai_key}">
                                                     <button id="mr-options-civitai-toggle" type="button" class="mr-options-visibility-btn" aria-label="Toggle visibility for saved CivitAI API key" data-tooltip="Show saved value">
                                                         ${getSvgIcon('eye')}
@@ -528,23 +561,6 @@ export const optionsMethods = {
                                                     <button id="mr-options-civitai-session-check" type="button" class="mr-btn mr-btn-secondary mr-btn-sm">${getSvgIcon('refreshCw')} Check session</button>
                                                     <span id="mr-options-civitai-session-check-status" class="mr-options-token-check-status">Not checked</span>
                                                 </div>
-                                            </div>
-                                        </div>
-                                        <label class="mr-options-toggle-row">
-                                            <div class="mr-options-toggle-copy">
-                                                <span class="mr-options-toggle-title">Use CivitAI HTML fallback <span class="mr-tooltip-badge" data-tooltip="Backup CivitAI search. Leave this enabled to try the regular CivitAI page when the main search does not find enough results.">?</span></span>
-                                            </div>
-                                            <span class="mr-options-toggle-control">
-                                                <input id="mr-options-civitai-use-html-fallback" class="mr-options-switch-input" type="checkbox" ${tokens.civitai_use_html_fallback ? 'checked' : ''}>
-                                                <span class="mr-options-switch"></span>
-                                            </span>
-                                        </label>
-                                        <div class="mr-options-dependent-block">
-                                            <div class="mr-options-number-row">
-                                                <div class="mr-options-number-copy">
-                                                    <span class="mr-options-label">CivitAI Models To Inspect <span class="mr-tooltip-badge" data-tooltip="How many CivitAI results to check for the exact file. Higher values may find more matches, but searches can take longer. Range: 1-20.">?</span></span>
-                                                </div>
-                                                <input id="mr-options-civitai-limit" class="mr-options-input" type="number" min="1" max="20" step="1" value="${tokens.civitai_candidate_limit}">
                                             </div>
                                         </div>
                                     </div>
@@ -722,6 +738,7 @@ export const optionsMethods = {
         const braveToggle = this.contentElement.querySelector('#mr-options-brave-toggle');
         const civitaiLimitInput = this.contentElement.querySelector('#mr-options-civitai-limit');
         const civitaiUseTrpcSearchInput = this.contentElement.querySelector('#mr-options-civitai-use-trpc-search');
+        const civitaiUseApiSearchInput = this.contentElement.querySelector('#mr-options-civitai-use-api-search');
         const civitaiUseHtmlFallbackInput = this.contentElement.querySelector('#mr-options-civitai-use-html-fallback');
         const civitaiKeyCheckBtn = this.contentElement.querySelector('#mr-options-civitai-key-check');
         const civitaiKeyCheckStatus = this.contentElement.querySelector('#mr-options-civitai-key-check-status');
@@ -795,6 +812,7 @@ export const optionsMethods = {
             braveInput,
             civitaiLimitInput,
             civitaiUseTrpcSearchInput,
+            civitaiUseApiSearchInput,
             civitaiUseHtmlFallbackInput,
             hfUseApiSearchInput,
             hfUseComfyOrgFallbackInput,
@@ -2101,6 +2119,7 @@ export const optionsMethods = {
                     civitai_key: civitaiInput?.value || '',
                     civitai_session_token: civitaiSessionInput?.value || '',
                     civitai_use_trpc_search: Boolean(civitaiUseTrpcSearchInput?.checked),
+                    civitai_use_api_search: Boolean(civitaiUseApiSearchInput?.checked),
                     civitai_use_html_fallback: Boolean(civitaiUseHtmlFallbackInput?.checked),
                     civitai_candidate_limit: civitaiCandidateLimit,
                     hf_token: hfInput?.value || '',
