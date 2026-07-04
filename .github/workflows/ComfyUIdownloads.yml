@@ -25,17 +25,17 @@ jobs:
           node_id="comfyui-model-resolver"
 
           for i in {1..3}; do
-            echo "Pobieranie danych z próby $i..."
+            echo "Fetching data for attempt $i..."
             curl -s "https://api.comfy.org/nodes/${node_id}" > tmp_$i.json
 
             if [ ! -s tmp_$i.json ] || ! jq empty tmp_$i.json 2>/dev/null; then
-              echo "Błąd: Nieprawidłowy JSON dla próby $i"
+              echo "Error: invalid JSON for attempt $i"
               continue
             fi
 
             if jq -e 'type == "array"' tmp_$i.json >/dev/null; then
               node_count=$(jq 'length' tmp_$i.json)
-              echo "Znaleziono $node_count węzłów w próbie $i"
+              echo "Found $node_count nodes in attempt $i"
 
               for j in $(seq 0 $((node_count - 1))); do
                 downloads=$(jq -r ".[$j].downloads // 0" tmp_$i.json)
@@ -44,7 +44,7 @@ jobs:
                 if [ "$downloads" -gt "$max_downloads" ]; then
                   max_downloads=$downloads
                   top_node_json=$(jq ".[$j]" tmp_$i.json)
-                  echo "Nowe maksimum znalezione: $downloads (węzeł: $name)"
+                  echo "New maximum found: $downloads (node: $name)"
                 fi
               done
             else
@@ -54,7 +54,7 @@ jobs:
               if [ "$downloads" -gt "$max_downloads" ]; then
                 max_downloads=$downloads
                 top_node_json=$(cat tmp_$i.json)
-                echo "Nowe maksimum znalezione: $downloads (węzeł: $name)"
+                echo "New maximum found: $downloads (node: $name)"
               fi
             fi
 
@@ -63,11 +63,11 @@ jobs:
 
           if [ "$max_downloads" -gt 0 ]; then
             echo "$top_node_json" > top_modelresolver.json
-            echo "Najwyższa liczba pobrań: $max_downloads"
-            echo "Szczegóły węzła:"
+            echo "Highest download count: $max_downloads"
+            echo "Node details:"
             jq . top_modelresolver.json
           else
-            echo "Błąd: Nie znaleziono żadnych prawidłowych danych"
+            echo "Error: no valid data found"
             echo '{"name": "ComfyUI Model Resolver", "downloads": 0}' > top_modelresolver.json
           fi
 
@@ -82,16 +82,16 @@ jobs:
               echo "GIST=${{ secrets.MODELRESOLVER_GIST_ID }}" >> $GITHUB_OUTPUT
 
               if gh gist view ${{ secrets.MODELRESOLVER_GIST_ID }} &>/dev/null; then
-                echo "Gist istnieje, będzie zaktualizowany"
+                echo "Gist exists and will be updated"
               else
-                echo "Gist nie istnieje, tworzenie nowego"
+                echo "Gist does not exist, creating a new one"
                 gist_id=$(gh gist create top_modelresolver.json | awk -F / '{print $NF}')
                 echo $gist_id | gh secret set MODELRESOLVER_GIST_ID
                 echo "GIST=$gist_id" >> $GITHUB_OUTPUT
                 git rm --ignore-unmatch "$BADGE_DOC" MODELRESOLVER.md
               fi
           else
-              echo "Tworzenie nowego gist"
+              echo "Creating a new gist"
               gist_id=$(gh gist create top_modelresolver.json | awk -F / '{print $NF}')
               echo $gist_id | gh secret set MODELRESOLVER_GIST_ID
               echo "GIST=$gist_id" >> $GITHUB_OUTPUT
@@ -168,7 +168,7 @@ jobs:
               -H "Content-Type: application/json" \
               -d @patch.json https://api.github.com/gists/${{ steps.set_id.outputs.GIST }}
           else
-            echo "Błąd: Nieprawidłowy JSON w top_modelresolver.json"
+            echo "Error: invalid JSON in top_modelresolver.json"
             exit 1
           fi
 

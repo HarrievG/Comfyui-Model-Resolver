@@ -557,7 +557,7 @@ def fetch_remote_file_size(
     timeout: int = 15,
 ) -> Optional[int]:
     """
-    Sprawdza rozmiar zdalnego pliku wykonując zapytanie HEAD i opcjonalnie GET Range=bytes=0-0.
+    Check a remote file size using HEAD and, when needed, GET Range=bytes=0-0.
     """
     import requests
     request_headers = {**(headers or {}), "Accept-Encoding": "identity"}
@@ -600,7 +600,7 @@ def fetch_remote_file_size(
 
 def looks_like_model_file(url: str, expected_filename: str = "") -> bool:
     """
-    Walidacja, czy dany link URL wygląda na poprawny plik modelu.
+    Validate whether the URL looks like a valid model file.
     """
     import os
     from urllib.parse import unquote, urlparse
@@ -638,7 +638,7 @@ def looks_like_model_file(url: str, expected_filename: str = "") -> bool:
 
 def normalize_model_image(image_data: Dict[str, Any], default_civitai_url: str = "") -> Dict[str, Any]:
     """
-    Normalizuje metadane obrazu pochodzące z różnych API do jednolitego słownika.
+    Normalize image metadata from different APIs into one dictionary shape.
     """
     if not isinstance(image_data, dict):
         return {}
@@ -709,7 +709,7 @@ def normalize_sha256(value: Any) -> str:
 
 
 def unique_ordered_strings(values: List[Any]) -> List[str]:
-    """Zwraca unikalne, niepuste ciągi znaków z zachowaniem oryginalnej kolejności."""
+    """Return unique, non-empty strings while preserving their original order."""
     seen = set()
     unique = []
     for value in values:
@@ -723,7 +723,7 @@ def unique_ordered_strings(values: List[Any]) -> List[str]:
 
 def extract_sha256_from_metadata(metadata: Any) -> str:
     """
-    Wyciąga i zwraca pierwszy poprawny znormalizowany hash SHA256 z metadanych.
+    Extract and return the first valid normalized SHA256 hash from metadata.
     """
     if not isinstance(metadata, dict):
         return ""
@@ -744,7 +744,7 @@ def extract_sha256_from_metadata(metadata: Any) -> str:
                 if normalized:
                     return normalized
 
-    # Obsługa słownika file_info (np. z popular/model_list)
+    # Support the file_info dictionary shape, for example from popular/model_list.
     file_info = metadata.get("file_info")
     if isinstance(file_info, dict):
         for key in ("sha256", "hash", "SHA256", "Sha256"):
@@ -762,7 +762,7 @@ def extract_sha256_from_metadata(metadata: Any) -> str:
                     if normalized:
                         return normalized
 
-    # Obsługa zagnieżdżonej listy plików w metadanych Civitai
+    # Support Civitai metadata with a nested files list.
     files = metadata.get("files")
     if isinstance(files, list):
         for file_info_item in files:
@@ -781,8 +781,8 @@ def extract_sha256_from_metadata(metadata: Any) -> str:
 
 def extract_trained_words(*values: Any) -> List[str]:
     """
-    Parsuje i zwraca znormalizowaną listę unikalnych słów kluczowych 
-    i tagów z przekazanych wartości (słowników wersji, list lub ciągów znaków).
+    Parse and return a normalized list of unique keywords and tags from the
+    provided values, such as version dictionaries, lists, or strings.
     """
     words: List[str] = []
     seen = set()
@@ -834,7 +834,7 @@ def fetch_remote_file_size_cached(
     timeout: int = 15,
 ) -> Optional[int]:
     """
-    Sprawdza rozmiar zdalnego pliku, korzystając ze wspólnej pamięci podręcznej.
+    Check a remote file size using the shared cache.
     """
     auth = headers.get("Authorization") if headers else None
     cache_key = (url, auth)
@@ -847,7 +847,7 @@ def fetch_remote_file_size_cached(
 
 
 def clear_remote_size_cache() -> None:
-    """Czyści cache rozmiarów plików zdalnych."""
+    """Clear the remote file size cache."""
     _remote_size_cache.clear()
 
 
@@ -899,7 +899,8 @@ def extract_file_size(file_info: Dict[str, Any]) -> Optional[int]:
 
 def normalize_category_to_model_type(category: str) -> str:
     """
-    Mapuje nazwę kategorii pobierania/ComfyUI (np. 'checkpoints') na znormalizowany typ modelu (np. 'checkpoint').
+    Map a download or ComfyUI category name, such as "checkpoints", to a
+    normalized model type, such as "checkpoint".
     """
     if not category:
         return ""
@@ -921,8 +922,9 @@ def normalize_category_to_model_type(category: str) -> str:
 
 def check_credential_preconditions(value: Optional[str], token_name: str) -> Optional[Dict[str, Any]]:
     """
-    Sprawdza, czy poświadczenie (np. token, klucz) nie jest puste.
-    Zwraca standardowy słownik błędu, jeśli poświadczenie jest puste, w przeciwnym razie None.
+    Check whether a credential, such as a token or key, is not empty.
+    Return a standard error dictionary when the credential is empty;
+    otherwise return None.
     """
     clean_val = (value or "").strip()
     if not clean_val:
