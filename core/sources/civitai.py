@@ -51,6 +51,16 @@ MAX_CIVITAI_CANDIDATE_LIMIT = 20
 MODEL_TITLE_MATCH_THRESHOLD = 82.0
 
 
+def _is_civitai_host(host: Optional[str]) -> bool:
+    host = str(host or "").lower().strip(".")
+    return (
+        host == "civitai.com"
+        or host.endswith(".civitai.com")
+        or host == "civitai.red"
+        or host.endswith(".civitai.red")
+    )
+
+
 
 
 
@@ -782,7 +792,7 @@ def parse_civitai_url(url: str) -> Optional[Dict[str, Any]]:
     if not isinstance(url, str) or not url.strip():
         return None
     parsed = urlparse(url)
-    if "civitai.com" not in parsed.netloc:
+    if not _is_civitai_host(parsed.hostname):
         return None
 
     if "/api/download/models/" in parsed.path:
