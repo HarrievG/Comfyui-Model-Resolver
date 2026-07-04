@@ -22,7 +22,7 @@ app.registerExtension({
         {
             id: MODEL_RESOLVER_OPEN_COMMAND_ID,
             label: "Open Model Resolver",
-            function: () => modelResolver.openResolverManager(),
+            function: () => modelResolver.activateResolverButton(),
         },
     ],
     keybindings: [

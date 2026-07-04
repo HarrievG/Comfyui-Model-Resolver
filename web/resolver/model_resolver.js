@@ -270,6 +270,30 @@ export class ModelResolver {
         });
     }
 
+    getSidebarButton() {
+        const button = document.querySelector(`.${this.sidebarTabId}-tab-button`);
+        return button instanceof HTMLElement ? button : null;
+    }
+
+    getVisibleResolverButton() {
+        const button = document.getElementById(this.buttonId);
+        return button instanceof HTMLElement ? button : null;
+    }
+
+    handleResolverButtonClick = () => {
+        this.openResolverManager();
+    }
+
+    activateResolverButton = () => {
+        const button = this.getSidebarButton() || this.getVisibleResolverButton();
+        if (button) {
+            button.click();
+            return;
+        }
+
+        this.handleResolverButtonClick();
+    }
+
     handleSidebarButtonClick(event) {
         const target = event.target instanceof Element ? event.target : null;
         const button = target?.closest(`.${this.sidebarTabId}-tab-button`);
@@ -342,7 +366,7 @@ export class ModelResolver {
             // Create button group with Model Resolver button
             const ModelResolverButton = new ComfyButton({
                 icon: "link-variant",
-                action: () => this.openResolverManager(),
+                action: this.handleResolverButtonClick,
                 content: "Model Resolver",
                 classList: "comfyui-button comfyui-menu-mobile-collapse"
             }).element;
@@ -880,9 +904,7 @@ export class ModelResolver {
         this.resolverButton = $el("button", {
             id: this.buttonId,
             textContent: "🔗 Model Resolver",
-            onclick: () => {
-                this.openResolverManager();
-            },
+            onclick: this.handleResolverButtonClick,
             className: "model-resolver-floating-button"
         });
 
