@@ -860,20 +860,6 @@ export const optionsMethods = {
                                             </div>
                                         </div>
                                         <div id="mr-options-metadata-build-history-panel" class="mr-options-build-tab-panel is-hidden">
-                                            <div class="mr-options-history-toolbar">
-                                                <label class="mr-options-history-filter-label" for="mr-options-metadata-build-history-filter">Show</label>
-                                                <select id="mr-options-metadata-build-history-filter" class="mr-options-input mr-options-history-filter-select">
-                                                    <option value="all">All</option>
-                                                    <option value="done">Done</option>
-                                                    <option value="created">Created</option>
-                                                    <option value="updated">Updated</option>
-                                                    <option value="skipped">Skipped</option>
-                                                    <option value="checked">Checked</option>
-                                                    <option value="error">Errors</option>
-                                                    <option value="cancelled">Cancelled</option>
-                                                </select>
-                                                <span id="mr-options-metadata-build-history-filter-info" class="mr-options-history-filter-info">0 shown</span>
-                                            </div>
                                             <div id="mr-options-metadata-build-results" class="mr-options-audit-results" hidden></div>
                                         </div>
                                     </div>
@@ -984,8 +970,6 @@ export const optionsMethods = {
         const metadataBuildProgressPanel = this.contentElement.querySelector('#mr-options-metadata-build-progress-panel');
         const metadataBuildHistoryPanel = this.contentElement.querySelector('#mr-options-metadata-build-history-panel');
         const metadataBuildHistoryCountEl = this.contentElement.querySelector('#mr-options-metadata-build-history-count');
-        const metadataBuildHistoryFilterInput = this.contentElement.querySelector('#mr-options-metadata-build-history-filter');
-        const metadataBuildHistoryFilterInfo = this.contentElement.querySelector('#mr-options-metadata-build-history-filter-info');
         const metadataBuildCpuEl = this.contentElement.querySelector('#mr-options-metadata-build-cpu');
         const metadataBuildWorkersEl = this.contentElement.querySelector('#mr-options-metadata-build-workers');
         const metadataBuildWorkerInput = this.contentElement.querySelector('#mr-options-metadata-build-worker-count');
@@ -1003,9 +987,7 @@ export const optionsMethods = {
         if (!metadataBuildHistoryFilterValues.includes(this.metadataBuildHistoryFilter)) {
             this.metadataBuildHistoryFilter = 'all';
         }
-        if (metadataBuildHistoryFilterInput) {
-            metadataBuildHistoryFilterInput.value = this.metadataBuildHistoryFilter;
-        }
+        this.metadataBuildHistoryFilterMenuOpen = false;
         if (this.metadataBuildPollTimer) {
             window.clearTimeout(this.metadataBuildPollTimer);
             this.metadataBuildPollTimer = null;
@@ -1596,11 +1578,14 @@ export const optionsMethods = {
         const metadataBuildDoneActions = new Set(['created', 'updated', 'skipped', 'checked']);
         const getMetadataBuildHistoryAction = (item = {}) => String(item.action || 'checked').toLowerCase();
         const getMetadataBuildHistoryFilter = () => {
-            const value = metadataBuildHistoryFilterInput?.value || this.metadataBuildHistoryFilter || 'all';
+            const value = this.metadataBuildHistoryFilter || 'all';
             return metadataBuildHistoryFilterValues.includes(value) ? value : 'all';
         };
         const metadataBuildHistoryMatchesFilter = (item, filter) => {
             const action = getMetadataBuildHistoryAction(item);
+            return metadataBuildHistoryActionMatchesFilter(action, filter);
+        };
+        const metadataBuildHistoryActionMatchesFilter = (action, filter) => {
             if (filter === 'all') return true;
             if (filter === 'done') return metadataBuildDoneActions.has(action);
             return action === filter;
@@ -1617,16 +1602,82 @@ export const optionsMethods = {
         };
         const updateMetadataBuildHistoryFilterUi = (allItems = [], filteredItems = [], filter = 'all') => {
             const counts = getMetadataBuildHistoryFilterCounts(allItems);
-            if (metadataBuildHistoryFilterInput) {
-                Array.from(metadataBuildHistoryFilterInput.options).forEach((option) => {
-                    const label = metadataBuildHistoryFilterLabels[option.value] || option.value;
-                    option.textContent = `${label} (${Number(counts[option.value] || 0).toLocaleString()})`;
-                });
-                metadataBuildHistoryFilterInput.value = filter;
+            this.metadataBuildHistoryFilterCounts = counts;
+            this.metadataBuildHistoryFilteredCount = filteredItems.length;
+            this.metadataBuildHistoryTotalCount = allItems.length;
+            this.metadataBuildHistoryFilter = filter;
+            return counts;
+        };
+        const renderMetadataBuildActionFilterHeader = (counts = {}, filter = 'all', filteredCount = 0, totalCount = 0) => {
+            const activeLabel = metadataBuildHistoryFilterLabels[filter] || metadataBuildHistoryFilterLabels.all;
+            const menuOpen = Boolean(this.metadataBuildHistoryFilterMenuOpen);
+            const options = metadataBuildHistoryFilterValues.map((value) => {
+                const label = metadataBuildHistoryFilterLabels[value] || value;
+                const count = Number(counts[value] || 0);
+                const isActive = value === filter;
+                return `
+                    <button type="button" class="mr-options-history-filter-option ${isActive ? 'is-active' : ''}" data-metadata-history-filter-option="${this.escapeHtml(value)}" role="menuitemradio" aria-checked="${isActive ? 'true' : 'false'}">
+                        <span>${this.escapeHtml(label)}</span>
+                        <strong>${count.toLocaleString()}</strong>
+                    </button>
+                `;
+            }).join('');
+            return `
+                <th class="mr-options-history-action-filter-cell">
+                    <div class="mr-options-history-action-filter-wrap">
+                        <button type="button" class="mr-options-history-action-filter-button ${filter !== 'all' ? 'is-filtered' : ''}" data-metadata-history-filter-toggle aria-haspopup="menu" aria-expanded="${menuOpen ? 'true' : 'false'}" title="Filter by action">
+                            <span>Action</span>
+                            <span class="mr-options-history-filter-chip" data-metadata-history-filter-chip ${filter !== 'all' ? '' : 'hidden'}>${this.escapeHtml(activeLabel)}</span>
+                        </button>
+                        <div class="mr-options-history-filter-menu" role="menu" ${menuOpen ? '' : 'hidden'}>
+                            ${options}
+                        </div>
+                    </div>
+                </th>
+            `;
+        };
+        const setMetadataBuildHistoryFilterMenuOpen = (open) => {
+            this.metadataBuildHistoryFilterMenuOpen = Boolean(open);
+            const menu = metadataBuildResults?.querySelector?.('.mr-options-history-filter-menu');
+            const toggle = metadataBuildResults?.querySelector?.('[data-metadata-history-filter-toggle]');
+            if (menu) menu.hidden = !this.metadataBuildHistoryFilterMenuOpen;
+            if (toggle) toggle.setAttribute('aria-expanded', this.metadataBuildHistoryFilterMenuOpen ? 'true' : 'false');
+        };
+        const updateMetadataBuildActionFilterControl = (filter = 'all') => {
+            if (!metadataBuildResults) return;
+            const normalizedFilter = metadataBuildHistoryFilterValues.includes(filter) ? filter : 'all';
+            const counts = this.metadataBuildHistoryFilterCounts || {};
+            const toggle = metadataBuildResults.querySelector('[data-metadata-history-filter-toggle]');
+            const chip = metadataBuildResults.querySelector('[data-metadata-history-filter-chip]');
+            if (toggle) toggle.classList.toggle('is-filtered', normalizedFilter !== 'all');
+            if (chip) {
+                chip.textContent = metadataBuildHistoryFilterLabels[normalizedFilter] || normalizedFilter;
+                chip.hidden = normalizedFilter === 'all';
             }
-            if (metadataBuildHistoryFilterInfo) {
-                metadataBuildHistoryFilterInfo.textContent = `${filteredItems.length.toLocaleString()} shown of ${allItems.length.toLocaleString()}`;
-            }
+            metadataBuildResults.querySelectorAll('[data-metadata-history-filter-option]').forEach((option) => {
+                const value = option.dataset.metadataHistoryFilterOption || 'all';
+                const isActive = value === normalizedFilter;
+                option.classList.toggle('is-active', isActive);
+                option.setAttribute('aria-checked', isActive ? 'true' : 'false');
+                const countEl = option.querySelector('strong');
+                if (countEl) countEl.textContent = Number(counts[value] || 0).toLocaleString();
+            });
+        };
+        const applyMetadataBuildHistoryFilter = (filter = 'all') => {
+            if (!metadataBuildResults) return;
+            const normalizedFilter = metadataBuildHistoryFilterValues.includes(filter) ? filter : 'all';
+            this.metadataBuildHistoryFilter = normalizedFilter;
+            let shown = 0;
+            metadataBuildResults.querySelectorAll('[data-metadata-history-row]').forEach((row) => {
+                const action = row.dataset.historyAction || 'checked';
+                const matches = metadataBuildHistoryActionMatchesFilter(action, normalizedFilter);
+                row.hidden = !matches;
+                if (matches) shown += 1;
+            });
+            const emptyRow = metadataBuildResults.querySelector('[data-metadata-history-empty-row]');
+            if (emptyRow) emptyRow.hidden = shown > 0;
+            this.metadataBuildHistoryFilteredCount = shown;
+            updateMetadataBuildActionFilterControl(normalizedFilter);
         };
 
         const renderMetadataBuildResults = (data = undefined) => {
@@ -1654,11 +1705,11 @@ export const optionsMethods = {
             const activeHistoryFilter = getMetadataBuildHistoryFilter();
             this.metadataBuildHistoryFilter = activeHistoryFilter;
             const filteredItems = displayItems.filter(item => metadataBuildHistoryMatchesFilter(item, activeHistoryFilter));
-            updateMetadataBuildHistoryFilterUi(displayItems, filteredItems, activeHistoryFilter);
-            const visibleItems = filteredItems;
+            const filterCounts = updateMetadataBuildHistoryFilterUi(displayItems, filteredItems, activeHistoryFilter);
+            const visibleItems = displayItems;
             let html = '';
 
-            if (visibleItems.length) {
+            if (displayItems.length) {
                 const rows = visibleItems.map((item) => {
                     const modelLabel = item.relative_path || item.filename || item.model_path || 'Model';
                     const modelPath = item.model_path || '';
@@ -1674,8 +1725,10 @@ export const optionsMethods = {
                         : '';
                     const changedFieldsTitle = changedFields ? ` title="${this.escapeHtml(changedFields)}"` : '';
                     const action = item.action || 'checked';
-                    const actionClass = String(action).toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+                    const actionValue = String(action).toLowerCase();
+                    const actionClass = actionValue.replace(/[^a-z0-9_-]+/g, '-');
                     const message = item.message || changedFieldsSummary;
+                    const rowMatchesFilter = metadataBuildHistoryActionMatchesFilter(actionValue, activeHistoryFilter);
                     const buildContext = modelPath ? {
                         context_scope: 'local_model',
                         open_folder_label: 'Show File in Folder',
@@ -1697,7 +1750,7 @@ export const optionsMethods = {
                         ? this.getContextMenuAttrs(buildContext, 'Right-click for model options')
                         : '';
                     return `
-                        <tr class="mr-options-audit-row ${contextAttrs ? 'is-context-menu' : ''}"${contextAttrs}>
+                        <tr class="mr-options-audit-row ${contextAttrs ? 'is-context-menu' : ''}" data-metadata-history-row data-history-action="${this.escapeHtml(actionValue)}" ${rowMatchesFilter ? '' : 'hidden'}${contextAttrs}>
                             <td>
                                 <div class="mr-options-audit-model">${this.escapeHtml(modelLabel)}</div>
                                 <div class="mr-options-audit-path" title="${this.escapeHtml(modelPath)}">${this.escapeHtml(modelPath)}</div>
@@ -1718,26 +1771,30 @@ export const optionsMethods = {
                         </tr>
                     `;
                 }).join('');
+                const emptyRow = `
+                    <tr data-metadata-history-empty-row ${filteredItems.length ? 'hidden' : ''}>
+                        <td colspan="6">
+                            <div class="mr-options-audit-empty">No history items match the ${this.escapeHtml(metadataBuildHistoryFilterLabels[activeHistoryFilter] || activeHistoryFilter)} filter.</div>
+                        </td>
+                    </tr>
+                `;
                 html += `
                     <div class="mr-options-audit-table-wrap">
                         <table class="mr-options-audit-table mr-options-history-table">
                             <thead>
                                 <tr>
                                     <th>Model</th>
-                                    <th>Action</th>
+                                    ${renderMetadataBuildActionFilterHeader(filterCounts, activeHistoryFilter, filteredItems.length, displayItems.length)}
                                     <th>Folder</th>
                                     <th>SHA256</th>
                                     <th>Size</th>
                                     <th>Metadata file</th>
                                 </tr>
                             </thead>
-                            <tbody>${rows}</tbody>
+                            <tbody>${rows}${emptyRow}</tbody>
                         </table>
                     </div>
                 `;
-            } else if (displayItems.length) {
-                const label = metadataBuildHistoryFilterLabels[activeHistoryFilter] || activeHistoryFilter;
-                html += `<div class="mr-options-audit-empty">No history items match the ${this.escapeHtml(label)} filter.</div>`;
             } else if (source?.cancelled) {
                 html += '<div class="mr-options-audit-empty">Metadata build was cancelled before any history item was captured.</div>';
             } else {
@@ -2977,10 +3034,38 @@ export const optionsMethods = {
             });
         });
 
-        if (metadataBuildHistoryFilterInput) {
-            metadataBuildHistoryFilterInput.addEventListener('change', () => {
-                this.metadataBuildHistoryFilter = getMetadataBuildHistoryFilter();
-                renderMetadataBuildResults();
+        if (metadataBuildResults) {
+            metadataBuildResults.addEventListener('click', (event) => {
+                const filterToggle = event.target?.closest?.('[data-metadata-history-filter-toggle]');
+                if (filterToggle) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setMetadataBuildHistoryFilterMenuOpen(!this.metadataBuildHistoryFilterMenuOpen);
+                    return;
+                }
+
+                const filterOption = event.target?.closest?.('[data-metadata-history-filter-option]');
+                if (filterOption) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const nextFilter = filterOption.dataset.metadataHistoryFilterOption || 'all';
+                    applyMetadataBuildHistoryFilter(nextFilter);
+                    setMetadataBuildHistoryFilterMenuOpen(false);
+                }
+            });
+        }
+
+        this.contentElement.addEventListener('click', (event) => {
+            if (!this.metadataBuildHistoryFilterMenuOpen) return;
+            if (event.target?.closest?.('.mr-options-history-action-filter-wrap')) return;
+            setMetadataBuildHistoryFilterMenuOpen(false);
+        });
+
+        if (metadataBuildResults) {
+            metadataBuildResults.addEventListener('keydown', (event) => {
+                if (event.key !== 'Escape' || !this.metadataBuildHistoryFilterMenuOpen) return;
+                event.preventDefault();
+                setMetadataBuildHistoryFilterMenuOpen(false);
             });
         }
 
