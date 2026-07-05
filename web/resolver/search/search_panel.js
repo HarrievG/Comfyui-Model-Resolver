@@ -2407,8 +2407,94 @@ export const searchPanelMethods = {
         return `<span class="mr-match-status mr-match-status-bad-folder" tabindex="0" data-tooltip="${this.escapeHtml(warning.tooltip)}">Bad folder</span>`;
     },
 
+    getActiveDownloadInfoForLocalMatch(match = {}) {
+        const model = match.model || {};
+        const normalizePath = (value = '') => this.normalizeLocalMatchPathIdentity?.(value) || String(value || '').trim().replace(/\\/g, '/').replace(/\/+/g, '/').toLowerCase();
+        const joinPath = (...parts) => normalizePath(parts.filter(Boolean).join('/'));
+        const activeStatuses = new Set(['starting', 'downloading', 'paused', 'cancelling']);
+        const matchAbsolutePaths = [
+            model.path,
+            model.resolved_path,
+            match.path,
+            match.resolved_path
+        ].map(normalizePath).filter(Boolean);
+        const matchRelativePaths = [
+            model.relative_path,
+            match.relative_path
+        ].map(normalizePath).filter(Boolean);
+        const matchFilename = normalizePath(model.filename || match.filename || '');
+
+        for (const [downloadId, info] of Object.entries(this.activeDownloads || {})) {
+            const progress = info?.lastProgress || info?.statusSnapshot?.progress || {};
+            const status = String(progress.status || info?.lastStatus || info?.statusSnapshot?.status || 'starting').trim().toLowerCase();
+            if (!activeStatuses.has(status)) continue;
+
+            const filename = progress.filename || info?.filename || '';
+            const absoluteCandidates = [
+                progress.path,
+                info?.downloadPath,
+                info?.statusSnapshot?.downloadPath,
+                joinPath(progress.directory || '', filename),
+                joinPath(info?.downloadDirectory || '', filename),
+                joinPath(info?.statusSnapshot?.downloadDirectory || '', filename)
+            ].map(normalizePath).filter(Boolean);
+            const relativeCandidates = [
+                info?.subfolder && filename ? joinPath(info.subfolder, filename) : '',
+                progress.relative_path,
+                info?.relativePath
+            ].map(normalizePath).filter(Boolean);
+
+            const absoluteMatch = absoluteCandidates.some(activePath => (
+                matchAbsolutePaths.includes(activePath)
+                || matchRelativePaths.some(relativePath => activePath.endsWith(`/${relativePath}`))
+            ));
+            const relativeMatch = relativeCandidates.some(activeRelative => (
+                matchRelativePaths.includes(activeRelative)
+                || matchAbsolutePaths.some(matchPath => matchPath.endsWith(`/${activeRelative}`))
+            ));
+            if (!absoluteMatch && !relativeMatch) continue;
+
+            return {
+                download_id: downloadId,
+                download_status: status,
+                download_progress: progress.progress,
+                downloaded: progress.downloaded,
+                total_size: progress.total_size,
+                filename: filename || matchFilename,
+                is_downloading: true,
+                downloading: true
+            };
+        }
+
+        return null;
+    },
+
+    renderLocalMatchDownloadingBadge(match = {}) {
+        const model = match.model || {};
+        const activeDownloadInfo = this.getActiveDownloadInfoForLocalMatch?.(match) || null;
+        const isDownloading = Boolean(
+            match.is_downloading
+            || match.downloading
+            || model.is_downloading
+            || model.downloading
+            || activeDownloadInfo
+        );
+        if (!isDownloading) return '';
+
+        const status = String(activeDownloadInfo?.download_status || match.download_status || model.download_status || '').trim().toLowerCase();
+        const progress = Number(activeDownloadInfo?.download_progress ?? match.download_progress ?? model.download_progress);
+        const progressLabel = Number.isFinite(progress) && progress > 0 && progress < 100
+            ? ` (${Math.round(progress)}%)`
+            : '';
+        const statusLabel = status === 'paused'
+            ? 'paused'
+            : (status === 'starting' ? 'starting' : 'still downloading');
+        const tooltip = `The download for this local file is ${statusLabel}${progressLabel}. It may be incomplete until the download finishes.`;
+        return `<span class="mr-match-status mr-match-status-downloading" tabindex="0" data-tooltip="${this.escapeHtml(tooltip)}">Downloading</span>`;
+    },
+
     renderLocalMatchStatusGroup(missing = {}, match = {}, hashLabelMap = null) {
-        return `<span class="mr-match-status-group">${this.renderLocalMatchStatus(match, hashLabelMap)}${this.renderLocalMatchBadFolderBadge(missing, match)}</span>`;
+        return `<span class="mr-match-status-group">${this.renderLocalMatchStatus(match, hashLabelMap)}${this.renderLocalMatchDownloadingBadge(match)}${this.renderLocalMatchBadFolderBadge(missing, match)}</span>`;
     },
 
     areLocalMatchAlternativesCollapsed() {

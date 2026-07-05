@@ -1923,8 +1923,20 @@
     cursor: help;
 }
 
+.mr-match-status-downloading {
+    color: #67e8f9;
+    background: rgba(6, 182, 212, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(6, 182, 212, 0.24);
+    cursor: help;
+}
+
 .mr-match-status-bad-folder:focus-visible {
     outline: 2px solid rgba(248, 113, 113, 0.58);
+    outline-offset: 2px;
+}
+
+.mr-match-status-downloading:focus-visible {
+    outline: 2px solid rgba(6, 182, 212, 0.58);
     outline-offset: 2px;
 }
 

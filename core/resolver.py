@@ -53,6 +53,7 @@ from .path_utils import (
 
 _LOCAL_HASH_MATCH_CACHE_LOCK = threading.Lock()
 _LOCAL_HASH_MATCH_CACHE: Optional[Dict[str, List[Dict[str, Any]]]] = None
+_ACTIVE_DOWNLOAD_STATUSES = {"starting", "downloading", "paused", "cancelling"}
 
 
 def invalidate_local_hash_match_cache() -> None:
@@ -67,6 +68,105 @@ def _clone_hash_match(match: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(cloned.get("model"), dict):
         cloned["model"] = dict(cloned["model"])
     return cloned
+
+
+def _normalize_download_match_path(path: Any) -> str:
+    text = str(path or "").strip()
+    if not text:
+        return ""
+
+    try:
+        return os.path.normcase(os.path.abspath(os.path.normpath(text)))
+    except (OSError, ValueError):
+        return os.path.normcase(os.path.normpath(text))
+
+
+def _get_active_downloads_by_path() -> Dict[str, Dict[str, Any]]:
+    try:
+        from .downloader import get_all_progress
+
+        progress_items = get_all_progress()
+    except Exception:
+        return {}
+
+    active: Dict[str, Dict[str, Any]] = {}
+    for download_id, progress in progress_items.items():
+        if not isinstance(progress, dict):
+            continue
+
+        status = str(progress.get("status") or "").strip().lower()
+        if status not in _ACTIVE_DOWNLOAD_STATUSES:
+            continue
+
+        path = progress.get("path") or ""
+        if not path and progress.get("directory") and progress.get("filename"):
+            path = os.path.join(str(progress["directory"]), str(progress["filename"]))
+
+        path_key = _normalize_download_match_path(path)
+        if not path_key:
+            continue
+
+        active[path_key] = {
+            "download_id": download_id,
+            "download_status": status,
+            "download_progress": progress.get("progress", 0),
+            "downloaded": progress.get("downloaded", 0),
+            "total_size": progress.get("total_size", 0),
+        }
+
+    return active
+
+
+def annotate_local_matches_with_download_state(
+    matches: List[Dict[str, Any]],
+    active_downloads_by_path: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    active_downloads = (
+        active_downloads_by_path
+        if active_downloads_by_path is not None
+        else _get_active_downloads_by_path()
+    )
+    if not active_downloads:
+        return matches
+
+    enriched_matches: List[Dict[str, Any]] = []
+    for match in matches:
+        if not isinstance(match, dict):
+            enriched_matches.append(match)
+            continue
+
+        model = match.get("model") if isinstance(match.get("model"), dict) else {}
+        candidate_paths = [
+            model.get("path"),
+            model.get("resolved_path"),
+            match.get("path"),
+            match.get("resolved_path"),
+        ]
+        download_info = None
+        for candidate_path in candidate_paths:
+            path_key = _normalize_download_match_path(candidate_path)
+            if path_key and path_key in active_downloads:
+                download_info = active_downloads[path_key]
+                break
+
+        if not download_info:
+            enriched_matches.append(match)
+            continue
+
+        enriched_match = dict(match)
+        enriched_model = dict(model)
+        download_fields = {
+            **download_info,
+            "is_downloading": True,
+            "downloading": True,
+        }
+        enriched_match.update(download_fields)
+        if enriched_model:
+            enriched_model.update(download_fields)
+            enriched_match["model"] = enriched_model
+        enriched_matches.append(enriched_match)
+
+    return enriched_matches
 
 
 def _is_local_hash_match_candidate(model: Dict[str, Any]) -> bool:
@@ -389,7 +489,7 @@ def search_local_matches(
                 deduplicated_matches[idx] = match
                 seen_absolute_paths[dedupe_key] = match
 
-    return deduplicated_matches
+    return annotate_local_matches_with_download_state(deduplicated_matches)
 
 
 def _collect_hashes_from_container(value: Any) -> List[str]:
@@ -477,9 +577,10 @@ def search_local_matches_by_hash(
             else 1
         )
 
+    annotated_matches = annotate_local_matches_with_download_state(matches)
     if max_matches > 0:
-        return matches[:max_matches]
-    return matches
+        return annotated_matches[:max_matches]
+    return annotated_matches
 
 
 def get_local_model_hash_metadata(
@@ -867,6 +968,7 @@ def analyze_and_find_matches(
         )
 
     local_match_cache: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    active_downloads_by_path = _get_active_downloads_by_path()
 
     def get_match_target(model_ref: Dict[str, Any]) -> Optional[str]:
         target_for_matching = (
@@ -961,7 +1063,10 @@ def analyze_and_find_matches(
             threshold=similarity_threshold,
             max_results=max_matches_per_model,
         )
-        deduplicated_matches = deduplicate_matches(matches)
+        deduplicated_matches = annotate_local_matches_with_download_state(
+            deduplicate_matches(matches),
+            active_downloads_by_path,
+        )
         local_match_cache[cache_key] = deduplicated_matches
         return deduplicated_matches
 

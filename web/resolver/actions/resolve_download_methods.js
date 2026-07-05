@@ -1775,6 +1775,7 @@ export const resolveDownloadMethods = {
 
             if (progress.status === 'downloading' || progress.status === 'starting' || progress.status === 'paused') {
                 this.renderDownloadSnapshot(downloadId, snapshot, { progressDiv, downloadBtn });
+                this.refreshLocalMatchesUiForMissing?.(missing);
                 if (typeof this.requestQueuePanelUpdate === 'function') {
                     this.requestQueuePanelUpdate();
                 } else {
@@ -1800,6 +1801,7 @@ export const resolveDownloadMethods = {
                 delete this.activeDownloads[downloadId];
                 this.updateDownloadAllButtonState();
                 this.updateQueuePanel?.();
+                this.refreshLocalMatchesUiForMissing?.(missing);
                 this.showNotification(alreadyExists
                     ? `Already downloaded: ${progress.filename}`
                     : `Downloaded: ${progress.filename}`, 'success', {
@@ -1831,6 +1833,7 @@ export const resolveDownloadMethods = {
                 delete this.activeDownloads[downloadId];
                 this.updateDownloadAllButtonState();
                 this.updateQueuePanel?.();
+                this.refreshLocalMatchesUiForMissing?.(missing);
 
             } else if (progress.status === 'cancelled') {
                 const cancelledSnapshot = this.rememberDownloadUiState(downloadId, info, progress, {
@@ -1842,6 +1845,7 @@ export const resolveDownloadMethods = {
                 delete this.activeDownloads[downloadId];
                 this.updateDownloadAllButtonState();
                 this.updateQueuePanel?.();
+                this.refreshLocalMatchesUiForMissing?.(missing);
                 this.showNotification('Download cancelled', 'info');
 
             } else {
