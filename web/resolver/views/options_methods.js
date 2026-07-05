@@ -860,6 +860,20 @@ export const optionsMethods = {
                                             </div>
                                         </div>
                                         <div id="mr-options-metadata-build-history-panel" class="mr-options-build-tab-panel is-hidden">
+                                            <div class="mr-options-history-toolbar">
+                                                <label class="mr-options-history-filter-label" for="mr-options-metadata-build-history-filter">Show</label>
+                                                <select id="mr-options-metadata-build-history-filter" class="mr-options-input mr-options-history-filter-select">
+                                                    <option value="all">All</option>
+                                                    <option value="done">Done</option>
+                                                    <option value="created">Created</option>
+                                                    <option value="updated">Updated</option>
+                                                    <option value="skipped">Skipped</option>
+                                                    <option value="checked">Checked</option>
+                                                    <option value="error">Errors</option>
+                                                    <option value="cancelled">Cancelled</option>
+                                                </select>
+                                                <span id="mr-options-metadata-build-history-filter-info" class="mr-options-history-filter-info">0 shown</span>
+                                            </div>
                                             <div id="mr-options-metadata-build-results" class="mr-options-audit-results" hidden></div>
                                         </div>
                                     </div>
@@ -970,6 +984,8 @@ export const optionsMethods = {
         const metadataBuildProgressPanel = this.contentElement.querySelector('#mr-options-metadata-build-progress-panel');
         const metadataBuildHistoryPanel = this.contentElement.querySelector('#mr-options-metadata-build-history-panel');
         const metadataBuildHistoryCountEl = this.contentElement.querySelector('#mr-options-metadata-build-history-count');
+        const metadataBuildHistoryFilterInput = this.contentElement.querySelector('#mr-options-metadata-build-history-filter');
+        const metadataBuildHistoryFilterInfo = this.contentElement.querySelector('#mr-options-metadata-build-history-filter-info');
         const metadataBuildCpuEl = this.contentElement.querySelector('#mr-options-metadata-build-cpu');
         const metadataBuildWorkersEl = this.contentElement.querySelector('#mr-options-metadata-build-workers');
         const metadataBuildWorkerInput = this.contentElement.querySelector('#mr-options-metadata-build-worker-count');
@@ -983,6 +999,13 @@ export const optionsMethods = {
         const optionsMain = this.contentElement.querySelector('.mr-options-main');
         const navButtons = Array.from(this.contentElement.querySelectorAll('.mr-options-nav-btn'));
         const optionSections = Array.from(this.contentElement.querySelectorAll('.mr-options-section'));
+        const metadataBuildHistoryFilterValues = ['all', 'done', 'created', 'updated', 'skipped', 'checked', 'error', 'cancelled'];
+        if (!metadataBuildHistoryFilterValues.includes(this.metadataBuildHistoryFilter)) {
+            this.metadataBuildHistoryFilter = 'all';
+        }
+        if (metadataBuildHistoryFilterInput) {
+            metadataBuildHistoryFilterInput.value = this.metadataBuildHistoryFilter;
+        }
         if (this.metadataBuildPollTimer) {
             window.clearTimeout(this.metadataBuildPollTimer);
             this.metadataBuildPollTimer = null;
@@ -1356,10 +1379,6 @@ export const optionsMethods = {
                 this.metadataBuildHistoryKeys.add(key);
                 this.metadataBuildHistory.unshift(item);
             });
-            if (this.metadataBuildHistory.length > 1000) {
-                this.metadataBuildHistory = this.metadataBuildHistory.slice(0, 1000);
-                this.metadataBuildHistoryKeys = new Set(this.metadataBuildHistory.map(getMetadataBuildHistoryKey));
-            }
             if (metadataBuildHistoryCountEl) {
                 metadataBuildHistoryCountEl.textContent = this.metadataBuildHistory.length.toLocaleString();
             }
@@ -1467,6 +1486,12 @@ export const optionsMethods = {
 
         const renderMetadataBuildWorkers = (data = {}, activeModels = []) => {
             if (!metadataBuildWorkerListEl) return;
+            const statusValue = String(data.status || data.stage || '').toLowerCase();
+            if (['done', 'cancelled', 'error'].includes(statusValue)) {
+                metadataBuildWorkerListEl.innerHTML = '';
+                metadataBuildWorkerListEl.hidden = true;
+                return;
+            }
             const workerItems = activeModels.length
                 ? activeModels
                 : (data.current_model ? [{
@@ -1525,7 +1550,8 @@ export const optionsMethods = {
 
             const current = Number(data.current || 0);
             const total = Number(data.total || data.total_models || 0);
-            const activeModels = Array.isArray(data.active_models) ? data.active_models : [];
+            const terminalStatus = ['done', 'cancelled', 'error'].includes(String(data.status || stage || '').toLowerCase());
+            const activeModels = !terminalStatus && Array.isArray(data.active_models) ? data.active_models : [];
             const currentModel = data.current_model || data.filename || '';
             const suffix = total > 0 ? ` (${current.toLocaleString()} / ${total.toLocaleString()})` : '';
             if (metadataBuildCurrentModelEl) {
@@ -1557,13 +1583,64 @@ export const optionsMethods = {
             renderMetadataBuildWorkers(data, activeModels);
         };
 
-        const renderMetadataBuildResults = (data = null) => {
+        const metadataBuildHistoryFilterLabels = {
+            all: 'All',
+            done: 'Done',
+            created: 'Created',
+            updated: 'Updated',
+            skipped: 'Skipped',
+            checked: 'Checked',
+            error: 'Errors',
+            cancelled: 'Cancelled'
+        };
+        const metadataBuildDoneActions = new Set(['created', 'updated', 'skipped', 'checked']);
+        const getMetadataBuildHistoryAction = (item = {}) => String(item.action || 'checked').toLowerCase();
+        const getMetadataBuildHistoryFilter = () => {
+            const value = metadataBuildHistoryFilterInput?.value || this.metadataBuildHistoryFilter || 'all';
+            return metadataBuildHistoryFilterValues.includes(value) ? value : 'all';
+        };
+        const metadataBuildHistoryMatchesFilter = (item, filter) => {
+            const action = getMetadataBuildHistoryAction(item);
+            if (filter === 'all') return true;
+            if (filter === 'done') return metadataBuildDoneActions.has(action);
+            return action === filter;
+        };
+        const getMetadataBuildHistoryFilterCounts = (items = []) => {
+            const counts = Object.fromEntries(metadataBuildHistoryFilterValues.map(value => [value, 0]));
+            items.forEach((item) => {
+                const action = getMetadataBuildHistoryAction(item);
+                counts.all += 1;
+                if (metadataBuildDoneActions.has(action)) counts.done += 1;
+                if (Object.prototype.hasOwnProperty.call(counts, action)) counts[action] += 1;
+            });
+            return counts;
+        };
+        const updateMetadataBuildHistoryFilterUi = (allItems = [], filteredItems = [], filter = 'all') => {
+            const counts = getMetadataBuildHistoryFilterCounts(allItems);
+            if (metadataBuildHistoryFilterInput) {
+                Array.from(metadataBuildHistoryFilterInput.options).forEach((option) => {
+                    const label = metadataBuildHistoryFilterLabels[option.value] || option.value;
+                    option.textContent = `${label} (${Number(counts[option.value] || 0).toLocaleString()})`;
+                });
+                metadataBuildHistoryFilterInput.value = filter;
+            }
+            if (metadataBuildHistoryFilterInfo) {
+                metadataBuildHistoryFilterInfo.textContent = `${filteredItems.length.toLocaleString()} shown of ${allItems.length.toLocaleString()}`;
+            }
+        };
+
+        const renderMetadataBuildResults = (data = undefined) => {
             if (!metadataBuildResults) return;
-            const source = data?.result && typeof data.result === 'object' ? data.result : data;
+            if (data !== undefined) {
+                this.metadataBuildLastResultsData = data;
+            }
+            const renderData = data === undefined ? this.metadataBuildLastResultsData : data;
+            const source = renderData?.result && typeof renderData.result === 'object' ? renderData.result : renderData;
             const historyItems = Array.isArray(this.metadataBuildHistory)
                 ? this.metadataBuildHistory
                 : [];
             if (!source && !historyItems.length) {
+                updateMetadataBuildHistoryFilterUi([], [], getMetadataBuildHistoryFilter());
                 metadataBuildResults.hidden = true;
                 metadataBuildResults.innerHTML = '';
                 return;
@@ -1574,7 +1651,11 @@ export const optionsMethods = {
                 : (source && Array.isArray(source.updated) ? source.updated : []);
             const displayItems = historyItems.length ? historyItems : fallbackItems;
             const errors = Array.isArray(source?.errors) ? source.errors : [];
-            const visibleItems = displayItems.slice(0, 500);
+            const activeHistoryFilter = getMetadataBuildHistoryFilter();
+            this.metadataBuildHistoryFilter = activeHistoryFilter;
+            const filteredItems = displayItems.filter(item => metadataBuildHistoryMatchesFilter(item, activeHistoryFilter));
+            updateMetadataBuildHistoryFilterUi(displayItems, filteredItems, activeHistoryFilter);
+            const visibleItems = filteredItems;
             let html = '';
 
             if (visibleItems.length) {
@@ -1654,9 +1735,9 @@ export const optionsMethods = {
                         </table>
                     </div>
                 `;
-                if (displayItems.length > visibleItems.length) {
-                    html += `<div class="mr-options-db-message">Showing latest ${visibleItems.length.toLocaleString()} of ${displayItems.length.toLocaleString()} history items.</div>`;
-                }
+            } else if (displayItems.length) {
+                const label = metadataBuildHistoryFilterLabels[activeHistoryFilter] || activeHistoryFilter;
+                html += `<div class="mr-options-audit-empty">No history items match the ${this.escapeHtml(label)} filter.</div>`;
             } else if (source?.cancelled) {
                 html += '<div class="mr-options-audit-empty">Metadata build was cancelled before any history item was captured.</div>';
             } else {
@@ -2895,6 +2976,13 @@ export const optionsMethods = {
                 setMetadataBuildTab(button.dataset.buildTab || 'progress');
             });
         });
+
+        if (metadataBuildHistoryFilterInput) {
+            metadataBuildHistoryFilterInput.addEventListener('change', () => {
+                this.metadataBuildHistoryFilter = getMetadataBuildHistoryFilter();
+                renderMetadataBuildResults();
+            });
+        }
 
         if (metadataBuildWorkerInput) {
             metadataBuildWorkerInput.addEventListener('change', () => {

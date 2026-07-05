@@ -470,7 +470,7 @@ def _build_result_payload(
         "errors": errors[:50],
         "updated": updated[:200],
         "updated_count": len(updated),
-        "history": history[:500],
+        "history": history,
         "history_count": len(history),
     }
 
@@ -696,6 +696,12 @@ def _build_missing_local_metadata_parallel(
             "current": completed,
             "total": total,
             "percent": 100,
+            "active_models": [],
+            "active_worker_count": 0,
+            "current_model": "",
+            "current_path": "",
+            "bytes_read": 0,
+            "total_bytes": 0,
             **result,
         },
     )
@@ -792,7 +798,7 @@ def build_missing_local_metadata(
                 "error_count": len(errors),
                 "errors": errors[:50],
                 "updated": updated[:200],
-                "history": history[:500],
+                "history": history,
                 "history_count": len(history),
             }
 
@@ -1056,7 +1062,7 @@ def build_missing_local_metadata(
                 "error_count": len(errors),
                 "errors": errors[:50],
                 "updated": updated[:200],
-                "history": history[:500],
+                "history": history,
                 "history_count": len(history),
             }
         except Exception as exc:
@@ -1110,7 +1116,7 @@ def build_missing_local_metadata(
         "errors": errors[:50],
         "updated": updated[:200],
         "updated_count": len(updated),
-        "history": history[:500],
+        "history": history,
         "history_count": len(history),
     }
     _emit(
@@ -1122,6 +1128,12 @@ def build_missing_local_metadata(
             "current": total,
             "total": total,
             "percent": 100,
+            "active_models": [],
+            "active_worker_count": 0,
+            "current_model": "",
+            "current_path": "",
+            "bytes_read": 0,
+            "total_bytes": 0,
             **result,
         },
     )

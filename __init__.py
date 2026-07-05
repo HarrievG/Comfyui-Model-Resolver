@@ -1220,6 +1220,12 @@ class ModelResolverExtension:
                                 stage="cancelled",
                                 message="Metadata build cancelled",
                                 percent=100,
+                                active_models=[],
+                                active_worker_count=0,
+                                current_model="",
+                                current_path="",
+                                bytes_read=0,
+                                total_bytes=0,
                                 result=result,
                                 **result,
                             )
@@ -1231,6 +1237,12 @@ class ModelResolverExtension:
                             stage="done",
                             message="Local metadata build completed.",
                             percent=100,
+                            active_models=[],
+                            active_worker_count=0,
+                            current_model="",
+                            current_path="",
+                            bytes_read=0,
+                            total_bytes=0,
                             result=result,
                             **result,
                         )
@@ -1242,6 +1254,12 @@ class ModelResolverExtension:
                             stage="error",
                             message=str(exc) or "Metadata build failed",
                             percent=100,
+                            active_models=[],
+                            active_worker_count=0,
+                            current_model="",
+                            current_path="",
+                            bytes_read=0,
+                            total_bytes=0,
                             error=str(exc) or "Metadata build failed",
                         )
 
