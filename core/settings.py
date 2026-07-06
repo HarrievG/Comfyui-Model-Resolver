@@ -163,6 +163,9 @@ def normalize_download_backend(value: Any) -> str:
 
 def normalize_settings(settings: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     data = dict(settings or {})
+    data["workflow_hash_metadata_enabled"] = bool_setting(
+        data.get("workflow_hash_metadata_enabled"), True
+    )
     data["download_backend"] = normalize_download_backend(data.get("download_backend"))
     data["aria2c_path"] = str(data.get("aria2c_path") or "").strip()
     data["aria2_auto_stop_daemon"] = bool_setting(

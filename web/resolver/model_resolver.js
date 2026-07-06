@@ -98,6 +98,10 @@ export class ModelResolver {
         this.dialog = null;
         this.isCheckingMissing = false;  // Prevent multiple simultaneous checks
         this.lastCheckedWorkflow = null;  // Track to avoid duplicate checks
+        this.workflowHashMetadataCache = null;
+        this.workflowHashMetadataSignature = null;
+        this.workflowHashMetadataRefreshTimer = null;
+        this.workflowHashMetadataRefreshing = false;
     }
 
     setup = async () => {
@@ -117,6 +121,7 @@ export class ModelResolver {
 
         // Listen for workflow load events to auto-check for missing models
         this.setupAutoOpenOnMissingModels();
+        this.setupWorkflowHashMetadataInjection();
         this.setupActiveWorkflowChangeListeners();
 
         const sidebarRegistered = this.registerSidebarButton();
@@ -509,8 +514,109 @@ export class ModelResolver {
     }
 
     handleActiveWorkflowRouteChange(reason = 'workflow-change') {
+        this.scheduleWorkflowHashMetadataRefresh();
         if (!this.dialog?.isVisible()) return;
         this.dialog.scheduleActiveWorkflowRefresh(reason);
+    }
+
+    isWorkflowHashMetadataEnabled() {
+        return localStorage.getItem('ModelResolver.workflowHashMetadataEnabled') !== 'false';
+    }
+
+    setupWorkflowHashMetadataInjection() {
+        window.__ModelResolverWorkflowHashMetadataOwner = this;
+        if (window.__ModelResolverWorkflowHashMetadataPatched) {
+            this.scheduleWorkflowHashMetadataRefresh();
+            return;
+        }
+
+        if (!app?.graph || typeof app.graph.serialize !== 'function') return;
+
+        const originalSerialize = app.graph.serialize;
+        app.graph.serialize = function(...args) {
+            const workflow = originalSerialize.apply(this, args);
+            window.__ModelResolverWorkflowHashMetadataOwner?.injectWorkflowHashMetadata(workflow);
+            window.__ModelResolverWorkflowHashMetadataOwner?.scheduleWorkflowHashMetadataRefresh(workflow);
+            return workflow;
+        };
+        window.__ModelResolverWorkflowHashMetadataPatched = true;
+        this.scheduleWorkflowHashMetadataRefresh();
+    }
+
+    injectWorkflowHashMetadata(workflow) {
+        if (!workflow || typeof workflow !== 'object') return workflow;
+        if (!this.isWorkflowHashMetadataEnabled()) return workflow;
+
+        const cache = this.workflowHashMetadataCache;
+        if (!cache || !Array.isArray(cache.models) || !cache.models.length) return workflow;
+
+        workflow.extra = workflow.extra && typeof workflow.extra === 'object' ? workflow.extra : {};
+        workflow.extra.model_resolver_hashes = {
+            version: 1,
+            source: 'comfyui-model-resolver',
+            models: cache.models,
+            updated_at: cache.updated_at || Date.now()
+        };
+        return workflow;
+    }
+
+    scheduleWorkflowHashMetadataRefresh(workflow = null) {
+        if (!this.isWorkflowHashMetadataEnabled()) return;
+        if (this.workflowHashMetadataRefreshTimer) {
+            clearTimeout(this.workflowHashMetadataRefreshTimer);
+        }
+        this.workflowHashMetadataRefreshTimer = setTimeout(() => {
+            this.workflowHashMetadataRefreshTimer = null;
+            this.refreshWorkflowHashMetadata(workflow);
+        }, 800);
+    }
+
+    async refreshWorkflowHashMetadata(workflow = null) {
+        if (this.workflowHashMetadataRefreshing || !this.isWorkflowHashMetadataEnabled()) return;
+
+        const currentWorkflow = workflow || app?.graph?.serialize?.();
+        if (!currentWorkflow) return;
+
+        let signature = '';
+        try {
+            signature = JSON.stringify((currentWorkflow.nodes || []).map((node) => [
+                node?.id,
+                node?.type,
+                node?.widgets_values
+            ]));
+        } catch (error) {
+            signature = '';
+        }
+        if (signature && signature === this.workflowHashMetadataSignature && this.workflowHashMetadataCache) {
+            return;
+        }
+
+        this.workflowHashMetadataRefreshing = true;
+        try {
+            const response = await api.fetchApi('/model_resolver/workflow-model-hashes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ workflow: currentWorkflow })
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            if (!data?.enabled) {
+                this.workflowHashMetadataCache = null;
+                this.workflowHashMetadataSignature = signature;
+                return;
+            }
+            this.workflowHashMetadataCache = {
+                models: Array.isArray(data.models) ? data.models : [],
+                by_path: data.by_path || {},
+                by_node: data.by_node || {},
+                updated_at: Date.now()
+            };
+            this.workflowHashMetadataSignature = signature;
+        } catch (error) {
+            log.debug('Model Resolver: workflow hash metadata refresh failed', error);
+        } finally {
+            this.workflowHashMetadataRefreshing = false;
+        }
     }
 
     /**

@@ -18,6 +18,7 @@ const SETTINGS_MAP = [
     { serverKey: 'auto_fill_base_model', localKey: 'ModelResolver.autoFillBaseModel', type: 'boolean', default: true },
     { serverKey: 'auto_fill_subfolder', localKey: 'ModelResolver.autoFillSubfolder', type: 'boolean', default: true },
     { serverKey: 'auto_refresh_comfy_models_after_apply', localKey: 'ModelResolver.autoRefreshComfyModelsAfterApply', type: 'boolean', default: true },
+    { serverKey: 'workflow_hash_metadata_enabled', localKey: 'ModelResolver.workflowHashMetadataEnabled', type: 'boolean', default: true },
     { serverKey: 'download_backend', localKey: 'ModelResolver.downloadBackend', type: 'backend', default: 'python' },
     { serverKey: 'aria2c_path', localKey: 'ModelResolver.aria2cPath', type: 'string', default: '' },
     { serverKey: 'aria2_auto_stop_daemon', localKey: 'ModelResolver.aria2AutoStopDaemon', type: 'boolean', default: true },
@@ -430,6 +431,15 @@ export const optionsMethods = {
                                             </div>
                                             <span class="mr-options-toggle-control">
                                                 <input id="mr-options-auto-refresh-comfy-models" class="mr-options-switch-input" type="checkbox" ${tokens.auto_refresh_comfy_models_after_apply ? 'checked' : ''}>
+                                                <span class="mr-options-switch"></span>
+                                            </span>
+                                        </label>
+                                        <label class="mr-options-toggle-row">
+                                            <div class="mr-options-toggle-copy">
+                                                <span class="mr-options-toggle-title">Embed workflow hashes <span class="mr-tooltip-badge" data-tooltip="Adds SHA256 metadata for models used in saved workflows and image workflow JSON, so renamed files can be resolved by hash later.">?</span></span>
+                                            </div>
+                                            <span class="mr-options-toggle-control">
+                                                <input id="mr-options-workflow-hash-metadata" class="mr-options-switch-input" type="checkbox" ${tokens.workflow_hash_metadata_enabled ? 'checked' : ''}>
                                                 <span class="mr-options-switch"></span>
                                             </span>
                                         </label>
@@ -903,6 +913,7 @@ export const optionsMethods = {
         const autoFillBaseModelInput = this.contentElement.querySelector('#mr-options-auto-fill-base-model');
         const autoFillSubfolderInput = this.contentElement.querySelector('#mr-options-auto-fill-subfolder');
         const autoRefreshComfyModelsInput = this.contentElement.querySelector('#mr-options-auto-refresh-comfy-models');
+        const workflowHashMetadataInput = this.contentElement.querySelector('#mr-options-workflow-hash-metadata');
         const downloadBackendInput = this.contentElement.querySelector('#mr-options-download-backend');
         const aria2cPathInput = this.contentElement.querySelector('#mr-options-aria2c-path');
         const aria2InstallBtn = this.contentElement.querySelector('#mr-options-aria2-install');
@@ -3422,6 +3433,7 @@ export const optionsMethods = {
                     auto_fill_base_model: Boolean(autoFillBaseModelInput?.checked),
                     auto_fill_subfolder: Boolean(autoFillSubfolderInput?.checked),
                     auto_refresh_comfy_models_after_apply: Boolean(autoRefreshComfyModelsInput?.checked),
+                    workflow_hash_metadata_enabled: Boolean(workflowHashMetadataInput?.checked),
                     download_backend: downloadBackend,
                     aria2c_path: aria2cPathInput?.value?.trim() || '',
                     aria2_auto_stop_daemon: Boolean(aria2AutoStopInput?.checked),

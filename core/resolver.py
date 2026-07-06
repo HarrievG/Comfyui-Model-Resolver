@@ -287,6 +287,98 @@ def get_workflow_url_info_for_filename(
     return None
 
 
+def _workflow_hash_entry_candidates(entry: Any) -> List[Dict[str, Any]]:
+    if not isinstance(entry, dict):
+        return []
+    sha256 = normalize_sha256(extract_sha256_from_metadata(entry))
+    if not sha256:
+        return []
+    return [{**entry, "sha256": sha256}]
+
+
+def _collect_workflow_hash_entries(value: Any) -> List[Dict[str, Any]]:
+    if not isinstance(value, dict):
+        return []
+
+    entries: List[Dict[str, Any]] = []
+    for key in (
+        "model_resolver_hashes",
+        "anomalous_hashes",
+        "model_hashes",
+        "hashes",
+    ):
+        raw = value.get(key)
+        if isinstance(raw, dict):
+            for nested_key in ("models", "by_path", "by_node"):
+                nested = raw.get(nested_key)
+                if isinstance(nested, list):
+                    for item in nested:
+                        entries.extend(_workflow_hash_entry_candidates(item))
+                elif isinstance(nested, dict):
+                    for item in nested.values():
+                        entries.extend(_workflow_hash_entry_candidates(item))
+            entries.extend(_workflow_hash_entry_candidates(raw))
+        elif isinstance(raw, list):
+            for item in raw:
+                entries.extend(_workflow_hash_entry_candidates(item))
+    return entries
+
+
+def extract_workflow_hash_metadata(workflow_json: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Return embedded workflow SHA256 metadata indexed by path, filename, and node/widget."""
+    if not isinstance(workflow_json, dict):
+        return {}
+
+    entries: List[Dict[str, Any]] = []
+    entries.extend(_collect_workflow_hash_entries(workflow_json))
+    extra = workflow_json.get("extra")
+    if isinstance(extra, dict):
+        entries.extend(_collect_workflow_hash_entries(extra))
+
+    index: Dict[str, Dict[str, Any]] = {}
+    for entry in entries:
+        sha256 = normalize_sha256(entry.get("sha256"))
+        if not sha256:
+            continue
+        normalized = {**entry, "sha256": sha256}
+        for candidate in (
+            entry.get("path"),
+            entry.get("original_path"),
+            entry.get("filename"),
+            entry.get("name"),
+            entry.get("file_name"),
+        ):
+            text = str(candidate or "").strip()
+            if not text:
+                continue
+            index[text] = normalized
+            index[get_filename_from_path(text)] = normalized
+        node_id = entry.get("node_id")
+        widget_index = entry.get("widget_index")
+        if node_id is not None and widget_index is not None:
+            index[f"{node_id}:{widget_index}"] = normalized
+    return index
+
+
+def get_workflow_hash_info_for_ref(
+    workflow_hashes: Dict[str, Dict[str, Any]], model_ref: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    if not workflow_hashes:
+        return None
+    original_path = str(model_ref.get("original_path") or "")
+    candidates = [
+        f"{model_ref.get('node_id')}:{model_ref.get('widget_index')}",
+        original_path,
+        get_filename_from_path(original_path),
+        model_ref.get("filename") or "",
+        model_ref.get("name") or "",
+    ]
+    for candidate in candidates:
+        if candidate and candidate in workflow_hashes:
+            return workflow_hashes[candidate]
+    return None
+
+
 def workflow_has_nodes(workflow_json: Dict[str, Any]) -> bool:
     """Return True when the active top-level workflow contains nodes."""
     if not isinstance(workflow_json, dict):
@@ -599,6 +691,12 @@ def get_local_model_hash_metadata(
 
     normalized_path = os.path.abspath(os.path.normpath(raw_path))
     exists = os.path.exists(normalized_path)
+    file_size = 0
+    if exists and os.path.isfile(normalized_path):
+        try:
+            file_size = os.path.getsize(normalized_path)
+        except OSError:
+            file_size = 0
     model_info: Dict[str, Any] = {
         **(model if isinstance(model, dict) else {}),
         "path": normalized_path,
@@ -620,6 +718,7 @@ def get_local_model_hash_metadata(
                     "hash_status": last_hash_status,
                     "hashes": hashes,
                     "sha256": hashes[0],
+                    "size": file_size,
                 }
 
     return {
@@ -628,6 +727,7 @@ def get_local_model_hash_metadata(
         "hash_status": last_hash_status,
         "hashes": [],
         "sha256": "",
+        "size": file_size,
     }
 
 
@@ -879,6 +979,8 @@ def analyze_and_find_matches(
     # Extract URLs from workflow (node.properties.models + regex)
     workflow_urls = extract_workflow_urls(workflow_json)
     log.debug(f"Extracted {len(workflow_urls)} URLs from workflow")
+    workflow_hashes = extract_workflow_hash_metadata(workflow_json)
+    log.debug(f"Extracted {len(workflow_hashes)} workflow hash metadata keys")
 
     if progress_callback:
         progress_callback(
@@ -944,6 +1046,10 @@ def analyze_and_find_matches(
             missing["workflow_model_url"] = url_info.get("model_url", "")
             missing["workflow_directory"] = url_info.get("directory", "")
             missing["url_source"] = url_info.get("source", "")
+        hash_info = get_workflow_hash_info_for_ref(workflow_hashes, missing)
+        if hash_info:
+            missing["workflow_sha256"] = normalize_sha256(hash_info.get("sha256"))
+            missing["hash_lookup_source"] = hash_info.get("source") or "workflow_metadata"
 
     # Handle URNs: mark for async resolution by frontend
     # No sync CivitAI calls here - frontend will fetch asynchronously
@@ -1049,13 +1155,32 @@ def analyze_and_find_matches(
 
     def find_local_matches_for_ref(model_ref: Dict[str, Any]) -> List[Dict[str, Any]]:
         target_for_matching = get_match_target(model_ref)
-        if not target_for_matching:
-            return []
-
         category = get_match_category(model_ref)
+        workflow_sha256 = normalize_sha256(model_ref.get("workflow_sha256"))
+        hash_matches = []
+        if workflow_sha256:
+            hash_matches = search_local_matches_by_hash(
+                workflow_sha256,
+                category=category,
+                max_matches=max_matches_per_model,
+                force_rescan=False,
+            )
+            hash_matches = [
+                {
+                    **match,
+                    "hash_lookup_source": model_ref.get("hash_lookup_source") or "workflow_metadata",
+                    "hash_lookup_filename": get_filename_from_path(model_ref.get("original_path") or ""),
+                    "hash_lookup_sha256": workflow_sha256,
+                }
+                for match in hash_matches
+            ]
+
+        if not target_for_matching:
+            return hash_matches
+
         cache_key = (target_for_matching, category)
         if cache_key in local_match_cache:
-            return local_match_cache[cache_key]
+            return deduplicate_matches(hash_matches + local_match_cache[cache_key])
 
         matches = find_matches(
             target_for_matching,
@@ -1068,7 +1193,7 @@ def analyze_and_find_matches(
             active_downloads_by_path,
         )
         local_match_cache[cache_key] = deduplicated_matches
-        return deduplicated_matches
+        return deduplicate_matches(hash_matches + deduplicated_matches)
 
     # Find matches for each missing model
     missing_with_matches = []

@@ -187,6 +187,7 @@ class ModelResolverExtension:
                     search_local_matches_by_hash,
                     search_local_matches,
                 )
+                from .core.workflow_analyzer import analyze_workflow_models
                 from .core.path_templates import infer_download_path_templates
                 from .core.metadata_audit import audit_metadata_sizes
                 from .core.metadata_builder import (
@@ -671,6 +672,105 @@ class ModelResolverExtension:
 
                 return web.json_response(
                     get_local_model_hash_metadata(path, model=model)
+                )
+
+            @routes.post("/model_resolver/workflow-model-hashes")
+            @json_api_endpoint("workflow-model-hashes")
+            async def workflow_model_hashes(request):
+                """Return hash metadata for existing local models used by a workflow."""
+                data = await request.json()
+                workflow_json = data.get("workflow")
+                if not isinstance(workflow_json, dict):
+                    return web.json_response(
+                        {"error": "Workflow JSON must be an object"}, status=400
+                    )
+
+                settings = await asyncio.to_thread(load_resolver_settings)
+                if not resolver_bool_setting(
+                    settings.get("workflow_hash_metadata_enabled"), True
+                ):
+                    return web.json_response(
+                        {
+                            "success": True,
+                            "enabled": False,
+                            "models": [],
+                            "by_node": {},
+                            "by_path": {},
+                            "count": 0,
+                        }
+                    )
+
+                available_models = await asyncio.to_thread(get_model_files, False)
+                refs = await asyncio.to_thread(
+                    analyze_workflow_models,
+                    workflow_json,
+                    available_models,
+                )
+
+                by_node = {}
+                by_path = {}
+                models = []
+                seen = set()
+
+                for ref in refs:
+                    if not isinstance(ref, dict) or not ref.get("exists"):
+                        continue
+                    full_path = str(ref.get("full_path") or "").strip()
+                    if not full_path:
+                        continue
+                    model_info = {
+                        "path": full_path,
+                        "filename": get_filename_from_path(full_path),
+                        "relative_path": ref.get("original_path") or "",
+                        "category": ref.get("category") or "",
+                    }
+                    metadata = get_local_model_hash_metadata(
+                        full_path, model=model_info
+                    )
+                    sha256 = normalize_sha256(metadata.get("sha256"))
+                    if not sha256:
+                        continue
+
+                    entry = {
+                        "node_id": ref.get("node_id"),
+                        "node_type": ref.get("node_type") or "",
+                        "widget_index": ref.get("widget_index"),
+                        "widget_name": ref.get("widget_name") or "",
+                        "path": ref.get("original_path") or "",
+                        "filename": get_filename_from_path(
+                            ref.get("original_path") or full_path
+                        ),
+                        "category": ref.get("category") or "",
+                        "sha256": sha256,
+                        "size": metadata.get("size") or 0,
+                    }
+                    entry_key = (
+                        str(entry.get("node_id")),
+                        str(entry.get("widget_index")),
+                        entry.get("path"),
+                        sha256,
+                    )
+                    if entry_key in seen:
+                        continue
+                    seen.add(entry_key)
+                    models.append(entry)
+
+                    path_key = str(entry.get("path") or entry.get("filename") or "")
+                    if path_key:
+                        by_path[path_key] = entry
+                        by_path[get_filename_from_path(path_key)] = entry
+                    node_key = f"{entry.get('node_id')}:{entry.get('widget_index')}"
+                    by_node[node_key] = entry
+
+                return web.json_response(
+                    {
+                        "success": True,
+                        "enabled": True,
+                        "models": models,
+                        "by_node": by_node,
+                        "by_path": by_path,
+                        "count": len(models),
+                    }
                 )
 
             @routes.post("/model_resolver/local-matches-by-hash")
