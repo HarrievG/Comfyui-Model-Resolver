@@ -6526,6 +6526,8 @@ a.mr-image-preview-resource-name:hover {
 
 #mr-options-metadata-build-progress-panel,
 #mr-options-metadata-build-history-panel {
+    grid-row: 6;
+    grid-column: 1;
     min-height: 0;
     padding: 10px;
     overflow: hidden;
@@ -6544,9 +6546,25 @@ a.mr-image-preview-resource-name:hover {
     flex-direction: column;
 }
 
-#mr-options-metadata-build-progress-panel.is-hidden,
+#mr-options-metadata-build-progress-panel:not(.is-hidden),
+#mr-options-metadata-build-history-panel:not(.is-hidden) {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+#mr-options-metadata-build-progress-panel.is-hidden {
+    display: grid;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 0;
+}
+
 #mr-options-metadata-build-history-panel.is-hidden {
-    display: none;
+    display: flex;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 0;
 }
 
 .mr-options-build-progress {
@@ -6883,6 +6901,12 @@ a.mr-image-preview-resource-name:hover {
 .mr-options-build-tab-panel .mr-options-audit-empty {
     border-top-left-radius: 0;
     background: transparent;
+}
+
+.mr-options-audit-loading {
+    padding: 12px;
+    color: var(--mr-text-secondary);
+    font-size: 12px;
 }
 
 .mr-options-audit-results {

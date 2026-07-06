@@ -1325,6 +1325,18 @@ export const optionsMethods = {
             setStatusMode(element, mode);
         };
 
+        let scheduleMetadataBuildHistoryRender = () => {};
+        const setMetadataBuildPanelHidden = (panel, hidden) => {
+            if (!panel) return;
+            panel.classList.toggle('is-hidden', hidden);
+            panel.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+            try {
+                panel.inert = hidden;
+            } catch (error) {
+                panel.toggleAttribute('inert', hidden);
+            }
+        };
+
         const setMetadataBuildTab = (tabName = 'progress') => {
             const activeTab = tabName === 'history' ? 'history' : 'progress';
             metadataBuildTabButtons.forEach((button) => {
@@ -1333,9 +1345,12 @@ export const optionsMethods = {
                 button.classList.toggle('mr-tab-active', isActive);
                 button.setAttribute('aria-selected', isActive ? 'true' : 'false');
             });
-            metadataBuildProgressPanel?.classList.toggle('is-hidden', activeTab !== 'progress');
-            metadataBuildHistoryPanel?.classList.toggle('is-hidden', activeTab !== 'history');
+            setMetadataBuildPanelHidden(metadataBuildProgressPanel, activeTab !== 'progress');
+            setMetadataBuildPanelHidden(metadataBuildHistoryPanel, activeTab !== 'history');
             this.metadataBuildActiveTab = activeTab;
+            if (activeTab === 'history') {
+                scheduleMetadataBuildHistoryRender();
+            }
         };
 
         const getMetadataBuildHistoryKey = (item = {}) => {
@@ -1697,6 +1712,12 @@ export const optionsMethods = {
                 return;
             }
 
+            if (this.metadataBuildActiveTab !== 'history') {
+                this.metadataBuildHistoryRenderPending = true;
+                return;
+            }
+            this.metadataBuildHistoryRenderPending = false;
+
             const fallbackItems = source && Array.isArray(source.history)
                 ? source.history
                 : (source && Array.isArray(source.updated) ? source.updated : []);
@@ -1818,6 +1839,34 @@ export const optionsMethods = {
             metadataBuildResults.hidden = false;
         };
 
+        const stopMetadataBuildHistoryRender = () => {
+            if (this.metadataBuildHistoryRenderFrame) {
+                window.cancelAnimationFrame(this.metadataBuildHistoryRenderFrame);
+                this.metadataBuildHistoryRenderFrame = 0;
+            }
+            if (this.metadataBuildHistoryRenderTimer) {
+                window.clearTimeout(this.metadataBuildHistoryRenderTimer);
+                this.metadataBuildHistoryRenderTimer = 0;
+            }
+        };
+
+        scheduleMetadataBuildHistoryRender = () => {
+            if (!metadataBuildResults || this.metadataBuildActiveTab !== 'history') return;
+            if (!this.metadataBuildHistoryRenderPending && metadataBuildResults.innerHTML) return;
+            stopMetadataBuildHistoryRender();
+            metadataBuildResults.hidden = false;
+            if (!metadataBuildResults.innerHTML) {
+                metadataBuildResults.innerHTML = '<div class="mr-options-audit-loading">Preparing history...</div>';
+            }
+            this.metadataBuildHistoryRenderFrame = window.requestAnimationFrame(() => {
+                this.metadataBuildHistoryRenderFrame = 0;
+                this.metadataBuildHistoryRenderTimer = window.setTimeout(() => {
+                    this.metadataBuildHistoryRenderTimer = 0;
+                    renderMetadataBuildResults(undefined);
+                }, 0);
+            });
+        };
+
         const stopMetadataBuildPolling = () => {
             if (this.metadataBuildPollTimer) {
                 window.clearTimeout(this.metadataBuildPollTimer);
@@ -1914,6 +1963,7 @@ export const optionsMethods = {
 
         const runMetadataBuild = async () => {
             stopMetadataBuildPolling();
+            stopMetadataBuildHistoryRender();
             this.metadataBuildProgressId = '';
             this.metadataBuildFinishedProgressId = '';
             this.metadataBuildHistory = [];
