@@ -515,14 +515,52 @@ export const resolveDownloadMethods = {
         return this.downloadProgressByMissingKey;
     },
 
-    getDownloadStateKey(missing) {
+    getDownloadWorkflowScopeIdentity(context = {}) {
+        const workflowKey = String(context.workflowKey || context.workflow_key || '').trim();
+        return String(
+            context.workflowTabId
+            || context.workflow_tab_id
+            || context.workflowId
+            || context.workflow_id
+            || context.workflowRouteKey
+            || context.workflow_route_key
+            || workflowKey.split('\n')[0]
+            || ''
+        ).trim();
+    },
+
+    getCurrentDownloadWorkflowScopeIdentity() {
+        const context = this.getActiveWorkflowTabContext?.() || {};
+        return this.getDownloadWorkflowScopeIdentity({
+            ...context,
+            workflowKey: this.getWorkflowScopedQueueKey?.() || '',
+            workflowRouteKey: context.workflowRouteKey || this.getActiveWorkflowRouteKey?.() || this.activeWorkflowRouteKey || '',
+            workflowId: context.workflowId || this.getActiveWorkflowId?.() || ''
+        });
+    },
+
+    isDownloadInCurrentWorkflowScope(info = {}) {
+        const downloadScope = this.getDownloadWorkflowScopeIdentity(info);
+        const currentScope = this.getCurrentDownloadWorkflowScopeIdentity();
+        return !downloadScope || !currentScope || downloadScope === currentScope;
+    },
+
+    getDownloadMissingIdentity(missing) {
         return this.getMissingSearchKey?.(missing) || this.getMissingModelKey(missing);
+    },
+
+    getDownloadStateKey(missing, context = null) {
+        const missingKey = this.getDownloadMissingIdentity(missing);
+        const workflowScope = context
+            ? this.getDownloadWorkflowScopeIdentity(context)
+            : this.getCurrentDownloadWorkflowScopeIdentity();
+        return workflowScope ? `${workflowScope}::${missingKey}` : missingKey;
     },
 
     rememberDownloadSnapshotForMissing(missing, snapshot = {}) {
         if (!missing) return null;
 
-        const key = this.getDownloadStateKey(missing);
+        const key = this.getDownloadStateKey(missing, snapshot);
         const store = this.getDownloadProgressStore();
         const previous = store.get(key) || {};
         const progress = {
@@ -914,7 +952,11 @@ export const resolveDownloadMethods = {
             // started. Rebind it by the verified download/path match so the next
             // polling tick cannot repaint Local Matches from stale state.
             const activeEntry = this.activeDownloads?.[activeDownload.download_id];
-            if (activeEntry && activeEntry.missing !== missing) {
+            if (
+                activeEntry
+                && (!this.isDownloadInCurrentWorkflowScope || this.isDownloadInCurrentWorkflowScope(activeEntry))
+                && activeEntry.missing !== missing
+            ) {
                 activeEntry.missing = missing;
             }
         }
@@ -993,6 +1035,49 @@ export const resolveDownloadMethods = {
         }
 
         return Array.isArray(info.missing?.matches) ? info.missing.matches : [];
+    },
+
+    finalizeCancelledDownloadFrontend(downloadId, info = {}, progress = {}) {
+        if (!downloadId) return;
+
+        this.clearPendingDownloadStatus?.(info);
+        this.removeCancelledDownloadLocalMatches?.(info, progress);
+
+        const store = this.getDownloadProgressStore?.();
+        const toCancelledSnapshot = (snapshot = {}) => ({
+            ...snapshot,
+            downloadId,
+            missing: snapshot.missing || info.missing || null,
+            progress: {
+                ...(snapshot.progress || {}),
+                ...progress,
+                status: 'cancelled',
+                speed: 0
+            },
+            status: 'cancelled',
+            message: 'Download cancelled - incomplete file removed',
+            type: 'warning',
+            isActive: false,
+            updatedAt: Date.now()
+        });
+        let cancelledSnapshot = toCancelledSnapshot(info.statusSnapshot || {});
+        if (store instanceof Map) {
+            for (const [key, snapshot] of store.entries()) {
+                if (String(snapshot?.downloadId || '') === String(downloadId)) {
+                    const terminalSnapshot = toCancelledSnapshot(snapshot);
+                    store.set(key, terminalSnapshot);
+                    cancelledSnapshot = terminalSnapshot;
+                }
+            }
+        }
+
+        delete this.activeDownloads?.[downloadId];
+
+        const elements = this.resolveDownloadUiElements?.(info) || {};
+        this.renderDownloadSnapshot?.(downloadId, cancelledSnapshot, elements);
+        this.refreshLocalMatchesUiForMissing?.(info.missing);
+        this.updateDownloadAllButtonState?.();
+        this.updateQueuePanel?.();
     },
 
     persistLocalMatchesInAnalysisCache(missing, matches = []) {
@@ -1094,10 +1179,14 @@ export const resolveDownloadMethods = {
 
     getActiveDownloadEntryForMissing(missing) {
         if (!missing) return null;
-        const missingKey = this.getDownloadStateKey(missing);
+        const missingKey = this.getDownloadMissingIdentity(missing);
 
         for (const [downloadId, info] of Object.entries(this.activeDownloads || {})) {
-            if (info?.missing && this.getDownloadStateKey(info.missing) === missingKey) {
+            if (
+                info?.missing
+                && this.isDownloadInCurrentWorkflowScope(info)
+                && this.getDownloadMissingIdentity(info.missing) === missingKey
+            ) {
                 return { downloadId, info };
             }
         }
@@ -1106,9 +1195,13 @@ export const resolveDownloadMethods = {
 
     getActiveDownloadEntriesForMissing(missing) {
         if (!missing) return [];
-        const missingKey = this.getDownloadStateKey(missing);
+        const missingKey = this.getDownloadMissingIdentity(missing);
         return Object.entries(this.activeDownloads || {})
-            .filter(([, info]) => info?.missing && this.getDownloadStateKey(info.missing) === missingKey)
+            .filter(([, info]) => (
+                info?.missing
+                && this.isDownloadInCurrentWorkflowScope(info)
+                && this.getDownloadMissingIdentity(info.missing) === missingKey
+            ))
             .map(([downloadId, info]) => ({ downloadId, info }));
     },
 
@@ -1883,6 +1976,8 @@ export const resolveDownloadMethods = {
             desiredStatus === 'downloading' && currentStatus === 'paused'
         ) || (
             desiredStatus === 'paused' && (currentStatus === 'downloading' || currentStatus === 'starting')
+        ) || (
+            desiredStatus === 'cancelling' && ['starting', 'downloading', 'paused'].includes(currentStatus)
         );
         if (!canHoldDesiredStatus) return progress;
 
@@ -1890,7 +1985,7 @@ export const resolveDownloadMethods = {
             ...progress,
             backend_status: currentStatus,
             status: desiredStatus,
-            speed: desiredStatus === 'paused' ? 0 : progress.speed
+            speed: desiredStatus === 'paused' || desiredStatus === 'cancelling' ? 0 : progress.speed
         };
     },
 
@@ -1903,6 +1998,9 @@ export const resolveDownloadMethods = {
 
         try {
             let progress = await this.fetchJson(`/model_resolver/progress/${downloadId}`, { silent: true }, 'Get download progress');
+            // Cancel may have completed while this request was in flight. Never
+            // let a stale progress response recreate a globally finalized bar.
+            if (this.activeDownloads?.[downloadId] !== info) return;
             progress = this.applyPendingDownloadStatus(info, progress);
             const snapshot = this.rememberDownloadUiState(downloadId, info, progress, { isActive: true });
             const { progressDiv, downloadBtn } = this.resolveDownloadUiElements(info);
@@ -1920,6 +2018,12 @@ export const resolveDownloadMethods = {
 
                 // Continue polling
                 setTimeout(() => this.pollDownloadProgress(downloadId), progress.status === 'paused' ? 1500 : 1000);
+
+            } else if (progress.status === 'cancelling') {
+                this.renderDownloadSnapshot(downloadId, snapshot, { progressDiv, downloadBtn });
+                this.refreshLocalMatchesUiForMissing?.(missing);
+                this.updateQueuePanel?.();
+                setTimeout(() => this.pollDownloadProgress(downloadId), 500);
 
             } else if (progress.status === 'completed') {
                 const alreadyExists = Boolean(progress.already_exists);
@@ -1972,17 +2076,7 @@ export const resolveDownloadMethods = {
                 this.refreshLocalMatchesUiForMissing?.(missing);
 
             } else if (progress.status === 'cancelled') {
-                const cancelledSnapshot = this.rememberDownloadUiState(downloadId, info, progress, {
-                    status: 'cancelled',
-                    type: 'warning',
-                    isActive: false
-                });
-                this.renderDownloadSnapshot(downloadId, cancelledSnapshot, { progressDiv, downloadBtn });
-                this.removeCancelledDownloadLocalMatches?.(info, progress);
-                delete this.activeDownloads[downloadId];
-                this.updateDownloadAllButtonState();
-                this.updateQueuePanel?.();
-                this.refreshLocalMatchesUiForMissing?.(missing);
+                this.finalizeCancelledDownloadFrontend?.(downloadId, info, progress);
                 this.showNotification('Download cancelled', 'info');
 
             } else {
@@ -2033,7 +2127,7 @@ export const resolveDownloadMethods = {
     cancelDownload(downloadId) {
         const info = this.activeDownloads[downloadId];
         if (info) {
-            this.clearPendingDownloadStatus(info);
+            this.setPendingDownloadStatus(info, 'cancelling', 30000);
             const snapshot = this.rememberDownloadUiState(
                 downloadId,
                 info,
@@ -2054,14 +2148,14 @@ export const resolveDownloadMethods = {
             method: 'POST'
         }, 'Cancel download').then(() => {
             if (!info) return;
-            this.removeCancelledDownloadLocalMatches?.(info, {
+            this.finalizeCancelledDownloadFrontend?.(downloadId, info, {
                 ...(info.lastProgress || {}),
                 status: 'cancelled',
                 filename: info.lastProgress?.filename || info.filename || '',
                 path: info.lastProgress?.path || info.downloadPath || '',
                 directory: info.lastProgress?.directory || info.downloadDirectory || ''
             });
-            this.refreshLocalMatchesUiForMissing?.(info.missing);
+            this.showNotification('Download cancelled', 'info');
         }).catch((error) => {
             console.error('Model Resolver: Cancel error:', error);
             this.showNotification('Failed to cancel download', 'error');
@@ -2070,6 +2164,29 @@ export const resolveDownloadMethods = {
 
     pauseDownload(downloadId) {
         const info = this.activeDownloads[downloadId];
+        const currentStatus = String(
+            info?.pendingDownloadStatus
+            || info?.lastStatus
+            || info?.lastProgress?.status
+            || ''
+        ).toLowerCase();
+        if (currentStatus === 'cancelling' || currentStatus === 'cancelled') {
+            if (info) {
+                const snapshot = this.rememberDownloadUiState(
+                    downloadId,
+                    info,
+                    { ...(info.lastProgress || {}), status: 'cancelling', speed: 0 },
+                    {
+                        status: 'cancelling',
+                        message: 'Cancelling download...',
+                        type: 'info',
+                        isActive: true
+                    }
+                );
+                this.renderDownloadSnapshot(downloadId, snapshot, this.resolveDownloadUiElements(info));
+            }
+            return;
+        }
         const previousProgress = info?.lastProgress ? { ...info.lastProgress } : null;
         if (info) {
             this.setPendingDownloadStatus(info, 'paused');
@@ -2095,6 +2212,24 @@ export const resolveDownloadMethods = {
             this.showNotification('Download paused', 'info');
         }).catch((error) => {
             console.error('Model Resolver: Pause error:', error);
+            const cancellationInProgress = /being cancelled|cancell?ing/i.test(String(error?.message || ''));
+            if (info && cancellationInProgress) {
+                this.setPendingDownloadStatus(info, 'cancelling', 30000);
+                const snapshot = this.rememberDownloadUiState(
+                    downloadId,
+                    info,
+                    { ...(info.lastProgress || {}), status: 'cancelling', speed: 0 },
+                    {
+                        status: 'cancelling',
+                        message: 'Cancelling download...',
+                        type: 'info',
+                        isActive: true
+                    }
+                );
+                this.renderDownloadSnapshot(downloadId, snapshot, this.resolveDownloadUiElements(info));
+                this.updateQueuePanel?.();
+                return;
+            }
             if (info && previousProgress) {
                 this.clearPendingDownloadStatus(info);
                 const snapshot = this.rememberDownloadUiState(
