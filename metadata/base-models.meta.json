@@ -1,7 +1,10 @@
 {
-  "updated_at": "2026-07-04T21:52:15+00:00",
-  "last_checked_at": "2026-07-04T21:52:15+00:00",
-  "local_count": 94,
-  "new_models_added": 0,
-  "new_models_added_list": []
+  "updated_at": "2026-07-12T19:07:42+00:00",
+  "last_checked_at": "2026-07-12T19:07:42+00:00",
+  "local_count": 96,
+  "new_models_added": 2,
+  "new_models_added_list": [
+    "Tripo",
+    "Hunyuan3D"
+  ]
 }

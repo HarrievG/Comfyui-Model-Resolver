@@ -642,6 +642,18 @@
       "aliases": [
         "polygen"
       ]
+    },
+    {
+      "name": "Tripo",
+      "aliases": [
+        "tripo"
+      ]
+    },
+    {
+      "name": "Hunyuan3D",
+      "aliases": [
+        "hunyuan3d"
+      ]
     }
   ]
 }
