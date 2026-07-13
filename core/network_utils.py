@@ -1,0 +1,163 @@
+"""Network security helpers for outbound HTTP requests."""
+
+from __future__ import annotations
+
+import ipaddress
+import socket
+from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urljoin, urlparse
+
+import requests
+
+
+REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
+SENSITIVE_REDIRECT_HEADERS = {"authorization", "cookie", "proxy-authorization"}
+
+
+class UnsafeUrlError(ValueError):
+    """Raised when an outbound URL could access a non-public network target."""
+
+
+def host_matches_domain(host: Any, *domains: str) -> bool:
+    """Return True for an exact domain or one of its real DNS subdomains."""
+    normalized_host = str(host or "").strip().lower().rstrip(".")
+    if not normalized_host:
+        return False
+    for domain in domains:
+        normalized_domain = str(domain or "").strip().lower().rstrip(".")
+        if normalized_domain and (
+            normalized_host == normalized_domain
+            or normalized_host.endswith(f".{normalized_domain}")
+        ):
+            return True
+    return False
+
+
+def _is_public_ip(address: str) -> bool:
+    try:
+        parsed = ipaddress.ip_address(str(address).split("%", 1)[0])
+    except ValueError:
+        return False
+    if isinstance(parsed, ipaddress.IPv6Address) and parsed.ipv4_mapped:
+        parsed = parsed.ipv4_mapped
+    return bool(parsed.is_global)
+
+
+def validate_public_http_url(url: Any) -> str:
+    """Validate an HTTP(S) URL and reject local, private, or reserved targets."""
+    text = str(url or "").strip()
+    if not text or len(text) > 8192:
+        raise UnsafeUrlError("A valid download URL is required")
+
+    try:
+        parsed = urlparse(text)
+        port = parsed.port
+    except ValueError as exc:
+        raise UnsafeUrlError("The download URL is malformed") from exc
+
+    if parsed.scheme.lower() not in {"http", "https"}:
+        raise UnsafeUrlError("Only http and https download URLs are supported")
+    if parsed.username is not None or parsed.password is not None:
+        raise UnsafeUrlError("Credentials embedded in download URLs are not allowed")
+
+    host = str(parsed.hostname or "").strip().lower().rstrip(".")
+    if not host:
+        raise UnsafeUrlError("The download URL must include a hostname")
+    if host_matches_domain(host, "localhost"):
+        raise UnsafeUrlError("Localhost download URLs are not allowed")
+
+    try:
+        direct_ip = ipaddress.ip_address(host.split("%", 1)[0])
+    except ValueError:
+        direct_ip = None
+
+    if direct_ip is not None:
+        if not _is_public_ip(str(direct_ip)):
+            raise UnsafeUrlError("Private, local, and reserved download addresses are not allowed")
+        return text
+
+    try:
+        ascii_host = host.encode("idna").decode("ascii")
+        addresses = {
+            item[4][0]
+            for item in socket.getaddrinfo(
+                ascii_host,
+                port or (443 if parsed.scheme.lower() == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
+            if item and len(item) > 4 and item[4]
+        }
+    except (OSError, UnicodeError) as exc:
+        raise UnsafeUrlError("The download hostname could not be resolved") from exc
+
+    if not addresses:
+        raise UnsafeUrlError("The download hostname did not resolve to an address")
+    if any(not _is_public_ip(address) for address in addresses):
+        raise UnsafeUrlError("Private, local, and reserved download addresses are not allowed")
+    return text
+
+
+def _url_origin(url: str) -> Tuple[str, str, int]:
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    port = parsed.port or (443 if scheme == "https" else 80)
+    return scheme, str(parsed.hostname or "").lower().rstrip("."), port
+
+
+def _redirect_headers(headers: Dict[str, str], source_url: str, target_url: str) -> Dict[str, str]:
+    if _url_origin(source_url) == _url_origin(target_url):
+        return dict(headers)
+    return {
+        key: value
+        for key, value in headers.items()
+        if str(key).lower() not in SENSITIVE_REDIRECT_HEADERS
+    }
+
+
+def request_public_url(
+    method: str,
+    url: Any,
+    *,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: Any = 30,
+    stream: bool = True,
+    max_redirects: int = 5,
+) -> Tuple[requests.Response, str, Dict[str, str]]:
+    """Perform a GET/HEAD request while validating every redirect target."""
+    current_url = validate_public_http_url(url)
+    current_headers = dict(headers or {})
+    request_method = str(method or "GET").upper()
+    if request_method not in {"GET", "HEAD"}:
+        raise ValueError("request_public_url supports only GET and HEAD")
+
+    for redirect_count in range(max_redirects + 1):
+        request_func = requests.head if request_method == "HEAD" else requests.get
+        response = request_func(
+            current_url,
+            headers=current_headers,
+            allow_redirects=False,
+            stream=stream,
+            timeout=timeout,
+        )
+        if response.status_code not in REDIRECT_STATUS_CODES:
+            return response, current_url, current_headers
+
+        location = response.headers.get("Location") or response.headers.get("location")
+        if not location:
+            return response, current_url, current_headers
+        if redirect_count >= max_redirects:
+            response.close()
+            raise UnsafeUrlError("The download URL has too many redirects")
+
+        candidate_url = urljoin(current_url, str(location).strip())
+        try:
+            next_url = validate_public_http_url(candidate_url)
+        except UnsafeUrlError:
+            response.close()
+            raise
+        next_headers = _redirect_headers(current_headers, current_url, next_url)
+        response.close()
+        current_url = next_url
+        current_headers = next_headers
+
+    raise UnsafeUrlError("The download URL has too many redirects")

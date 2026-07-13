@@ -18,6 +18,7 @@ from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
 from ..path_utils import write_json_atomic, METADATA_DIR, read_json_safe
+from ..network_utils import host_matches_domain
 from ..type_utils import check_credential_http, parse_size_header as _parse_size_header, fetch_remote_file_size, fetch_remote_file_size_cached, clear_remote_size_cache, extract_file_size
 from ..matcher import build_filename_search_queries, clean_filename_for_search
 
@@ -302,7 +303,7 @@ def parse_huggingface_url(url: str) -> Optional[Dict[str, str]]:
         return None
 
     parsed = urlparse(url)
-    if "huggingface.co" not in parsed.netloc:
+    if not host_matches_domain(parsed.hostname, "huggingface.co"):
         return None
 
     match = re.match(r"^/([^/]+/[^/]+)/(resolve|blob)/([^/]+)/(.+)$", parsed.path)
@@ -332,7 +333,7 @@ def _normalize_huggingface_size_probe_url(url: str) -> Optional[str]:
         return None
     value = url.strip()
     parsed = urlparse(value)
-    if "huggingface.co" not in parsed.netloc:
+    if not host_matches_domain(parsed.hostname, "huggingface.co"):
         return None
     if "/blob/" in parsed.path:
         value = value.replace("/blob/", "/resolve/", 1)

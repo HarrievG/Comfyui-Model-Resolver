@@ -559,15 +559,15 @@ def fetch_remote_file_size(
     """
     Check a remote file size using HEAD and, when needed, GET Range=bytes=0-0.
     """
-    import requests
+    from .network_utils import request_public_url
     request_headers = {**(headers or {}), "Accept-Encoding": "identity"}
     
     size = None
     try:
-        response = requests.head(
+        response, _final_url, _final_headers = request_public_url(
+            "HEAD",
             url,
             headers=request_headers,
-            allow_redirects=True,
             timeout=timeout,
         )
         try:
@@ -580,10 +580,10 @@ def fetch_remote_file_size(
 
     if not size:
         try:
-            response = requests.get(
+            response, _final_url, _final_headers = request_public_url(
+                "GET",
                 url,
                 headers={**request_headers, "Range": "bytes=0-0"},
-                allow_redirects=True,
                 stream=True,
                 timeout=timeout,
             )
@@ -604,26 +604,27 @@ def looks_like_model_file(url: str, expected_filename: str = "") -> bool:
     """
     import os
     from urllib.parse import unquote, urlparse
+    from .network_utils import host_matches_domain
 
     text = str(url or "").strip()
     if not text.startswith(("http://", "https://", "hf://")):
         return False
     try:
         parsed = urlparse(text)
-        host = parsed.netloc.lower()
+        host = parsed.hostname
         path = unquote(parsed.path or "")
     except Exception:
         host = ""
         path = text
 
-    if host.endswith("huggingface.co") and path.startswith("/spaces/"):
+    if host_matches_domain(host, "huggingface.co") and path.startswith("/spaces/"):
         return False
     
     # Civitai/CivArchive api/download url prefix check
     if (
-        host.endswith("civitai.com")
-        or host.endswith("civitai.red")
-        or host.endswith("civarchive.com")
+        host_matches_domain(host, "civitai.com")
+        or host_matches_domain(host, "civitai.red")
+        or host_matches_domain(host, "civarchive.com")
     ) and "/api/download/" in path:
         return True
 

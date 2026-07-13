@@ -265,11 +265,16 @@ class ModelResolverExtension:
                     read_json_safe,
                     write_json_atomic,
                 )
+                from .core.network_utils import (
+                    UnsafeUrlError,
+                    host_matches_domain,
+                    request_public_url,
+                    validate_public_http_url,
+                )
                 from .core.type_utils import (
                     first_non_empty,
                     to_int,
                     to_bool,
-                    MODEL_EXTENSIONS,
                     format_size_bytes,
                     normalize_sha256,
                     extract_sha256_from_metadata,
@@ -305,9 +310,11 @@ class ModelResolverExtension:
                     stop_aria2_daemon,
                     get_download_directory,
                     get_metadata_sidecar_path,
+                    get_safe_metadata_sidecar_path,
                     normalize_download_category,
                     write_lora_manager_metadata,
                     sanitize_download_filename,
+                    is_allowed_model_download_filename,
                 )
                 from .core.aria2_installer import Aria2InstallError, install_aria2_engine
                 from .core.sources.popular import (
@@ -733,8 +740,17 @@ class ModelResolverExtension:
                         {"error": "path is required"}, status=400
                     )
 
+                normalized_path = os.path.realpath(
+                    os.path.abspath(os.path.normpath(str(path)))
+                )
+                if not is_path_in_configured_model_roots(normalized_path):
+                    return web.json_response(
+                        {"error": "path is outside configured model directories"},
+                        status=403,
+                    )
+
                 return web.json_response(
-                    get_local_model_hash_metadata(path, model=model)
+                    get_local_model_hash_metadata(normalized_path, model=model)
                 )
 
             @routes.post("/model_resolver/workflow-model-hashes")
@@ -905,7 +921,9 @@ class ModelResolverExtension:
                         {"error": "path is required"}, status=400
                     )
 
-                normalized_path = os.path.abspath(os.path.normpath(target_path))
+                normalized_path = os.path.realpath(
+                    os.path.abspath(os.path.normpath(target_path))
+                )
                 if not os.path.exists(normalized_path):
                     return web.json_response(
                         {"error": "path does not exist"}, status=404
@@ -942,7 +960,9 @@ class ModelResolverExtension:
                 if not file_path:
                     return "", "file_path is required"
 
-                normalized_path = _os.path.abspath(_os.path.normpath(file_path))
+                normalized_path = _os.path.realpath(
+                    _os.path.abspath(_os.path.normpath(file_path))
+                )
                 if not _os.path.exists(normalized_path) or not _os.path.isfile(normalized_path):
                     return "", "file does not exist"
                 if not is_path_in_configured_model_roots(normalized_path):
@@ -951,25 +971,12 @@ class ModelResolverExtension:
 
             def write_calculated_hash_metadata(
                 normalized_path,
-                metadata_path,
                 sha256,
                 sha256_source="file",
             ):
                 import os as _os
 
-                model_dir = _os.path.abspath(_os.path.dirname(normalized_path))
-                resolved_metadata_path = ""
-                if metadata_path:
-                    candidate_path = _os.path.abspath(_os.path.normpath(metadata_path))
-                    try:
-                        same_dir = _os.path.commonpath([model_dir, candidate_path]) == model_dir
-                    except ValueError:
-                        same_dir = False
-                    if same_dir:
-                        resolved_metadata_path = candidate_path
-
-                if not resolved_metadata_path:
-                    resolved_metadata_path = get_metadata_sidecar_path(normalized_path)
+                resolved_metadata_path = get_safe_metadata_sidecar_path(normalized_path)
 
                 metadata_updated = False
                 try:
@@ -1128,7 +1135,6 @@ class ModelResolverExtension:
             async def calculate_file_hash_route(request):
                 """Calculate SHA256 for a local model and persist it to sidecar metadata."""
                 data = await request.json()
-                metadata_path = data.get("metadata_path") or ""
 
                 normalized_path, error = resolve_hash_file_request(data)
                 if error == "file_path is required":
@@ -1148,7 +1154,6 @@ class ModelResolverExtension:
                     )
                 resolved_metadata_path, metadata_updated = write_calculated_hash_metadata(
                     normalized_path,
-                    metadata_path,
                     sha256,
                     sha256_source,
                 )
@@ -1172,7 +1177,6 @@ class ModelResolverExtension:
                 import uuid
 
                 data = await request.json()
-                metadata_path = data.get("metadata_path") or ""
                 normalized_path, error = resolve_hash_file_request(data)
                 if error == "file_path is required":
                     return web.json_response(
@@ -1212,7 +1216,6 @@ class ModelResolverExtension:
                         )
                         resolved_metadata_path, metadata_updated = write_calculated_hash_metadata(
                             normalized_path,
-                            metadata_path,
                             sha256,
                             sha256_source,
                         )
@@ -1958,6 +1961,29 @@ class ModelResolverExtension:
                 if not file_path:
                     file_path = find_local_file_path(filename, category)
 
+                if file_path:
+                    file_path = _os.path.realpath(
+                        _os.path.abspath(_os.path.normpath(str(file_path)))
+                    )
+                    if not is_path_in_configured_model_roots(file_path):
+                        if resolved_path:
+                            return web.json_response(
+                                {
+                                    "error": (
+                                        "resolved_path is outside configured model directories"
+                                    )
+                                },
+                                status=403,
+                            )
+                        file_path = None
+                    elif not _os.path.isfile(file_path):
+                        if resolved_path:
+                            return web.json_response(
+                                {"error": "resolved_path is not an existing model file"},
+                                status=404,
+                            )
+                        file_path = None
+
                 if file_path and _os.path.exists(file_path):
                     file_location = _os.path.dirname(file_path).replace("\\", "/")
                     if file_location and not file_location.endswith("/"):
@@ -2208,20 +2234,15 @@ class ModelResolverExtension:
                     return urls
 
                 def remote_download_url_is_alive(url):
-                    try:
-                        import requests
-                    except Exception:
-                        return True
-
                     headers = {
                         "User-Agent": "ComfyUI-Model-Resolver/1.0",
                         "Accept": "*/*",
                     }
                     try:
-                        response = requests.head(
+                        response, _final_url, _final_headers = request_public_url(
+                            "HEAD",
                             url,
                             headers=headers,
-                            allow_redirects=True,
                             timeout=8,
                         )
                         try:
@@ -2235,10 +2256,10 @@ class ModelResolverExtension:
                         pass
 
                     try:
-                        response = requests.get(
+                        response, _final_url, _final_headers = request_public_url(
+                            "GET",
                             url,
                             headers={**headers, "Range": "bytes=0-0"},
-                            allow_redirects=True,
                             stream=True,
                             timeout=8,
                         )
@@ -3113,15 +3134,16 @@ class ModelResolverExtension:
                 if raw_url.startswith("hf://"):
                     normalized_url = raw_url
                 else:
-                    from urllib.parse import urlparse
-
-                    parsed_input = urlparse(raw_url)
-                    if parsed_input.scheme not in {"http", "https"}:
+                    try:
+                        normalized_url = await asyncio.to_thread(
+                            validate_public_http_url,
+                            raw_url,
+                        )
+                    except UnsafeUrlError as exc:
                         return web.json_response(
-                            {"error": "Only http, https, and hf:// URLs are supported"},
+                            {"error": str(exc)},
                             status=400,
                         )
-                    normalized_url = raw_url
 
                 category = data.get("category") or ""
                 expected_filename = (
@@ -3225,9 +3247,9 @@ class ModelResolverExtension:
                     from urllib.parse import urlparse
 
                     parsed_direct = urlparse(normalized_url)
-                    direct_host = parsed_direct.netloc.lower()
+                    direct_host = parsed_direct.hostname
                     if (
-                        direct_host.endswith("civarchive.com")
+                        host_matches_domain(direct_host, "civarchive.com")
                         and "/api/download/" in parsed_direct.path
                     ):
                         source = "civarchive"
@@ -4549,6 +4571,14 @@ class ModelResolverExtension:
                         return web.json_response(
                             {"error": "URL is required"}, status=400
                         )
+                    try:
+                        url = await asyncio.to_thread(validate_public_http_url, url)
+                    except UnsafeUrlError as exc:
+                        return web.json_response({"error": str(exc)}, status=400)
+
+                    from urllib.parse import urlparse as _download_urlparse
+
+                    download_host = _download_urlparse(url).hostname
 
                     if not filename:
                         # Extract filename from URL
@@ -4562,14 +4592,22 @@ class ModelResolverExtension:
                         return web.json_response(
                             {"error": "Could not determine filename"}, status=400
                         )
+                    if not is_allowed_model_download_filename(filename):
+                        return web.json_response(
+                            {"error": "Unsupported model file extension"}, status=400
+                        )
 
                     # Build headers if needed
                     headers = {}
-                    if "huggingface.co" in url:
+                    if host_matches_domain(download_host, "huggingface.co"):
                         hf_token = data.get("hf_token", "")
                         if hf_token:
                             headers["Authorization"] = f"Bearer {hf_token}"
-                    elif "civitai.com" in url or "civitai.red" in url:
+                    elif host_matches_domain(
+                        download_host,
+                        "civitai.com",
+                        "civitai.red",
+                    ):
                         civitai_key = data.get("civitai_key", "")
                         if civitai_key and "token=" not in url:
                             url += (
@@ -4590,9 +4628,9 @@ class ModelResolverExtension:
                         return to_int(value)
 
                     inferred_source = ""
-                    if "civitai.com" in url:
+                    if host_matches_domain(download_host, "civitai.com", "civitai.red"):
                         inferred_source = "civitai"
-                    elif "huggingface.co" in url:
+                    elif host_matches_domain(download_host, "huggingface.co"):
                         inferred_source = "huggingface"
 
                     download_metadata.setdefault("filename", filename)

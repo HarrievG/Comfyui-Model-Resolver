@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 import requests
 
+from ..network_utils import host_matches_domain
 from ..matcher import (
     calculate_archived_model_confidence,
     calculate_model_title_confidence,
@@ -481,7 +482,7 @@ def parse_civarchive_url(url: str) -> Optional[Dict[str, Any]]:
         return None
 
     parsed = urlparse(urljoin(CIVARCHIVE_BASE_URL, url))
-    if parsed.netloc and "civarchive.com" not in parsed.netloc:
+    if parsed.hostname and not host_matches_domain(parsed.hostname, "civarchive.com"):
         return None
 
     sha_match = re.search(r"/sha256/([a-fA-F0-9]{64})", parsed.path)
@@ -573,18 +574,18 @@ def _prepare_size_probe_url(url: Any) -> Optional[str]:
         return None
 
     parsed = urlparse(normalized)
-    host = parsed.netloc.lower()
+    host = parsed.hostname
     path = parsed.path or ""
 
-    if host.endswith("huggingface.co") and "/blob/" in path:
+    if host_matches_domain(host, "huggingface.co") and "/blob/" in path:
         normalized = normalized.replace("/blob/", "/resolve/", 1)
         parsed = urlparse(normalized)
-        host = parsed.netloc.lower()
+        host = parsed.hostname
         path = parsed.path or ""
 
-    if host.endswith("civarchive.com") and not path.startswith("/api/download/"):
+    if host_matches_domain(host, "civarchive.com") and not path.startswith("/api/download/"):
         return None
-    if (host.endswith("civitai.com") or host.endswith("civitai.red")) and not path.startswith("/api/download/"):
+    if host_matches_domain(host, "civitai.com", "civitai.red") and not path.startswith("/api/download/"):
         return None
 
     return normalized

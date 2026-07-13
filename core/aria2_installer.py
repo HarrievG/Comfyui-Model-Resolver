@@ -169,7 +169,7 @@ def _select_release_asset(release: Dict[str, Any], tokens: Dict[str, str]) -> Di
         asset_names = ", ".join(_asset_name(asset) for asset in assets if _asset_name(asset))
         raise Aria2InstallError(
             f"No prebuilt aria2 desktop binary for {tokens['label']} was found in {release_name}. "
-            "Install aria2 with your system package manager or configure aria2c_path manually. "
+            "Install aria2 with your system package manager so aria2c is available on PATH. "
             f"Available assets: {asset_names or 'none'}"
         )
 
@@ -184,7 +184,7 @@ def _fetch_latest_release() -> Dict[str, Any]:
     except requests.RequestException as exc:
         raise Aria2InstallError(
             "Could not contact GitHub to check the latest aria2 release. "
-            "Check your internet connection, firewall/proxy settings, or configure aria2c_path manually. "
+            "Check your internet connection or firewall/proxy settings. "
             f"Details: {exc}"
         ) from exc
     data = response.json()
@@ -206,6 +206,11 @@ def _safe_extract_zip(archive_path: Path, destination: Path) -> None:
     destination_abs = destination.resolve()
     with zipfile.ZipFile(archive_path) as archive:
         for member in archive.infolist():
+            unix_mode = member.external_attr >> 16
+            if unix_mode and stat.S_ISLNK(unix_mode):
+                raise Aria2InstallError(
+                    f"Refusing symbolic link in aria2 archive: {member.filename}"
+                )
             target = destination_abs / member.filename
             target_abs = target.resolve()
             if not is_path_within(str(target_abs), str(destination_abs)) and target_abs != destination_abs:
@@ -217,6 +222,14 @@ def _safe_extract_tar(archive_path: Path, destination: Path) -> None:
     destination_abs = destination.resolve()
     with tarfile.open(archive_path) as archive:
         for member in archive.getmembers():
+            if member.issym() or member.islnk():
+                raise Aria2InstallError(
+                    f"Refusing link in aria2 archive: {member.name}"
+                )
+            if not (member.isfile() or member.isdir()):
+                raise Aria2InstallError(
+                    f"Refusing special file in aria2 archive: {member.name}"
+                )
             target = destination_abs / member.name
             target_abs = target.resolve()
             if not is_path_within(str(target_abs), str(destination_abs)) and target_abs != destination_abs:
@@ -356,7 +369,7 @@ def _download_file(url: str, destination: Path) -> int:
     except requests.RequestException as exc:
         raise Aria2InstallError(
             "Could not download the aria2 release asset from GitHub. "
-            "Check your internet connection, firewall/proxy settings, or configure aria2c_path manually. "
+            "Check your internet connection or firewall/proxy settings. "
             f"Details: {exc}"
         ) from exc
     return total

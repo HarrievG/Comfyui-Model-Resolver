@@ -294,7 +294,7 @@ export const optionsMethods = {
                                         <div class="mr-options-dependent-block mr-options-aria2-setting">
                                             <div class="mr-options-number-row mr-options-wide-row">
                                                 <div class="mr-options-number-copy">
-                                                    <span class="mr-options-label">aria2c path <span class="mr-tooltip-badge" data-tooltip="Optional full path to aria2c/aria2c.exe. Leave empty to use aria2c from your system PATH.">?</span></span>
+                                                    <span class="mr-options-label">aria2c path <span class="mr-tooltip-badge" data-tooltip="Only paths created by the built-in installer are accepted. Leave empty to use aria2c from your system PATH.">?</span></span>
                                                 </div>
                                                 <input id="mr-options-aria2c-path" class="mr-options-input" type="text" value="${this.escapeHtml(tokens.aria2c_path || '')}" placeholder="Leave empty to use aria2c from PATH">
                                             </div>
@@ -2269,7 +2269,7 @@ export const optionsMethods = {
                 if (data?.available) {
                     setAria2Status('');
                 } else {
-                    setAria2Status(data?.error || 'aria2c was not found. Install aria2 or configure the aria2c path.', 'is-invalid');
+                    setAria2Status(data?.error || 'aria2c was not found. Use the built-in installer or add aria2c to PATH.', 'is-invalid');
                 }
             } catch (error) {
                 setAria2Status(error.message || 'aria2 check failed.', 'is-invalid');

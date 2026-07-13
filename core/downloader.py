@@ -26,7 +26,12 @@ log = create_module_logger(__name__)
 from .resolver import invalidate_local_hash_match_cache, normalize_sha256
 from .scanner import invalidate_model_files_cache
 from .path_utils import is_path_within, get_path_identity, write_json_atomic, read_json_safe, get_comfy_root_path, calculate_file_sha256, get_filename_from_path
-from .type_utils import as_dict, as_list, first_non_empty, format_size_bytes as format_bytes, DEFAULT_BROWSER_USER_AGENT, extract_response_file_size, normalize_category_to_model_type, get_category_folder_keys
+from .network_utils import (
+    host_matches_domain,
+    request_public_url,
+    validate_public_http_url,
+)
+from .type_utils import as_dict, as_list, first_non_empty, format_size_bytes as format_bytes, DEFAULT_BROWSER_USER_AGENT, extract_response_file_size, normalize_category_to_model_type, get_category_folder_keys, MODEL_EXTENSIONS
 
 
 try:
@@ -55,6 +60,7 @@ CLI_LOG_INTERVAL = 5  # Log progress to CLI every N seconds
 ARIA2_RPC_TIMEOUT = (2, 5)  # local JSON-RPC should respond quickly
 ARIA2_IDLE_STOP_SECONDS = 5 * 60
 DOWNLOAD_USER_AGENT = DEFAULT_BROWSER_USER_AGENT
+MANAGED_ARIA2_ROOT = Path(__file__).resolve().parents[1] / "tools" / "aria2"
 
 from .settings import CATEGORY_MAP, load_settings, normalize_download_backend, normalize_download_category, normalize_relative_subfolder
 
@@ -88,6 +94,7 @@ SENSITIVE_QUERY_KEYS = {
 }
 
 _INVALID_DOWNLOAD_FILENAME_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+_HTTP_URL_IN_TEXT_RE = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 
 
 def sanitize_download_filename(filename: Any) -> str:
@@ -98,6 +105,12 @@ def sanitize_download_filename(filename: Any) -> str:
     if text in {"", ".", ".."}:
         return ""
     return text
+
+
+def is_allowed_model_download_filename(filename: Any) -> bool:
+    """Return True only for model file extensions supported by the resolver."""
+    safe_name = sanitize_download_filename(filename)
+    return bool(safe_name and os.path.splitext(safe_name)[1].lower() in MODEL_EXTENSIONS)
 
 
 def _is_sensitive_metadata_key(key: Any) -> bool:
@@ -127,6 +140,23 @@ def _strip_sensitive_url_params(value: str) -> str:
     if not changed:
         return value
     return urlunparse(parsed._replace(query=urlencode(filtered, doseq=True)))
+
+
+def _sanitize_download_error(value: Any) -> str:
+    """Remove signed query strings and credentials from errors shown or logged."""
+    text = str(value or "")
+
+    def redact_url(match: re.Match) -> str:
+        raw_url = match.group(0)
+        try:
+            parsed = urlparse(raw_url)
+            if parsed.query:
+                return urlunparse(parsed._replace(query="", fragment=""))
+        except Exception:
+            pass
+        return raw_url
+
+    return _HTTP_URL_IN_TEXT_RE.sub(redact_url, text)
 
 
 def _clean_http_header_value(value: Any) -> str:
@@ -162,8 +192,8 @@ def build_download_headers(
     _set_header_default(request_headers, "Accept", "*/*")
     _set_header_default(request_headers, "Accept-Encoding", "identity")
 
-    host = urlparse(str(url or "")).netloc.lower()
-    if host in {"civitai.com", "www.civitai.com", "civitai.red", "www.civitai.red"}:
+    host = urlparse(str(url or "")).hostname
+    if host_matches_domain(host, "civitai.com", "civitai.red"):
         _set_header_default(request_headers, "Referer", "https://civitai.com/")
         _set_header_default(request_headers, "Origin", "https://civitai.com")
 
@@ -172,9 +202,9 @@ def build_download_headers(
 
 def _is_civitai_api_download_url(url: str) -> bool:
     parsed = urlparse(str(url or ""))
-    host = parsed.netloc.lower()
+    host = parsed.hostname
     return (
-        host in {"civitai.com", "www.civitai.com", "civitai.red", "www.civitai.red"}
+        host_matches_domain(host, "civitai.com", "civitai.red")
         and parsed.path.startswith("/api/download/")
     )
 
@@ -184,14 +214,15 @@ def _resolve_civitai_download_url_for_aria2(
     headers: Optional[Dict[str, str]] = None,
 ) -> str:
     """Resolve CivitAI's API download redirect before handing the URL to aria2."""
-    if not _is_civitai_api_download_url(url):
-        return url
+    validated_url = validate_public_http_url(url)
+    if not _is_civitai_api_download_url(validated_url):
+        return validated_url
 
     response = None
     try:
         response = requests.get(
-            url,
-            headers=build_download_headers(url, headers),
+            validated_url,
+            headers=build_download_headers(validated_url, headers),
             allow_redirects=False,
             stream=True,
             timeout=20,
@@ -203,18 +234,40 @@ def _resolve_civitai_download_url_for_aria2(
         if not location:
             return url
 
-        resolved_url = urljoin(url, location.strip())
+        resolved_url = validate_public_http_url(urljoin(validated_url, location.strip()))
         log.debug("Resolved CivitAI download redirect for aria2")
         return resolved_url
     except Exception as exc:
         log.warning(f"Could not pre-resolve CivitAI download URL for aria2: {exc}")
-        return url
+        return validated_url
     finally:
         if response is not None:
             try:
                 response.close()
             except Exception:
                 pass
+
+
+def _resolve_download_url_for_aria2(
+    url: str,
+    headers: Optional[Dict[str, str]] = None,
+) -> tuple[str, Dict[str, str]]:
+    """Preflight an aria2 URL and validate every redirect before RPC handoff."""
+    request_headers = build_download_headers(url, headers)
+    response = None
+    try:
+        response, resolved_url, resolved_headers = request_public_url(
+            "GET",
+            url,
+            headers=request_headers,
+            timeout=20,
+            stream=True,
+        )
+        response.raise_for_status()
+        return resolved_url, resolved_headers
+    finally:
+        if response is not None:
+            response.close()
 
 
 def _json_safe_metadata(value: Any, depth: int = 0) -> Any:
@@ -270,6 +323,24 @@ def get_metadata_sidecar_path(file_path: str) -> str:
     """Return the LoRA Manager-compatible sidecar path for a model file."""
     base_path, _extension = os.path.splitext(file_path)
     return f"{base_path}.metadata.json"
+
+
+def get_safe_metadata_sidecar_path(file_path: str) -> str:
+    """Return the canonical sidecar path without allowing caller-selected targets."""
+    raw_model_path = str(file_path or "").strip()
+    if not raw_model_path:
+        raise ValueError("A model path is required")
+    model_path = os.path.realpath(os.path.abspath(raw_model_path))
+    model_dir = os.path.realpath(os.path.dirname(model_path))
+    metadata_path = os.path.realpath(get_metadata_sidecar_path(model_path))
+    if (
+        not model_dir
+        or os.path.dirname(metadata_path) != model_dir
+        or metadata_path == model_path
+        or not is_path_within(metadata_path, model_dir)
+    ):
+        raise ValueError("Metadata path is outside the model directory")
+    return metadata_path
 
 
 def _resolve_lora_manager_model_type(category: str, source_type: Any = "") -> str:
@@ -778,16 +849,34 @@ def _resolve_aria2c_executable(settings: Optional[Dict[str, Any]] = None) -> str
     active_settings = settings if isinstance(settings, dict) else load_settings()
     configured = str(active_settings.get("aria2c_path") or "").strip()
     candidate = os.path.expandvars(os.path.expanduser(configured or "aria2c"))
+    expected_names = {"aria2c", "aria2c.exe"}
+    candidate_name = os.path.basename(candidate).lower()
+    has_path_component = bool(
+        os.path.isabs(candidate)
+        or os.path.dirname(candidate)
+        or "/" in candidate
+        or "\\" in candidate
+    )
 
-    resolved = shutil.which(candidate)
-    if resolved:
-        return resolved
+    if has_path_component:
+        if (
+            candidate_name in expected_names
+            and os.path.isfile(candidate)
+            and is_path_within(candidate, MANAGED_ARIA2_ROOT)
+        ):
+            return os.path.realpath(os.path.abspath(candidate))
+        raise Aria2Error(
+            "Custom aria2c paths are restricted to the managed Model Resolver install. "
+            "Use the built-in aria2 installer or place aria2c on PATH."
+        )
 
-    if configured and os.path.isfile(candidate):
-        return candidate
+    if candidate_name in expected_names:
+        resolved = shutil.which(candidate)
+        if resolved and os.path.basename(resolved).lower() in expected_names:
+            return os.path.realpath(os.path.abspath(resolved))
 
     raise Aria2Error(
-        "aria2c executable was not found. Install aria2 or configure aria2c_path."
+        "aria2c executable was not found. Use the built-in installer or place aria2c on PATH."
     )
 
 
@@ -1150,6 +1239,230 @@ def _delete_partial_download_files(dest_path: str) -> None:
             log.warning(f"Could not delete incomplete download file {path}: {exc}")
 
 
+class _HuggingFaceXetDownloadCancelled(Exception):
+    """Raised by the Xet progress adapter when a download is cancelled."""
+
+
+class _HuggingFaceXetProgressAdapter:
+    """Forward hf_xet byte progress to the resolver's download state."""
+
+    def __init__(self, download_id: str, total_size: int, start_time: float) -> None:
+        self.download_id = download_id
+        self.total_size = max(0, int(total_size or 0))
+        self.downloaded = 0
+        self.last_update = start_time
+
+    def update(self, byte_delta: Any) -> None:
+        if self.download_id in cancelled_downloads:
+            raise _HuggingFaceXetDownloadCancelled("Download cancelled")
+
+        try:
+            delta = max(0, int(float(byte_delta or 0)))
+        except (TypeError, ValueError):
+            delta = 0
+
+        now = time.time()
+        elapsed = max(now - self.last_update, 0.001)
+        self.last_update = now
+        self.downloaded += delta
+        speed = int(delta / elapsed) if delta else 0
+        progress = (
+            min(100, int((self.downloaded / self.total_size) * 100))
+            if self.total_size > 0
+            else 0
+        )
+
+        with download_lock:
+            state = download_progress.get(self.download_id)
+            if state is not None:
+                state.update(
+                    {
+                        "status": "downloading",
+                        "progress": progress,
+                        "downloaded": self.downloaded,
+                        "total_size": self.total_size,
+                        "speed": speed,
+                        "download_backend": "huggingface_xet",
+                    }
+                )
+
+
+def _download_huggingface_xet(
+    url: str,
+    dest_path: str,
+    download_id: str,
+    headers: Optional[Dict[str, str]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    category: str = "",
+) -> Optional[Dict[str, Any]]:
+    """Download Hugging Face Xet files with the official hf_xet transport."""
+    validated_url = validate_public_http_url(url)
+    parsed_url = urlparse(validated_url)
+    if not (
+        host_matches_domain(parsed_url.hostname, "huggingface.co")
+        and "/resolve/" in parsed_url.path
+    ):
+        return None
+
+    try:
+        __import__("hf_xet")
+        from huggingface_hub.file_download import get_hf_file_metadata, xet_get
+    except ImportError:
+        return None
+
+    request_headers = build_download_headers(validated_url, headers)
+    try:
+        file_metadata = get_hf_file_metadata(
+            validated_url,
+            headers=request_headers,
+            timeout=20,
+        )
+    except Exception as exc:
+        log.debug(
+            "Hugging Face Xet metadata probe failed; using HTTP fallback: "
+            f"{type(exc).__name__}"
+        )
+        return None
+
+    xet_file_data = getattr(file_metadata, "xet_file_data", None)
+    if xet_file_data is None:
+        return None
+
+    try:
+        expected_size = max(0, int(getattr(file_metadata, "size", 0) or 0))
+    except (TypeError, ValueError):
+        expected_size = 0
+
+    result = {
+        "success": False,
+        "download_id": download_id,
+        "path": dest_path,
+        "error": None,
+        "size": 0,
+    }
+    start_time = time.time()
+    filename = get_filename_from_path(dest_path)
+    partial_path = f"{dest_path}.xet-part"
+    progress_adapter = _HuggingFaceXetProgressAdapter(
+        download_id,
+        expected_size,
+        start_time,
+    )
+
+    with download_lock:
+        download_progress[download_id] = {
+            "status": "starting",
+            "progress": 0,
+            "total_size": expected_size,
+            "downloaded": 0,
+            "filename": filename,
+            "path": dest_path,
+            "directory": os.path.dirname(dest_path),
+            "url": validated_url,
+            "error": None,
+            "speed": 0,
+            "start_time": start_time,
+            "download_backend": "huggingface_xet",
+        }
+
+    cancelled_downloads.discard(download_id)
+    try:
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        if os.path.exists(partial_path):
+            os.remove(partial_path)
+
+        log.info(f"Starting Hugging Face Xet download: {filename}")
+        xet_get(
+            incomplete_path=Path(partial_path),
+            xet_file_data=xet_file_data,
+            headers=request_headers,
+            expected_size=expected_size or None,
+            displayed_filename=filename,
+            _tqdm_bar=progress_adapter,
+        )
+
+        if download_id in cancelled_downloads:
+            raise _HuggingFaceXetDownloadCancelled("Download cancelled")
+
+        size = os.path.getsize(partial_path)
+        if expected_size and size != expected_size:
+            raise IOError(
+                f"Downloaded size mismatch: expected {expected_size}, received {size}"
+            )
+        os.replace(partial_path, dest_path)
+
+        metadata_path = write_lora_manager_metadata(
+            dest_path,
+            metadata or {},
+            category,
+            validated_url,
+        )
+        with download_lock:
+            state = download_progress.get(download_id)
+            if state is not None:
+                state.update(
+                    {
+                        "status": "completed",
+                        "progress": 100,
+                        "downloaded": size,
+                        "total_size": expected_size or size,
+                        "speed": 0,
+                    }
+                )
+                if metadata_path:
+                    state["metadata_path"] = metadata_path
+
+        result.update(
+            {
+                "success": True,
+                "size": size,
+                "metadata_path": metadata_path,
+            }
+        )
+        elapsed = time.time() - start_time
+        avg_speed = size / elapsed if elapsed > 0 else 0
+        log.info(f"✓ Hugging Face Xet download complete: {filename}")
+        log.info(
+            f"Size: {format_bytes(size)}, Time: {elapsed:.1f}s, "
+            f"Avg speed: {format_bytes(int(avg_speed))}/s"
+        )
+        invalidate_model_files_cache()
+        invalidate_local_hash_match_cache()
+        return result
+    except Exception as exc:
+        was_cancelled = (
+            isinstance(exc, _HuggingFaceXetDownloadCancelled)
+            or download_id in cancelled_downloads
+        )
+        try:
+            if os.path.exists(partial_path):
+                os.remove(partial_path)
+        except Exception as cleanup_exc:
+            log.warning(f"Could not delete incomplete Xet file: {cleanup_exc}")
+
+        error_msg = (
+            "Download cancelled" if was_cancelled else _sanitize_download_error(exc)
+        )
+        with download_lock:
+            state = download_progress.get(download_id)
+            if state is not None:
+                state.update(
+                    {
+                        "status": "cancelled" if was_cancelled else "error",
+                        "error": error_msg,
+                        "speed": 0,
+                    }
+                )
+        cancelled_downloads.discard(download_id)
+        result["error"] = error_msg
+        if was_cancelled:
+            log.info(f"Hugging Face Xet download cancelled: {filename}")
+        else:
+            log.error(f"✗ Hugging Face Xet download failed: {filename}")
+            log.error(f"Error: {error_msg}")
+        return result
+
+
 def download_file_with_aria2(
     url: str,
     dest_path: str,
@@ -1189,13 +1502,7 @@ def download_file_with_aria2(
     try:
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         _ensure_aria2_daemon(settings)
-        aria2_url = _resolve_civitai_download_url_for_aria2(url, headers)
-        aria2_headers = (
-            None
-            if aria2_url != url and _is_civitai_api_download_url(url)
-            else headers
-        )
-        request_headers = build_download_headers(aria2_url, aria2_headers)
+        aria2_url, request_headers = _resolve_download_url_for_aria2(url, headers)
 
         options: Dict[str, Any] = {
             "dir": os.path.dirname(dest_path),
@@ -1350,7 +1657,7 @@ def download_file_with_aria2(
             time.sleep(0.5)
 
     except Exception as exc:
-        error_msg = str(exc)
+        error_msg = _sanitize_download_error(exc)
         with download_lock:
             if download_id in download_progress:
                 download_progress[download_id]["status"] = "error"
@@ -1395,6 +1702,17 @@ def download_file(
         Result dictionary with status and info
     """
     global download_progress, cancelled_downloads
+
+    xet_result = _download_huggingface_xet(
+        url,
+        dest_path,
+        download_id,
+        headers=headers,
+        metadata=metadata,
+        category=category,
+    )
+    if xet_result is not None:
+        return xet_result
 
     if _download_backend_from_settings() == "aria2":
         return download_file_with_aria2(
@@ -1447,11 +1765,12 @@ def download_file(
 
         # Verbose logging - what model and from where
         filename = get_filename_from_path(dest_path)
+        source_host = urlparse(url).hostname
         source = (
             "HuggingFace"
-            if "huggingface.co" in url
+            if host_matches_domain(source_host, "huggingface.co")
             else "CivitAI"
-            if "civitai.com" in url
+            if host_matches_domain(source_host, "civitai.com", "civitai.red")
             else "URL"
         )
         log.info(f"Starting download: {filename}")
@@ -1460,8 +1779,16 @@ def download_file(
 
         # Start download
         request_headers = build_download_headers(url, headers)
-        response = requests.get(url, headers=request_headers, stream=True, timeout=30)
+        response, final_url, _final_headers = request_public_url(
+            "GET",
+            url,
+            headers=request_headers,
+            stream=True,
+            timeout=30,
+        )
         response.raise_for_status()
+        if final_url != url:
+            log.debug("Validated download redirect target")
 
         # Get total size
         total_size = extract_response_file_size(response) or 0
@@ -1607,7 +1934,7 @@ def download_file(
         invalidate_local_hash_match_cache()
 
     except requests.exceptions.RequestException as e:
-        error_msg = str(e)
+        error_msg = _sanitize_download_error(e)
         # Check for specific HTTP errors
         if hasattr(e, "response") and e.response is not None:
             status_code = e.response.status_code
@@ -1640,7 +1967,7 @@ def download_file(
             pass
 
     except Exception as e:
-        error_msg = str(e)
+        error_msg = _sanitize_download_error(e)
         with download_lock:
             download_progress[download_id]["status"] = "error"
             download_progress[download_id]["error"] = error_msg
@@ -1689,6 +2016,12 @@ def download_model(
             "success": False,
             "download_id": download_id,
             "error": "Invalid filename",
+        }
+    if not is_allowed_model_download_filename(filename):
+        return {
+            "success": False,
+            "download_id": download_id,
+            "error": "Unsupported model file extension",
         }
     subfolder = normalize_relative_subfolder(subfolder)
 
