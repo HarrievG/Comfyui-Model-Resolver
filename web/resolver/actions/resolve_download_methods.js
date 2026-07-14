@@ -463,7 +463,7 @@ export const resolveDownloadMethods = {
             name: progress?.filename || info?.filename || 'Download',
             path: targetPath,
             resolved_path: targetPath,
-            open_path: filePath || directory,
+            open_path: directory || filePath,
             folder_path: directory || targetPath,
             download_directory: directory || '',
             download_path: filePath || '',
@@ -1282,8 +1282,12 @@ export const resolveDownloadMethods = {
         });
     },
 
-    getDownloadProgressStatusLabel(status = '', percent = 0) {
-        if (status === 'downloading') return `${Math.round(percent)}%`;
+    getDownloadProgressStatusLabel(status = '', percent = 0, isFinalizing = false) {
+        if (status === 'downloading') {
+            if (isFinalizing) return 'Finalizing';
+            const percentLabel = this.formatDownloadPercent?.(percent) ?? String(Math.round(percent));
+            return `${percentLabel}%`;
+        }
         if (status === 'starting') return 'Starting';
         if (status === 'paused') return 'Paused';
         if (status === 'completed_checking') return 'Checking';
@@ -1309,13 +1313,19 @@ export const resolveDownloadMethods = {
             const backend = String(progress.download_backend || snapshot.downloadBackend || snapshot.download_backend || '').toLowerCase();
             const isAria2 = backend === 'aria2';
             const isPaused = status === 'paused';
-            const percent = Math.max(0, Math.min(100, Number(progress.progress) || 0));
-            const downloaded = this.formatBytes(progress.downloaded || 0);
-            const total = this.formatBytes(progress.total_size || 0);
+            const displayProgress = this.getDownloadDisplayProgress(progress);
+            const percent = displayProgress.percent;
+            const downloaded = this.formatBytes(displayProgress.downloaded);
+            const total = this.formatBytes(displayProgress.totalSize);
             const progressMeta = this.formatDownloadProgressMeta(progress);
-            const leftText = progress.total_size
-                ? `${downloaded} / ${total} (${percent}%)${isPaused ? ' - Paused' : ''}`
-                : '<span class="mr-info-accent-text">Connecting...</span>';
+            const percentLabel = this.formatDownloadPercent?.(percent) ?? String(Math.round(percent));
+            const logicalDownloaded = this.formatBytes(progress.downloaded || 0);
+            const logicalTotal = progress.total_size ? this.formatBytes(progress.total_size) : 'Unknown';
+            const leftText = displayProgress.isFinalizing
+                ? `Finalizing file: ${logicalDownloaded} / ${logicalTotal}`
+                : (displayProgress.totalSize
+                    ? `${downloaded} / ${total} (${percentLabel}%)${isPaused ? ' - Paused' : ''}`
+                    : '<span class="mr-info-accent-text">Connecting...</span>');
             let actionClass = canCancel ? 'cancel-download-btn mr-btn mr-btn-danger mr-btn-sm' : '';
             let actionText = canCancel ? 'Cancel' : '';
             let actionsHtml = '';
@@ -1390,9 +1400,10 @@ export const resolveDownloadMethods = {
     renderDownloadProgressGroupItem(downloadId, snapshot) {
         const progress = snapshot.progress || {};
         const status = snapshot.status || progress.status || '';
-        const percent = Math.max(0, Math.min(100, Number(progress.progress) || 0));
+        const displayProgress = this.getDownloadDisplayProgress(progress);
+        const percent = displayProgress.percent;
         const filename = progress.filename || snapshot.filename || 'Download';
-        const statusLabel = this.getDownloadProgressStatusLabel(status, percent);
+        const statusLabel = this.getDownloadProgressStatusLabel(status, percent, displayProgress.isFinalizing);
         const itemIdAttr = downloadId ? ` data-download-id="${this.escapeHtml(String(downloadId))}"` : '';
         return `
             <div class="mr-download-progress-item"${itemIdAttr}>
@@ -1432,20 +1443,28 @@ export const resolveDownloadMethods = {
         if (!downloadBtn) return;
 
         if (shouldRenderProgress) {
-            const percent = Number(progress.progress);
+            const displayProgress = this.getDownloadDisplayProgress(progress);
+            const percent = displayProgress.percent;
             downloadBtn.disabled = true;
             downloadBtn.classList.remove('mr-is-success-action', 'mr-btn-primary');
-            const label = status === 'paused'
-                ? `Paused ${Number.isFinite(percent) && percent > 0 ? `${Math.round(percent)}%` : ''}`.trim()
-                : (Number.isFinite(percent) && percent > 0 ? `Downloading ${Math.round(percent)}%` : 'Starting download...');
+            const percentLabel = Number.isFinite(percent) && percent > 0
+                ? `${this.formatDownloadPercent?.(percent) ?? Math.round(percent)}%`
+                : '';
+            const label = displayProgress.isFinalizing
+                ? 'Finalizing download...'
+                : (status === 'paused'
+                    ? `Paused ${percentLabel}`.trim()
+                    : (percentLabel ? `Downloading ${percentLabel}` : 'Starting download...'));
             if (downloadBtn.classList.contains('search-download-btn')) {
                 downloadBtn.innerHTML = getSvgIcon('download');
                 downloadBtn.setAttribute('data-tooltip', label);
                 downloadBtn.setAttribute('aria-label', label);
             } else {
-                downloadBtn.textContent = status === 'paused'
-                    ? 'Paused'
-                    : (Number.isFinite(percent) && percent > 0 ? `${Math.round(percent)}%` : 'Starting...');
+                downloadBtn.textContent = displayProgress.isFinalizing
+                    ? 'Finalizing...'
+                    : (status === 'paused'
+                        ? 'Paused'
+                        : (Number.isFinite(percent) && percent > 0 ? `${Math.round(percent)}%` : 'Starting...'));
             }
         } else if (status === 'cancelling') {
             downloadBtn.disabled = true;
@@ -1992,6 +2011,14 @@ export const resolveDownloadMethods = {
     /**
      * Poll download progress
      */
+    getDownloadProgressPollDelay(progress = {}, info = {}) {
+        if (progress.status === 'paused') return 1500;
+        const backend = String(
+            progress.download_backend || info.downloadBackend || info.download_backend || ''
+        ).toLowerCase();
+        return backend === 'huggingface_xet' ? 200 : 1000;
+    },
+
     async pollDownloadProgress(downloadId) {
         const info = this.activeDownloads[downloadId];
         if (!info) return;
@@ -2017,7 +2044,8 @@ export const resolveDownloadMethods = {
                 }
 
                 // Continue polling
-                setTimeout(() => this.pollDownloadProgress(downloadId), progress.status === 'paused' ? 1500 : 1000);
+                const pollDelay = this.getDownloadProgressPollDelay(progress, info);
+                setTimeout(() => this.pollDownloadProgress(downloadId), pollDelay);
 
             } else if (progress.status === 'cancelling') {
                 this.renderDownloadSnapshot(downloadId, snapshot, { progressDiv, downloadBtn });

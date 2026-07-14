@@ -350,9 +350,51 @@ export const renderFormatMethods = {
         return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
     },
 
+    formatDownloadPercent(value) {
+        const percent = Math.max(0, Math.min(100, Number(value) || 0));
+        if (percent > 0 && percent < 0.1) return '<0.1';
+        if (percent > 0 && percent < 10) {
+            return percent.toFixed(1).replace(/\.0$/, '');
+        }
+        return String(Math.round(percent));
+    },
+
+    getDownloadDisplayProgress(progress = {}) {
+        const logicalDownloaded = Math.max(0, Number(progress.downloaded) || 0);
+        const logicalTotalSize = Math.max(0, Number(progress.total_size) || 0);
+        const logicalPercent = Math.max(0, Math.min(100, Number(progress.progress) || 0));
+        const backend = String(progress.download_backend || '').toLowerCase();
+        const transferDownloaded = Math.max(0, Number(progress.transfer_downloaded) || 0);
+        const transferTotalSize = Math.max(0, Number(progress.transfer_total_size) || 0);
+
+        if (backend === 'huggingface_xet' && logicalTotalSize > 0) {
+            return {
+                percent: Math.max(0, Math.min(100, (transferDownloaded / logicalTotalSize) * 100)),
+                downloaded: transferDownloaded,
+                totalSize: logicalTotalSize,
+                isTransfer: true,
+                isFinalizing: transferTotalSize > 0
+                    && transferDownloaded >= transferTotalSize
+                    && logicalTotalSize > 0
+                    && logicalDownloaded < logicalTotalSize
+            };
+        }
+
+        return {
+            percent: logicalPercent,
+            downloaded: logicalDownloaded,
+            totalSize: logicalTotalSize,
+            isTransfer: false,
+            isFinalizing: false
+        };
+    },
+
     getDownloadEtaText(progress = {}) {
+        const backend = String(progress.download_backend || '').toLowerCase();
         const totalSize = Number(progress.total_size) || 0;
-        const downloaded = Number(progress.downloaded) || 0;
+        const downloaded = backend === 'huggingface_xet'
+            ? (Number(progress.transfer_downloaded) || 0)
+            : (Number(progress.downloaded) || 0);
         const speed = Number(progress.speed) || 0;
         if (totalSize <= 0 || downloaded <= 0 || speed <= 0 || downloaded >= totalSize) return '';
 
