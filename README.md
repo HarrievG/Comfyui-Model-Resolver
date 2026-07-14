@@ -52,7 +52,7 @@
 
 Model Resolver supports standard ComfyUI mechanisms as well as custom implementations of popular loader nodes:
 * **Standard loaders**: CheckpointLoader, LoraLoader, VAELoader, ControlNetLoader, UpscaleModelLoader, etc.
-* **Advanced loaders**: Nodes from the `LoraManager` suite (`LoraLoaderV2`, `Lora Loader`, `Lora Stacker`), `rgthree` (`Power Lora Loader`), and LTX-Video nodes.
+* **Advanced loaders**: Nodes from the [LoraManager](https://github.com/willmiao/ComfyUI-Lora-Manager) suite (`LoraLoaderV2`, `Lora Loader`, `Lora Stacker`), [rgthree](https://github.com/rgthree/rgthree-comfy) (`Power Lora Loader`), and [LTX-Video](https://github.com/Lightricks/ComfyUI-LTXVideo) nodes.
 * **Subgraphs**: Full support for scanning and updating nodes inside nested group subgraphs.
 
 ---
