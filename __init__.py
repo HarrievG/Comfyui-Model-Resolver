@@ -416,6 +416,57 @@ class ModelResolverExtension:
                     "progress_id": job_id,
                 })
 
+            def run_in_background_thread(
+                tracker,
+                progress_id,
+                task_func,
+                on_success,
+                on_cancel=None,
+                on_error=None,
+                error_log_msg="Background task failed",
+             ):
+                def wrapper():
+                    try:
+                        result = task_func()
+                        if tracker.is_cancelled(progress_id):
+                            if on_cancel:
+                                on_cancel(result)
+                            else:
+                                tracker.update(
+                                    progress_id,
+                                    status="cancelled",
+                                    stage="cancelled",
+                                    message="Task cancelled",
+                                )
+                            return
+                        on_success(result)
+                    except (HashCalculationCancelled, asyncio.CancelledError):
+                        if on_cancel:
+                            on_cancel()
+                        else:
+                            tracker.update(
+                                progress_id,
+                                status="cancelled",
+                                stage="cancelled",
+                                message="Task cancelled",
+                            )
+                    except Exception as exc:
+                        self.logger.exception(f"{error_log_msg}: {exc}")
+                        if on_error:
+                            on_error(exc)
+                        else:
+                            tracker.update(
+                                progress_id,
+                                status="error",
+                                stage="error",
+                                message=str(exc) or "Task failed",
+                                percent=100,
+                                error=str(exc) or "Task failed",
+                            )
+
+                import threading
+                threading.Thread(target=wrapper, daemon=True).start()
+
             async def get_override_settings_from_request(request):
                 settings = await asyncio.to_thread(load_resolver_settings)
                 if request.method == "POST":
@@ -1035,57 +1086,29 @@ class ModelResolverExtension:
                 if self.hash_tracker.is_cancelled(progress_id):
                     raise HashCalculationCancelled()
 
-                is_safetensors = normalized_path.lower().endswith(".safetensors")
-                if is_safetensors:
-                    self.logger.info(
-                        f"Checking safetensors header for SHA256: {normalized_path}"
-                    )
-                else:
-                    self.logger.info(
-                        "Skipping safetensors header lookup for non-safetensors file; "
-                        f"calculating full SHA256: {normalized_path}"
-                    )
-
-                header_sha256 = extract_safetensors_header_sha256(normalized_path)
-                if header_sha256:
-                    self.logger.info(
-                        f"Found SHA256 in safetensors header: {normalized_path}"
-                    )
-                    self.hash_tracker.update(
-                        progress_id,
-                        status="running",
-                        stage="header",
-                        message="Found SHA256 in safetensors header",
-                        percent=98,
-                        bytes_read=0,
-                        total_bytes=total_bytes,
-                        sha256=header_sha256,
-                        hash=header_sha256,
-                        sha256_source="safetensors_header",
-                    )
-                    return header_sha256, "safetensors_header"
-
-                if is_safetensors:
-                    self.logger.info(
-                        "No SHA256 found in safetensors header; calculating full "
-                        f"file SHA256: {normalized_path}"
-                    )
-
-                self.hash_tracker.update(
-                    progress_id,
-                    status="running",
-                    stage="hashing",
-                    message="Calculating SHA256...",
-                    percent=0,
-                    bytes_read=0,
-                    total_bytes=total_bytes,
-                )
-
+                hash_source = ["file"]
+                stage_transitioned = [False]
                 _bytes_read = [0]
                 _last_update = [0.0]
 
                 def on_progress(bytes_read, total_bytes):
                     _bytes_read[0] = bytes_read
+                    if not stage_transitioned[0]:
+                        stage_transitioned[0] = True
+                        self.logger.info(
+                            "No SHA256 found in safetensors header; calculating full "
+                            f"file SHA256: {normalized_path}"
+                        )
+                        self.hash_tracker.update(
+                            progress_id,
+                            status="running",
+                            stage="hashing",
+                            message="Calculating SHA256...",
+                            percent=0,
+                            bytes_read=0,
+                            total_bytes=total_bytes,
+                        )
+
                     now = time.time()
                     if now - _last_update[0] >= 0.15 or bytes_read >= total_bytes:
                         percent = 98 if total_bytes <= 0 else min(
@@ -1121,14 +1144,36 @@ class ModelResolverExtension:
                         return True
                     return False
 
+                def on_hash_source(source_name):
+                    hash_source[0] = source_name
+                    if source_name == "safetensors_header":
+                        self.logger.info(
+                            f"Found SHA256 in safetensors header: {normalized_path}"
+                        )
+                        self.hash_tracker.update(
+                            progress_id,
+                            status="running",
+                            stage="header",
+                            message="Found SHA256 in safetensors header",
+                            percent=98,
+                            bytes_read=0,
+                            total_bytes=total_bytes,
+                            sha256_source="safetensors_header",
+                        )
+
                 sha256 = _calculate_file_sha256_core(
                     normalized_path,
                     chunk_size=1024 * 1024 * 4,
                     on_progress=on_progress,
                     is_cancelled=is_cancelled,
-                    use_safetensors_header=False,
+                    use_safetensors_header=True,
+                    on_hash_source=on_hash_source,
                 )
-                return sha256, "file"
+
+                if is_cancelled():
+                    raise HashCalculationCancelled()
+
+                return sha256, hash_source[0]
 
             @routes.post("/model_resolver/calculate-file-hash")
             @json_api_endpoint("calculate-file-hash")
@@ -1200,57 +1245,58 @@ class ModelResolverExtension:
                 )
 
                 def run_hash_task():
-                    try:
-                        sha256, sha256_source = calculate_sha256_with_progress(
-                            normalized_path,
-                            progress_id=progress_id,
-                        )
-                        if self.hash_tracker.is_cancelled(progress_id):
-                            raise HashCalculationCancelled()
-                        self.hash_tracker.update(
-                            progress_id,
-                            status="running",
-                            stage="metadata",
-                            message="Saving metadata...",
-                            percent=99,
-                        )
-                        resolved_metadata_path, metadata_updated = write_calculated_hash_metadata(
-                            normalized_path,
-                            sha256,
-                            sha256_source,
-                        )
-                        self.hash_tracker.update(
-                            progress_id,
-                            status="done",
-                            stage="done",
-                            message="Hash calculated",
-                            percent=100,
-                            sha256=sha256,
-                            hash=sha256,
-                            sha256_source=sha256_source,
-                            file_path=normalized_path,
-                            metadata_path=resolved_metadata_path,
-                            metadata_updated=metadata_updated,
-                        )
-                    except HashCalculationCancelled:
-                        self.hash_tracker.update(
-                            progress_id,
-                            status="cancelled",
-                            stage="cancelled",
-                            message="Hash calculation cancelled",
-                        )
-                    except Exception as exc:
-                        self.logger.exception(f"Hash calculation failed for {normalized_path}: {exc}")
-                        self.hash_tracker.update(
-                            progress_id,
-                            status="error",
-                            stage="error",
-                            message=str(exc) or "Hash calculation failed",
-                            percent=100,
-                            error=str(exc) or "Hash calculation failed",
-                        )
+                    sha256, sha256_source = calculate_sha256_with_progress(
+                        normalized_path,
+                        progress_id=progress_id,
+                    )
+                    if self.hash_tracker.is_cancelled(progress_id):
+                        raise HashCalculationCancelled()
+                    self.hash_tracker.update(
+                        progress_id,
+                        status="running",
+                        stage="metadata",
+                        message="Saving metadata...",
+                        percent=99,
+                    )
+                    resolved_metadata_path, metadata_updated = write_calculated_hash_metadata(
+                        normalized_path,
+                        sha256,
+                        sha256_source,
+                    )
+                    return sha256, sha256_source, resolved_metadata_path, metadata_updated
 
-                threading.Thread(target=run_hash_task, daemon=True).start()
+                def on_success(res):
+                    sha256, sha256_source, resolved_metadata_path, metadata_updated = res
+                    self.hash_tracker.update(
+                        progress_id,
+                        status="done",
+                        stage="done",
+                        message="Hash calculated",
+                        percent=100,
+                        sha256=sha256,
+                        hash=sha256,
+                        sha256_source=sha256_source,
+                        file_path=normalized_path,
+                        metadata_path=resolved_metadata_path,
+                        metadata_updated=metadata_updated,
+                    )
+
+                def on_cancel(res=None):
+                    self.hash_tracker.update(
+                        progress_id,
+                        status="cancelled",
+                        stage="cancelled",
+                        message="Hash calculation cancelled",
+                    )
+
+                run_in_background_thread(
+                    self.hash_tracker,
+                    progress_id,
+                    run_hash_task,
+                    on_success,
+                    on_cancel,
+                    error_log_msg=f"Hash calculation failed for {normalized_path}",
+                )
                 return web.json_response(
                     {
                         "success": True,
@@ -1372,64 +1418,73 @@ class ModelResolverExtension:
                     return self.metadata_builder_progress.is_cancelled(progress_id)
 
                 def run_metadata_build_task():
-                    try:
-                        result = build_missing_local_metadata(
-                            force_rescan=force_rescan,
-                            worker_count=worker_count,
-                            progress_callback=update_metadata_build_progress,
-                            is_cancelled=is_metadata_build_cancelled,
-                        )
-                        if result.get("cancelled") or is_metadata_build_cancelled():
-                            self.metadata_builder_progress.update(
-                                progress_id,
-                                status="cancelled",
-                                stage="cancelled",
-                                message="Metadata build cancelled",
-                                percent=100,
-                                active_models=[],
-                                active_worker_count=0,
-                                current_model="",
-                                current_path="",
-                                bytes_read=0,
-                                total_bytes=0,
-                                result=result,
-                                **result,
-                            )
-                            return
+                    result = build_missing_local_metadata(
+                        force_rescan=force_rescan,
+                        worker_count=worker_count,
+                        progress_callback=update_metadata_build_progress,
+                        is_cancelled=is_metadata_build_cancelled,
+                    )
+                    return result
 
-                        self.metadata_builder_progress.update(
-                            progress_id,
-                            status="done",
-                            stage="done",
-                            message="Local metadata build completed.",
-                            percent=100,
-                            active_models=[],
-                            active_worker_count=0,
-                            current_model="",
-                            current_path="",
-                            bytes_read=0,
-                            total_bytes=0,
-                            result=result,
-                            **result,
-                        )
-                    except Exception as exc:
-                        self.logger.exception(f"Metadata build failed: {exc}")
-                        self.metadata_builder_progress.update(
-                            progress_id,
-                            status="error",
-                            stage="error",
-                            message=str(exc) or "Metadata build failed",
-                            percent=100,
-                            active_models=[],
-                            active_worker_count=0,
-                            current_model="",
-                            current_path="",
-                            bytes_read=0,
-                            total_bytes=0,
-                            error=str(exc) or "Metadata build failed",
-                        )
+                def on_success(result):
+                    self.metadata_builder_progress.update(
+                        progress_id,
+                        status="done",
+                        stage="done",
+                        message="Local metadata build completed.",
+                        percent=100,
+                        active_models=[],
+                        active_worker_count=0,
+                        current_model="",
+                        current_path="",
+                        bytes_read=0,
+                        total_bytes=0,
+                        result=result,
+                        **result,
+                    )
 
-                threading.Thread(target=run_metadata_build_task, daemon=True).start()
+                def on_cancel(result=None):
+                    self.metadata_builder_progress.update(
+                        progress_id,
+                        status="cancelled",
+                        stage="cancelled",
+                        message="Metadata build cancelled",
+                        percent=100,
+                        active_models=[],
+                        active_worker_count=0,
+                        current_model="",
+                        current_path="",
+                        bytes_read=0,
+                        total_bytes=0,
+                        result=result or {},
+                        **(result or {}),
+                    )
+
+                def on_error(exc):
+                    self.metadata_builder_progress.update(
+                        progress_id,
+                        status="error",
+                        stage="error",
+                        message=str(exc) or "Metadata build failed",
+                        percent=100,
+                        active_models=[],
+                        active_worker_count=0,
+                        current_model="",
+                        current_path="",
+                        bytes_read=0,
+                        total_bytes=0,
+                        error=str(exc) or "Metadata build failed",
+                    )
+
+                run_in_background_thread(
+                    self.metadata_builder_progress,
+                    progress_id,
+                    run_metadata_build_task,
+                    on_success,
+                    on_cancel,
+                    on_error,
+                    error_log_msg="Metadata build failed",
+                )
                 return web.json_response(
                     {
                         "success": True,

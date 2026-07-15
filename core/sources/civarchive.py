@@ -1215,14 +1215,9 @@ def _find_model_title_match_in_model_details(
     base_model_context: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """For extensionless workflow values, resolve by CivArchive model page title."""
-    model_name = model_details.get("name", "")
-    title_confidence = calculate_model_title_confidence(title_query, model_name)
-    if title_confidence < MODEL_TITLE_MATCH_THRESHOLD:
-        log.debug(
-            f"CivArchive title candidate rejected: model_id={model_id}, query={title_query}, model_name={model_name}, confidence={title_confidence}"
-        )
-        return None
+    from ..matcher import match_model_by_title_generic
 
+    model_name = model_details.get("name", "")
     versions = [
         version
         for version in (model_details.get("versions") or [])
@@ -1234,46 +1229,35 @@ def _find_model_title_match_in_model_details(
         if not any(_coerce_int(version.get("id")) == selected_id for version in versions):
             versions.append(selected_version)
 
-    if not versions:
-        return None
+    def hydrate_version(v):
+        return _hydrate_civarchive_version_with_files(model_id, v)
 
-    versions = sorted(versions, key=get_version_sort_key, reverse=True)
-    rejected_by_base_model = False
+    def get_base_model(v):
+        return v.get("base_model")
 
-    for version in versions:
-        hydrated_version = _hydrate_civarchive_version_with_files(model_id, version)
-        if base_model_context and not _base_model_matches(
-            hydrated_version.get("base_model"), base_model_context
-        ):
-            rejected_by_base_model = True
-            continue
+    def select_file(v):
+        return _select_primary_model_file(v.get("files") or [])
 
-        file_info = _select_primary_model_file(hydrated_version.get("files") or [])
-        if not file_info:
-            continue
-
-        result = _build_result_from_normalized_version(
+    def build_result(v, file_info, confidence):
+        return _build_result_from_normalized_version(
             model_details=model_details,
-            version=hydrated_version,
+            version=v,
             file_info=file_info,
             match_type="model_title",
         )
-        if not result:
-            continue
 
-        result["confidence"] = title_confidence
-        result["title_confidence"] = title_confidence
-        log.info(
-            f"CivArchive model-title match: query={title_query}, model_id={model_id}, model_name={model_name}, version_id={result.get('version_id')}, filename={result.get('filename')}, confidence={title_confidence}, base={result.get('base_model')}"
-        )
-        return result
-
-    if rejected_by_base_model:
-        log.debug(
-            f"CivArchive title candidate rejected by base model: model_id={model_id}, base={base_model_context}"
-        )
-
-    return None
+    return match_model_by_title_generic(
+        model_id=model_id,
+        title_query=title_query,
+        model_name=model_name,
+        versions=versions,
+        base_model_context=base_model_context,
+        get_base_model_fn=get_base_model,
+        select_file_fn=select_file,
+        build_result_fn=build_result,
+        hydrate_version_fn=hydrate_version,
+        log_prefix="CivArchive",
+    )
 
 
 

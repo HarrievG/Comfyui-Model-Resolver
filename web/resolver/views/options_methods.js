@@ -1159,23 +1159,24 @@ export const optionsMethods = {
 
         const shortSha = (value) => value ? String(value).slice(0, 8) : '';
 
-        const setModelListBusy = (busy) => {
-            if (modelListCheckBtn) modelListCheckBtn.disabled = busy;
-            if (modelListUpdateBtn) modelListUpdateBtn.disabled = busy;
+        const setControlsBusyState = (buttons, busy, cancelBtn = null) => {
+            const btnList = Array.isArray(buttons) ? buttons : [buttons];
+            btnList.forEach(btn => {
+                if (btn) btn.disabled = busy;
+            });
+            if (cancelBtn) {
+                cancelBtn.hidden = !busy;
+                cancelBtn.disabled = false;
+            }
         };
 
-        const setBaseModelsBusy = (busy) => {
-            if (baseModelsCheckBtn) baseModelsCheckBtn.disabled = busy;
-            if (baseModelsUpdateBtn) baseModelsUpdateBtn.disabled = busy;
-        };
+        const setModelListBusy = (busy) => setControlsBusyState([modelListCheckBtn, modelListUpdateBtn], busy);
 
-        const setHfIndexBusy = (busy) => {
-            if (hfIndexRefreshBtn) hfIndexRefreshBtn.disabled = busy;
-        };
+        const setBaseModelsBusy = (busy) => setControlsBusyState([baseModelsCheckBtn, baseModelsUpdateBtn], busy);
 
-        const setMetadataSizeAuditBusy = (busy) => {
-            if (metadataSizeAuditBtn) metadataSizeAuditBtn.disabled = busy;
-        };
+        const setHfIndexBusy = (busy) => setControlsBusyState(hfIndexRefreshBtn, busy);
+
+        const setMetadataSizeAuditBusy = (busy) => setControlsBusyState(metadataSizeAuditBtn, busy);
 
         const setStatusMode = (element, mode = '') => {
             if (!element) return;
@@ -1188,11 +1189,13 @@ export const optionsMethods = {
             return Number.isFinite(number) ? number.toLocaleString() : '0';
         };
 
-        const setMetadataSizeAuditStatus = (text, mode = '') => {
-            if (!metadataSizeAuditStatus) return;
-            metadataSizeAuditStatus.textContent = text;
-            setStatusMode(metadataSizeAuditStatus, mode);
+        const setElementStatusText = (element, text, mode = '') => {
+            if (!element) return;
+            element.textContent = text;
+            setStatusMode(element, mode);
         };
+
+        const setMetadataSizeAuditStatus = (text, mode = '') => setElementStatusText(metadataSizeAuditStatus, text, mode);
 
         const setMetadataSizeSummaryValue = (element, value, mode = '') => {
             if (!element) return;
@@ -1394,19 +1397,9 @@ export const optionsMethods = {
             }
         };
 
-        const setMetadataBuildBusy = (busy) => {
-            if (metadataBuildStartBtn) metadataBuildStartBtn.disabled = busy;
-            if (metadataBuildCancelBtn) {
-                metadataBuildCancelBtn.hidden = !busy;
-                metadataBuildCancelBtn.disabled = false;
-            }
-        };
+        const setMetadataBuildBusy = (busy) => setControlsBusyState(metadataBuildStartBtn, busy, metadataBuildCancelBtn);
 
-        const setMetadataBuildStatus = (text, mode = '') => {
-            if (!metadataBuildStatus) return;
-            metadataBuildStatus.textContent = text;
-            setStatusMode(metadataBuildStatus, mode);
-        };
+        const setMetadataBuildStatus = (text, mode = '') => setElementStatusText(metadataBuildStatus, text, mode);
 
         const setMetadataBuildSummaryValue = (element, value, mode = '') => {
             if (!element) return;

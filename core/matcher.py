@@ -7,7 +7,7 @@ Implements fuzzy string matching to find similar model names.
 import os
 import re
 import heapq
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
 from difflib import SequenceMatcher
 
 from .log_system import create_module_logger
@@ -287,7 +287,7 @@ def base_model_score(candidate: str, preferred: Optional[str]) -> float:
 
 # ==================== CENTRALIZED MATCHING & CONFIDENCE HELPERS ====================
 
-from .type_utils import MODEL_EXTENSIONS, PRECISION_FORMAT_SUFFIXES
+from .type_utils import MODEL_EXTENSIONS, PRECISION_FORMAT_SUFFIXES, get_version_sort_key
 MODEL_FILE_EXTENSIONS = MODEL_EXTENSIONS
 
 
@@ -437,3 +437,68 @@ def build_filename_search_queries(filename: str) -> List[str]:
             queries.append(query_val)
             
     return queries
+
+
+def match_model_by_title_generic(
+    model_id: int,
+    title_query: str,
+    model_name: str,
+    versions: list,
+    base_model_context: Optional[str],
+    get_base_model_fn,
+    select_file_fn,
+    build_result_fn,
+    hydrate_version_fn=None,
+    log_prefix: str = "ModelResolver",
+) -> Optional[Dict[str, Any]]:
+    """Generic helper to resolve extensionless workflow values by model title across CivitAI and CivArchive."""
+    from typing import Callable, Any
+    
+    title_confidence = calculate_model_title_confidence(title_query, model_name)
+    if title_confidence < MODEL_TITLE_MATCH_THRESHOLD:
+        log.debug(
+            f"{log_prefix} title candidate rejected: model_id={model_id}, query={title_query}, model_name={model_name}, confidence={title_confidence}"
+        )
+        return None
+
+    if not versions:
+        return None
+
+    # Sort versions
+    versions = sorted(versions, key=get_version_sort_key, reverse=True)
+    rejected_by_base_model = False
+
+    for version in versions:
+        hydrated_version = hydrate_version_fn(version) if hydrate_version_fn else version
+        
+        # Check base model context
+        if base_model_context:
+            base_model = get_base_model_fn(hydrated_version)
+            if not base_model_matches(base_model, base_model_context):
+                rejected_by_base_model = True
+                continue
+
+        # Select file
+        file_info = select_file_fn(hydrated_version)
+        if not file_info:
+            continue
+
+        # Build result
+        result = build_result_fn(hydrated_version, file_info, title_confidence)
+        if not result:
+            continue
+
+        result["confidence"] = title_confidence
+        result["title_confidence"] = title_confidence
+        
+        log.info(
+            f"{log_prefix} model-title match: query={title_query}, model_id={model_id}, model_name={model_name}, version_id={result.get('version_id')}, filename={result.get('filename')}, confidence={title_confidence}, base={result.get('base_model')}"
+        )
+        return result
+
+    if rejected_by_base_model:
+        log.debug(
+            f"{log_prefix} title candidate rejected by base model: model_id={model_id}, base={base_model_context}"
+        )
+
+    return None

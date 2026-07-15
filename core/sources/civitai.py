@@ -190,59 +190,46 @@ def _find_model_title_match_in_model(
     base_model_context: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """For extensionless workflow values, resolve by CivitAI model page title."""
-    model_name = model_data.get("name", "")
-    title_confidence = calculate_model_title_confidence(title_query, model_name)
-    if title_confidence < MODEL_TITLE_MATCH_THRESHOLD:
-        log.debug(
-            f"CivitAI title candidate rejected: model_id={model_id}, query={title_query}, model_name={model_name}, confidence={title_confidence}"
-        )
-        return None
+    from ..matcher import match_model_by_title_generic
 
+    model_name = model_data.get("name", "")
     versions = [
         version
         for version in (model_data.get("modelVersions") or [])
         if isinstance(version, dict)
     ]
-    if not versions:
-        return None
 
-    if base_model_context:
-        versions = [
-            version
-            for version in versions
-            if _base_model_matches(version.get("baseModel"), base_model_context)
-        ]
-        if not versions:
-            log.debug(
-                f"CivitAI title candidate rejected by base model: model_id={model_id}, base={base_model_context}"
-            )
-            return None
+    def get_base_model(v):
+        return v.get("baseModel")
 
-    versions = sorted(versions, key=get_version_sort_key, reverse=True)
+    def select_file(v):
+        return select_primary_model_file(v.get("files") or [])
 
-    for version in versions:
-        file_info = select_primary_model_file(version.get("files") or [])
-        if not file_info:
-            continue
-
-        result = _build_civitai_result_from_version(
+    def build_result(v, file_info, confidence):
+        res = _build_civitai_result_from_version(
             model_id=model_id,
             model_name=model_name,
             model_type=model_data.get("type", ""),
-            version=version,
+            version=v,
             file_info=file_info,
             tags=model_data.get("tags", []),
             match_type="model_title",
         )
-        result["confidence"] = title_confidence
-        result["title_confidence"] = title_confidence
-        result["version_name"] = version.get("name", "")
-        log.info(
-            f"CivitAI model-title match: query={title_query}, model_id={model_id}, model_name={model_name}, version_id={result.get('version_id')}, filename={result.get('filename')}, confidence={title_confidence}, base={result.get('base_model')}"
-        )
-        return result
+        if res:
+            res["version_name"] = v.get("name", "")
+        return res
 
-    return None
+    return match_model_by_title_generic(
+        model_id=model_id,
+        title_query=title_query,
+        model_name=model_name,
+        versions=versions,
+        base_model_context=base_model_context,
+        get_base_model_fn=get_base_model,
+        select_file_fn=select_file,
+        build_result_fn=build_result,
+        log_prefix="CivitAI",
+    )
 
 
 def _filename_base_partial_match(target_base: str, candidate_base: str) -> bool:
