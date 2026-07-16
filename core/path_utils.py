@@ -503,7 +503,7 @@ def infer_safetensors_base_model(
 
     tensor_keys = [
         str(key)
-        for key in header_json.keys()
+        for key in header_json
         if key != "__metadata__"
     ][:max_tensor_keys]
     keys_text = " ".join(tensor_keys)
@@ -768,7 +768,7 @@ def extract_safetensors_header_metadata(file_path: str) -> Dict[str, Any]:
         metadata = {}
 
     result: Dict[str, Any] = {}
-    metadata_keys = sorted(str(key) for key in metadata.keys())
+    metadata_keys = sorted(str(key) for key in metadata)
     if metadata_keys:
         result["header_metadata_keys"] = metadata_keys[:SAFETENSORS_METADATA_KEY_LIMIT]
 

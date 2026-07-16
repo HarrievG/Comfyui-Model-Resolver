@@ -128,7 +128,6 @@ def find_matches(
 
     # Normalize target filename once for exact match comparisons
     target_norm = normalize_filename(target_filename)
-    target_base = os.path.splitext(target_filename)[0]
 
     for candidate in candidate_models:
         # Get filename from candidate (prefer 'filename' key, fallback to extracting from 'path' or 'relative_path')
@@ -136,9 +135,8 @@ def find_matches(
         candidate_path = candidate.get("path", "") or candidate.get("relative_path", "")
 
         # If no filename key, try to extract from path or relative_path
-        if not candidate_filename:
-            if candidate_path:
-                candidate_filename = get_filename_from_path(candidate_path)
+        if not candidate_filename and candidate_path:
+            candidate_filename = get_filename_from_path(candidate_path)
 
         if not candidate_filename:
             continue
@@ -167,10 +165,13 @@ def find_matches(
         if candidate_path_normalized and target_model_normalized:
             if candidate_path_normalized == target_model_normalized:
                 path_match = True
-        elif candidate_relative_path_normalized and target_model_normalized:
+        elif (
+            candidate_relative_path_normalized
+            and target_model_normalized
+            and candidate_relative_path_normalized == target_model_normalized
+        ):
             # Also check if relative path matches the target (which might be relative)
-            if candidate_relative_path_normalized == target_model_normalized:
-                path_match = True
+            path_match = True
 
         if path_match:
             # Exact path match after normalization = 100% confidence

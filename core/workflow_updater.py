@@ -235,10 +235,9 @@ def update_model_path(
                 new_lora_name = resolved_model.get("filename") or resolved_model.get(
                     "name", ""
                 )
-                if new_lora_name:
+                if new_lora_name and "." in new_lora_name:
                     # Remove extension if present
-                    if "." in new_lora_name:
-                        new_lora_name = new_lora_name.rsplit(".", 1)[0]
+                    new_lora_name = new_lora_name.rsplit(".", 1)[0]
 
             log.debug(
                 f"LoraManager update: original={original_lora_name}, new={new_lora_name}"
@@ -371,10 +370,6 @@ def update_workflow_nodes(
         is_top_level = mapping.get(
             "is_top_level"
         )  # True for top-level nodes, False for nodes in subgraph definitions
-        is_lora_v2 = mapping.get("is_lora_v2")  # Flag for LoraManager nodes
-        original_lora_name = mapping.get(
-            "original_lora_name"
-        )  # Original lora name for replacement
 
         success = update_model_path(
             workflow,

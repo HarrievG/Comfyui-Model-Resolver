@@ -637,7 +637,8 @@ class ModelResolverExtension:
                             total=0,
                         )
 
-                    update_analysis_progress = lambda payload: self._update_analysis_progress(analysis_id, payload)
+                    def update_analysis_progress(payload):
+                        self._update_analysis_progress(analysis_id, payload)
 
                     # Analyze and find matches
                     result = await asyncio.to_thread(
@@ -1483,7 +1484,10 @@ class ModelResolverExtension:
                     requested_worker_count=worker_count,
                 )
 
-                update_metadata_build_progress = lambda progress_payload: self._update_metadata_build_progress(progress_id, progress_payload)
+                def update_metadata_build_progress(progress_payload):
+                    self._update_metadata_build_progress(
+                        progress_id, progress_payload
+                    )
 
                 def is_metadata_build_cancelled():
                     return self.metadata_builder_progress.is_cancelled(progress_id)
@@ -1602,7 +1606,8 @@ class ModelResolverExtension:
                         {"error": "Workflow JSON must be an object"}, status=400
                     )
 
-                update_loaded_progress = lambda *args, **kwargs: self._update_loaded_progress(loaded_id, *args, **kwargs)
+                def update_loaded_progress(*args, **kwargs):
+                    self._update_loaded_progress(loaded_id, *args, **kwargs)
 
                 def get_workflow_node_count():
                     node_count = 0
@@ -1740,7 +1745,13 @@ class ModelResolverExtension:
                         total=workflow_node_count,
                     )
 
-                    update_workflow_analysis_progress = lambda payload: self._update_workflow_analysis_progress(loaded_id, workflow_node_count, interpolate_percent, payload)
+                    def update_workflow_analysis_progress(payload):
+                        self._update_workflow_analysis_progress(
+                            loaded_id,
+                            workflow_node_count,
+                            interpolate_percent,
+                            payload,
+                        )
 
                     # Analyze workflow to get all model references
                     all_model_refs = analyze_workflow_models(
@@ -2170,9 +2181,7 @@ class ModelResolverExtension:
                     result_hash = extract_result_sha256(result)
                     if result_hash != provided_hash:
                         return False
-                    if require_filename and not result_filename_matches(result):
-                        return False
-                    return True
+                    return not require_filename or result_filename_matches(result)
 
                 def huggingface_page_url(result):
                     try:

@@ -446,17 +446,19 @@ def _find_matching_file_in_repo(
         file_name_lower = file_name.lower()
         file_base = os.path.splitext(file_name_lower)[0]
 
-        if not exact_only:
-            if filename_base in file_base or file_base in filename_base:
-                if file_path.endswith(".safetensors") or file_path.endswith(".ckpt"):
-                    partial_match = _build_huggingface_result(
-                        repo_id,
-                        file_path,
-                        file_info,
-                        "partial",
-                        headers=headers,
-                    )
-                    break
+        if (
+            not exact_only
+            and (filename_base in file_base or file_base in filename_base)
+            and (file_path.endswith(".safetensors") or file_path.endswith(".ckpt"))
+        ):
+            partial_match = _build_huggingface_result(
+                repo_id,
+                file_path,
+                file_info,
+                "partial",
+                headers=headers,
+            )
+            break
 
     return partial_match
 
@@ -505,18 +507,17 @@ def _find_matching_file_in_author_index(
         file_base = os.path.splitext(file_name_lower)[0]
         file_path_lower = file_path.lower()
 
-        if filename_base in file_base or file_base in filename_base:
-            if file_path_lower.endswith(".safetensors") or file_path_lower.endswith(
-                ".ckpt"
-            ):
-                partial_match = _build_huggingface_result(
-                    repo_id,
-                    file_path,
-                    file_info,
-                    "partial",
-                    headers=headers,
-                )
-                break
+        if (
+            filename_base in file_base or file_base in filename_base
+        ) and file_path_lower.endswith((".safetensors", ".ckpt")):
+            partial_match = _build_huggingface_result(
+                repo_id,
+                file_path,
+                file_info,
+                "partial",
+                headers=headers,
+            )
+            break
 
     return partial_match
 

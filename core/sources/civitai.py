@@ -10,7 +10,7 @@ import re
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote, urlencode
 
-import requests  # noqa: F401 – used indirectly via unittest.mock patch targets
+import requests  # noqa: F401 - used indirectly via unittest.mock patch targets
 
 from ..log_system import create_module_logger
 from ..matcher import (
@@ -667,17 +667,18 @@ def _find_civitai_file_in_model(
         )
         if expected_filename == filename_lower:
             return True
-        if not exact_only and _filename_base_partial_match(filename_base, expected_base):
-            return True
-        return False
+        return not exact_only and _filename_base_partial_match(
+            filename_base, expected_base
+        )
 
     if preferred_version_id is not None:
         resolved = resolve_urn(model_id, preferred_version_id, api_key)
-        if resolved:
-            if resolved_version_matches(resolved) and _base_model_matches(
-                resolved.get("base_model"), base_model_context
-            ):
-                return build_result_from_resolved_version(resolved, preferred_version_id)
+        if (
+            resolved
+            and resolved_version_matches(resolved)
+            and _base_model_matches(resolved.get("base_model"), base_model_context)
+        ):
+            return build_result_from_resolved_version(resolved, preferred_version_id)
 
     best_resolved_result = None
     best_resolved_confidence = 0.0
@@ -1605,8 +1606,7 @@ def _apply_safetensors_header_metadata(
     current_name = str(result.get("model_name") or "").strip()
     if header_name and (
         not current_name
-        or current_name == stem
-        or current_name == filename
+        or current_name in (stem, filename)
         or result.get("source") == "local"
     ):
         result["model_name"] = header_name

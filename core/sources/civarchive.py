@@ -2152,7 +2152,9 @@ def search_civarchive_for_file(
             scored_candidates.sort(key=lambda x: x[0], reverse=True)
 
             candidate_count = len(scored_candidates)
-            for candidate_index, (prelim_confidence, candidate) in enumerate(scored_candidates, start=1):
+            for candidate_index, (_prelim_confidence, candidate) in enumerate(
+                scored_candidates, start=1
+            ):
                 if len(seen) >= detail_limit:
                     break
                 identity = _candidate_identity(candidate)

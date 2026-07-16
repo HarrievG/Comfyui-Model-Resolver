@@ -136,22 +136,25 @@ def scan_directory(
 
             dirs[:] = filtered_dirs
 
-            if "folder" in (extensions or set()) and root != base_directory:
-                if category != "diffusers" or "model_index.json" in files:
-                    try:
-                        relative_path = os.path.relpath(root, base_directory)
-                    except ValueError:
-                        relative_path = get_filename_from_path(root)
+            if (
+                "folder" in (extensions or set())
+                and root != base_directory
+                and (category != "diffusers" or "model_index.json" in files)
+            ):
+                try:
+                    relative_path = os.path.relpath(root, base_directory)
+                except ValueError:
+                    relative_path = get_filename_from_path(root)
 
-                    models.append(
-                        {
-                            "filename": get_filename_from_path(root),
-                            "path": root,
-                            "relative_path": relative_path,
-                            "category": category,
-                            "base_directory": base_directory,
-                        }
-                    )
+                models.append(
+                    {
+                        "filename": get_filename_from_path(root),
+                        "path": root,
+                        "relative_path": relative_path,
+                        "category": category,
+                        "base_directory": base_directory,
+                    }
+                )
 
             for filename in files:
                 # Check if file has a model extension

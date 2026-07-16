@@ -2213,7 +2213,7 @@ def download_file(
         try:
             if os.path.exists(dest_path):
                 os.remove(dest_path)
-        except:
+        except Exception:
             pass
 
     except Exception as e:

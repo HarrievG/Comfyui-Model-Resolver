@@ -928,11 +928,10 @@ def static_or_hybrid_choice_looks_like_model(
 
     target = _normalize_choice_for_match(value_text)
     choices = choice_info.get("choices") or []
-    for choice in choices:
-        if _normalize_choice_for_match(choice) == target and is_model_filename(choice):
-            return True
-
-    return False
+    return any(
+        _normalize_choice_for_match(choice) == target and is_model_filename(choice)
+        for choice in choices
+    )
 
 
 MODEL_WIDGET_PLACEHOLDERS = {

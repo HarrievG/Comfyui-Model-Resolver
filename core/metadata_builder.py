@@ -191,7 +191,7 @@ def extract_local_header_snapshot(model_path: str) -> Dict[str, Any]:
     if not isinstance(metadata, dict) or not metadata:
         return {}
 
-    keys = sorted(str(key) for key in metadata.keys())
+    keys = sorted(str(key) for key in metadata)
     limited_metadata = {}
     for key in keys[:LOCAL_HEADER_MAX_KEYS]:
         limited_metadata[key] = _limited_local_value(metadata.get(key))

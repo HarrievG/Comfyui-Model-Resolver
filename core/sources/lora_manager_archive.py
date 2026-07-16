@@ -63,7 +63,7 @@ def get_lora_manager_archive_db_path() -> Optional[str]:
     if _db_path_cache is not None:
         return _db_path_cache if os.path.exists(_db_path_cache) else None
 
-    env_path = os.environ.get("model_resolver_LORA_MANAGER_ARCHIVE_DB", "").strip()
+    env_path = os.environ.get("MODEL_RESOLVER_LORA_MANAGER_ARCHIVE_DB", "").strip()
     candidates: List[str] = []
     if env_path:
         candidates.append(env_path)

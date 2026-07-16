@@ -141,11 +141,13 @@ def get_popular_model_url(filename: str) -> Optional[Dict[str, Any]]:
     # Try aliases
     aliases = _load_model_aliases()
     for canonical, alias_list in aliases.items():
-        if filename in alias_list or filename_lower in [a.lower() for a in alias_list]:
-            if canonical in models:
-                result = models[canonical].copy()
-                result["canonical_name"] = canonical
-                return result
+        if (
+            filename in alias_list
+            or filename_lower in [a.lower() for a in alias_list]
+        ) and canonical in models:
+            result = models[canonical].copy()
+            result["canonical_name"] = canonical
+            return result
 
     return None
 
