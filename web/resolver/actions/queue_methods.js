@@ -495,7 +495,7 @@ export const queueMethods = {
         if (typeof document === 'undefined') return null;
 
         for (const selector of this.getWorkflowTabActiveSelectors()) {
-            let elements = [];
+            let elements;
             try {
                 elements = Array.from(document.querySelectorAll(selector));
             } catch (error) {
@@ -900,7 +900,7 @@ export const queueMethods = {
         let bestMatch = null;
 
         for (const selector of this.getWorkflowTabSearchSelectors()) {
-            let elements = [];
+            let elements;
             try {
                 elements = Array.from(document.querySelectorAll(selector));
             } catch (error) {

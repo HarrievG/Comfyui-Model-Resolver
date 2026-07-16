@@ -335,6 +335,9 @@ export const resolveDownloadMethods = {
         const batchWorkflowKey = this.getWorkflowScopedQueueKey();
         let completed = 0;
         let failed = 0;
+        let cancelled;
+        let batchError;
+        let hasBatchError = false;
         try {
             for (const missing of targets) {
                 if (this.batchSearchCancelRequested) {
@@ -351,20 +354,25 @@ export const resolveDownloadMethods = {
                 completed += 1;
                 this.updateBatchFooterButtons();
             }
+        } catch (error) {
+            batchError = error;
+            hasBatchError = true;
         } finally {
-            const cancelled = this.batchSearchCancelRequested;
+            cancelled = this.batchSearchCancelRequested;
             this.batchSearchRunning = false;
             this.batchSearchCancelRequested = false;
             this.persistSearchStateForActiveWorkflow();
             this.updateBatchFooterButtons();
-            const suffix = failed ? `, ${failed} failed` : '';
-            if (cancelled) {
-                this.showNotification(`Stopped search after ${completed} of ${targets.length} model${targets.length === 1 ? '' : 's'}${suffix}.`, 'info');
-                return;
-            }
         }
 
         const suffix = failed ? `, ${failed} failed` : '';
+        if (cancelled) {
+            this.showNotification(`Stopped search after ${completed} of ${targets.length} model${targets.length === 1 ? '' : 's'}${suffix}.`, 'info');
+            return;
+        }
+        if (hasBatchError) {
+            throw batchError;
+        }
         this.showNotification(`Finished search for ${completed} model${completed === 1 ? '' : 's'}${suffix}.`, failed ? 'error' : 'success');
     },
 
@@ -2904,7 +2912,7 @@ export const resolveDownloadMethods = {
                 const url = btn.dataset.url;
                 const filename = btn.dataset.filename;
                 const category = btn.dataset.category;
-                let pathMetadata = null;
+                let pathMetadata;
                 try {
                     pathMetadata = btn.dataset.pathMetadata
                         ? JSON.parse(decodeURIComponent(btn.dataset.pathMetadata))
@@ -2912,7 +2920,7 @@ export const resolveDownloadMethods = {
                 } catch (_error) {
                     pathMetadata = null;
                 }
-                let downloadMetadata = null;
+                let downloadMetadata;
                 try {
                     downloadMetadata = btn.dataset.downloadMetadata
                         ? JSON.parse(decodeURIComponent(btn.dataset.downloadMetadata))

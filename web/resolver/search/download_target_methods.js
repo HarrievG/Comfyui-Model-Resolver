@@ -5,6 +5,10 @@ import { getSvgIcon } from "../../utils/icon_utils.js";
 import { createFloatingTreePicker } from "../utils/tree_picker.js";
 import { safeStorage } from "../utils/html_utils.js";
 const localStorage = safeStorage;
+const invalidWindowsPathCharacters = new RegExp(
+    `[<>:"|?*${Array.from({ length: 32 }, (_, code) => String.fromCharCode(code)).join('')}]+`,
+    'g'
+);
 export const downloadTargetMethods = {
     /**
      * Ensure all models are loaded for the dropdown.
@@ -1198,7 +1202,7 @@ export const downloadTargetMethods = {
         let text = String(value || '').trim() || fallback;
         text = text
             .replace(/[\\/]+/g, '_')
-            .replace(/[<>:"|?*\x00-\x1f]+/g, '_')
+            .replace(invalidWindowsPathCharacters, '_')
             .replace(/\s+/g, ' ')
             .replace(/^[\s.]+|[\s.]+$/g, '');
         if (!text || text === '.' || text === '..') {

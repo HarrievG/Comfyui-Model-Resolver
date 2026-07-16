@@ -885,7 +885,7 @@ export class ModelResolver {
         const currentWorkflow = workflow || app?.graph?.serialize?.();
         if (!currentWorkflow) return;
 
-        let signature = '';
+        let signature;
         try {
             signature = JSON.stringify((currentWorkflow.nodes || []).map((node) => [
                 node?.id,
@@ -1017,7 +1017,7 @@ export class ModelResolver {
                 for (const el of allElements) {
                     if (el.textContent?.includes('following models were not found') && 
                         el.children.length === 0) {
-                        el.parentElement?.insertBefore(btnContainer, el.nextSibling);
+                        el.parentElement?.insertBefore(autoResolveBtn, el.nextSibling);
                         break;
                     }
                 }
@@ -1082,7 +1082,7 @@ export class ModelResolver {
             );
             
             let node;
-            while (node = walker.nextNode()) {
+            while ((node = walker.nextNode())) {
                 if (node.textContent?.toLowerCase().includes(filename)) {
                     // Found text containing filename - now find parent with Download button
                     let parent = node.parentElement;

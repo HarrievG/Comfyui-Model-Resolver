@@ -453,7 +453,7 @@ export const workflowStateMethods = {
     },
 
     cloneSearchState(state = {}, { preserveActive = false } = {}) {
-        let clone = {};
+        let clone;
         try {
             clone = JSON.parse(JSON.stringify(state || {}));
         } catch (error) {
