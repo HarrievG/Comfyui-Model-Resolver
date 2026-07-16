@@ -605,6 +605,7 @@ def looks_like_model_file(url: str, expected_filename: str = "") -> bool:
     import os
     from urllib.parse import unquote, urlparse
     from .network_utils import host_matches_domain
+    from .path_utils import get_filename_from_path
 
     text = str(url or "").strip()
     if not text.startswith(("http://", "https://", "hf://")):
@@ -628,8 +629,8 @@ def looks_like_model_file(url: str, expected_filename: str = "") -> bool:
     ) and "/api/download/" in path:
         return True
 
-    basename = os.path.basename(path).lower()
-    expected = os.path.basename(str(expected_filename or "")).lower()
+    basename = get_filename_from_path(path).lower()
+    expected = get_filename_from_path(str(expected_filename or "")).lower()
     if expected and basename == expected:
         return True
 
@@ -827,6 +828,34 @@ def extract_trained_words(*values: Any) -> List[str]:
 
 
 _remote_size_cache: Dict[tuple[str, Optional[str]], Optional[int]] = {}
+
+
+def prepare_remote_size_probe_url(url: Any) -> Optional[str]:
+    """
+    Normalize a remote URL to be suitable for file size probing.
+    Converts HuggingFace '/blob/' URLs to '/resolve/' URLs.
+    """
+    from urllib.parse import urlparse
+    from .network_utils import host_matches_domain
+
+    if not isinstance(url, str) or not url.strip():
+        return None
+
+    value = url.strip()
+    if value.startswith("//"):
+        value = f"https:{value}"
+
+    try:
+        parsed = urlparse(value)
+        host = parsed.hostname
+        path = parsed.path or ""
+    except Exception:
+        return None
+
+    if host and host_matches_domain(host, "huggingface.co") and "/blob/" in path:
+        value = value.replace("/blob/", "/resolve/", 1)
+
+    return value
 
 
 def fetch_remote_file_size_cached(

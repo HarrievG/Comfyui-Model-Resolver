@@ -13,6 +13,8 @@ from difflib import SequenceMatcher
 from .log_system import create_module_logger
 log = create_module_logger(__name__)
 
+from .path_utils import get_filename_from_path
+
 try:
     from rapidfuzz import fuzz as rapidfuzz_fuzz
 except ImportError:
@@ -121,7 +123,7 @@ def find_matches(
 
     # Extract just the filename from target_model (remove any subfolder paths)
     # target_model might be just a filename or might include subfolder paths
-    target_filename = os.path.basename(target_model_normalized)
+    target_filename = get_filename_from_path(target_model_normalized)
 
     # Normalize target filename once for exact match comparisons
     target_norm = normalize_filename(target_filename)
@@ -135,7 +137,7 @@ def find_matches(
         # If no filename key, try to extract from path or relative_path
         if not candidate_filename:
             if candidate_path:
-                candidate_filename = os.path.basename(candidate_path)
+                candidate_filename = get_filename_from_path(candidate_path)
 
         if not candidate_filename:
             continue
@@ -402,7 +404,7 @@ def clean_filename_for_search(filename: str) -> str:
     """
     if not filename:
         return ""
-    basename = os.path.basename(filename).strip()
+    basename = get_filename_from_path(filename).strip()
     base = os.path.splitext(basename)[0]
     pattern = r"[-_]?(" + "|".join(PRECISION_FORMAT_SUFFIXES) + r").*$"
     return re.sub(pattern, "", base, flags=re.IGNORECASE).strip(" -_")
@@ -413,7 +415,7 @@ def build_filename_search_queries(filename: str) -> List[str]:
     Build a list of candidate search queries from a filename by stripping
     extensions and common precision/format suffixes (e.g. fp16, bf16, pruned).
     """
-    basename = os.path.basename(filename or "").strip()
+    basename = get_filename_from_path(filename).strip()
     if not basename:
         return []
         

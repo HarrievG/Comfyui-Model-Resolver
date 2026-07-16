@@ -6,6 +6,8 @@ import { createFloatingTreePicker } from "../utils/tree_picker.js";
 import { showNotification as showNotificationUtils } from "../../utils/notification_utils.js";
 import { startSplitterDrag } from "../utils/splitter_drag.js";
 import { getCivitaiModelUrl } from "../globals.js";
+import { safeStorage, normalizePathIdentity } from "../utils/html_utils.js";
+const localStorage = safeStorage;
 
 export const missingBrowserMethods = {
     getMissingFilename(missing = {}) {
@@ -180,10 +182,7 @@ export const missingBrowserMethods = {
         const seenPaths = new Set();
         const details = [];
 
-        const normalizePathIdentity = (value = '') => String(value || '')
-            .replace(/[\\/]+/g, '/')
-            .replace(/\/+$/g, '')
-            .toLowerCase();
+        // Uses imported normalizePathIdentity from html_utils.js
 
         folderKeys.forEach(folderKey => {
             const normalizedCategory = this.normalizeDownloadCategory?.(folderKey) || folderKey;

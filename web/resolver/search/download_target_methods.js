@@ -3,6 +3,8 @@ import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
 import { createFloatingTreePicker } from "../utils/tree_picker.js";
+import { safeStorage } from "../utils/html_utils.js";
+const localStorage = safeStorage;
 export const downloadTargetMethods = {
     /**
      * Ensure all models are loaded for the dropdown.

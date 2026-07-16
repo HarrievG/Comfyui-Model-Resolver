@@ -159,3 +159,67 @@ export async function pollBackgroundTask({
         await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
 }
+
+const memoryStorage = new Map();
+let isLocalStorageAvailable = null;
+
+function checkLocalStorage() {
+    if (isLocalStorageAvailable !== null) return isLocalStorageAvailable;
+    try {
+        localStorage.setItem('__test_storage__', '1');
+        localStorage.removeItem('__test_storage__');
+        isLocalStorageAvailable = true;
+    } catch (e) {
+        isLocalStorageAvailable = false;
+        console.warn('LocalStorage is not available, falling back to memory storage.', e);
+    }
+    return isLocalStorageAvailable;
+}
+
+export const safeStorage = {
+    getItem(key, defaultValue = null) {
+        if (checkLocalStorage()) {
+            try {
+                const val = localStorage.getItem(key);
+                return val !== null ? val : defaultValue;
+            } catch (e) {
+                console.warn(`safeStorage.getItem failed for key ${key}:`, e);
+            }
+        }
+        return memoryStorage.has(key) ? memoryStorage.get(key) : defaultValue;
+    },
+    setItem(key, value) {
+        const valStr = String(value);
+        if (checkLocalStorage()) {
+            try {
+                localStorage.setItem(key, valStr);
+                return true;
+            } catch (e) {
+                console.warn(`safeStorage.setItem failed for key ${key}:`, e);
+            }
+        }
+        memoryStorage.set(key, valStr);
+        return true;
+    },
+    removeItem(key) {
+        if (checkLocalStorage()) {
+            try {
+                localStorage.removeItem(key);
+                return true;
+            } catch (e) {
+                console.warn(`safeStorage.removeItem failed for key ${key}:`, e);
+            }
+        }
+        memoryStorage.delete(key);
+        return true;
+    }
+};
+
+export function normalizePathIdentity(value = '') {
+    return String(value || '')
+        .trim()
+        .replace(/[\\/]+/g, '/')
+        .replace(/\/+$/g, '')
+        .toLowerCase();
+}
+

@@ -4,7 +4,8 @@ import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
 import { LOG_LEVEL as DEFAULT_FRONTEND_LOG_LEVEL } from "../../log_system/config.js";
 import { logger as frontendLogger } from "../../log_system/logger.js";
-import { pollBackgroundTask } from "../utils/html_utils.js";
+import { pollBackgroundTask, safeStorage } from "../utils/html_utils.js";
+const localStorage = safeStorage;
 const SETTINGS_MAP = [
     { serverKey: 'civitai_key', localKey: 'ModelResolver.civitaiApiKey', type: 'string', default: '' },
     { serverKey: 'civitai_session_token', localKey: 'ModelResolver.civitaiSessionToken', type: 'string', default: '' },

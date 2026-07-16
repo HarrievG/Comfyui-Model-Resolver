@@ -4,6 +4,8 @@ import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
 import { getModelCardUrl } from "../utils/url_utils.js";
 import { getCivitaiModelUrl } from "../globals.js";
+import { safeStorage, normalizePathIdentity } from "../utils/html_utils.js";
+const localStorage = safeStorage;
 export const searchPanelMethods = {
     /**
      * Build stable cache key for a missing model entry
@@ -2458,7 +2460,7 @@ export const searchPanelMethods = {
 
     getActiveDownloadInfoForLocalMatch(match = {}) {
         const model = match.model || {};
-        const normalizePath = (value = '') => this.normalizeLocalMatchPathIdentity?.(value) || String(value || '').trim().replace(/\\/g, '/').replace(/\/+/g, '/').toLowerCase();
+        const normalizePath = (value = '') => normalizePathIdentity(value);
         const joinPath = (...parts) => normalizePath(parts.filter(Boolean).join('/'));
         const activeStatuses = new Set(['starting', 'downloading', 'paused', 'cancelling']);
         const matchAbsolutePaths = [

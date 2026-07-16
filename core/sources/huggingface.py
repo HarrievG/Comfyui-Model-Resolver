@@ -17,9 +17,9 @@ from ..progress import report_progress, get_progress_reporter
 from ..log_system import create_module_logger
 log = create_module_logger(__name__)
 
-from ..path_utils import write_json_atomic, METADATA_DIR, read_json_safe
+from ..path_utils import write_json_atomic, METADATA_DIR, read_json_safe, get_filename_from_path
 from ..network_utils import host_matches_domain, request_source_response, request_source_json
-from ..type_utils import check_credential_http, parse_size_header as _parse_size_header, fetch_remote_file_size, fetch_remote_file_size_cached, clear_remote_size_cache, extract_file_size
+from ..type_utils import check_credential_http, parse_size_header as _parse_size_header, fetch_remote_file_size, fetch_remote_file_size_cached, clear_remote_size_cache, extract_file_size, prepare_remote_size_probe_url
 from ..matcher import build_filename_search_queries, clean_filename_for_search
 
 HF_API_URL = "https://huggingface.co/api"
@@ -171,7 +171,7 @@ def _build_author_index_from_models(
                 {
                     "repo_id": repo_id,
                     "path": file_path,
-                    "filename": os.path.basename(file_path),
+                    "filename": get_filename_from_path(file_path),
                     "size": sibling.get("size"),
                 }
             )
@@ -330,15 +330,7 @@ def get_huggingface_download_url(repo: str, filename: str, branch: str = "main")
 
 
 def _normalize_huggingface_size_probe_url(url: str) -> Optional[str]:
-    if not isinstance(url, str) or not url.strip():
-        return None
-    value = url.strip()
-    parsed = urlparse(value)
-    if not host_matches_domain(parsed.hostname, "huggingface.co"):
-        return None
-    if "/blob/" in parsed.path:
-        value = value.replace("/blob/", "/resolve/", 1)
-    return value
+    return prepare_remote_size_probe_url(url)
 
 
 
@@ -375,7 +367,7 @@ def _build_huggingface_result(
     return {
         "source": "huggingface",
         "repo_id": repo_id,
-        "filename": os.path.basename(file_path),
+        "filename": get_filename_from_path(file_path),
         "path": file_path,
         "url": download_url,
         "size": size,
@@ -424,7 +416,7 @@ def _find_matching_file_in_repo(
         if not file_path:
             continue
 
-        file_name = os.path.basename(file_path)
+        file_name = get_filename_from_path(file_path)
         file_name_lower = file_name.lower()
         file_base = os.path.splitext(file_name_lower)[0]
 
@@ -445,7 +437,7 @@ def _find_matching_file_in_repo(
         if not file_path:
             continue
 
-        file_name = os.path.basename(file_path)
+        file_name = get_filename_from_path(file_path)
         file_name_lower = file_name.lower()
         file_base = os.path.splitext(file_name_lower)[0]
 
@@ -481,7 +473,7 @@ def _find_matching_file_in_author_index(
         if not repo_id or not file_path:
             continue
 
-        file_name = os.path.basename(file_path)
+        file_name = get_filename_from_path(file_path)
         file_name_lower = file_name.lower()
         if file_name_lower == filename_lower or file_path.lower().endswith(
             filename_lower
@@ -503,7 +495,7 @@ def _find_matching_file_in_author_index(
         if not repo_id or not file_path:
             continue
 
-        file_name = os.path.basename(file_path)
+        file_name = get_filename_from_path(file_path)
         file_name_lower = file_name.lower()
         file_base = os.path.splitext(file_name_lower)[0]
         file_path_lower = file_path.lower()
@@ -1021,7 +1013,7 @@ def get_repo_files(repo: str, token: Optional[str] = None) -> List[Dict[str, Any
                         size = _fetch_remote_file_size_bytes(url, headers=headers)
                     files.append(
                         {
-                            "filename": os.path.basename(path),
+                            "filename": get_filename_from_path(path),
                             "path": path,
                             "url": url,
                             "size": size,

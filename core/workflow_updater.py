@@ -9,7 +9,7 @@ from typing import Dict, Any, List, Optional
 
 from .log_system import create_module_logger
 log = create_module_logger(__name__)
-from .path_utils import is_path_within
+from .path_utils import is_path_within, get_filename_from_path
 
 
 
@@ -78,7 +78,7 @@ def convert_to_relative_path(
             pass
 
     # Fallback: return just the filename
-    return os.path.basename(absolute_path)
+    return get_filename_from_path(absolute_path)
 
 
 def get_base_directory_for_model(

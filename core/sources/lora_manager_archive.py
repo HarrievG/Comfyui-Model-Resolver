@@ -19,6 +19,7 @@ from ..matcher import (
     calculate_candidate_rank,
     should_update_best_match,
 )
+from ..path_utils import get_filename_from_path
 from ..type_utils import (
     select_primary_model_file,
     get_generic_filename_tokens,
@@ -113,7 +114,7 @@ def _normalize_model_type(model_type: Optional[str]) -> str:
 
 def _extract_search_tokens(query: str) -> Dict[str, List[str]]:
     """Split filename/model query into useful content/version tokens."""
-    base_query = os.path.splitext(os.path.basename(query or ""))[0]
+    base_query = os.path.splitext(get_filename_from_path(query))[0]
     raw_tokens = [
         token.lower()
         for token in re.split(r"[^a-zA-Z0-9]+", base_query)
@@ -662,7 +663,7 @@ def search_lora_manager_archive_for_file(
     """
     Search the archive for the best model/version match for a filename.
     """
-    search_query = os.path.splitext(os.path.basename(filename or ""))[0]
+    search_query = os.path.splitext(get_filename_from_path(filename))[0]
     if not search_query:
         return None
 

@@ -12,7 +12,7 @@ from .log_system import create_module_logger
 log = create_module_logger(__name__)
 
 
-from .path_utils import get_path_identity
+from .path_utils import get_path_identity, get_filename_from_path
 # Import folder_paths lazily - it may not be available until ComfyUI is initialized
 try:
     import folder_paths
@@ -139,11 +139,11 @@ def scan_directory(
                     try:
                         relative_path = os.path.relpath(root, base_directory)
                     except ValueError:
-                        relative_path = os.path.basename(root)
+                        relative_path = get_filename_from_path(root)
 
                     models.append(
                         {
-                            "filename": os.path.basename(root),
+                            "filename": get_filename_from_path(root),
                             "path": root,
                             "relative_path": relative_path,
                             "category": category,

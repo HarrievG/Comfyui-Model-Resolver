@@ -1,7 +1,8 @@
-﻿import { app } from "../../../../../scripts/app.js";
+import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
+import { safeStorage } from "../utils/html_utils.js";
 export const dialogShellMethods = {
     createHeader() {
         // Create tabs
@@ -141,22 +142,18 @@ export const dialogShellMethods = {
             return;
         }
 
-        try {
-            const wh = JSON.parse(localStorage.getItem('model_resolver_modal_size_before_fs') || 'null');
-            if (wh?.w && wh?.h) {
-                el.style.width = `${wh.w}px`;
-                el.style.height = `${wh.h}px`;
-            }
+        const wh = JSON.parse(safeStorage.getItem('model_resolver_modal_size_before_fs') || 'null');
+        if (wh?.w && wh?.h) {
+            el.style.width = `${wh.w}px`;
+            el.style.height = `${wh.h}px`;
+        }
 
-            const pos = JSON.parse(localStorage.getItem('model_resolver_modal_pos') || 'null');
-            if (pos && Number.isFinite(pos.top) && Number.isFinite(pos.left)) {
-                el.style.top = `${pos.top}px`;
-                el.style.left = `${pos.left}px`;
-                el.style.transform = 'none';
-                return;
-            }
-        } catch (e) {
-            // Fall back to centered floating geometry below.
+        const pos = JSON.parse(safeStorage.getItem('model_resolver_modal_pos') || 'null');
+        if (pos && Number.isFinite(pos.top) && Number.isFinite(pos.left)) {
+            el.style.top = `${pos.top}px`;
+            el.style.left = `${pos.left}px`;
+            el.style.transform = 'none';
+            return;
         }
 
         el.style.top = '50%';
@@ -165,17 +162,11 @@ export const dialogShellMethods = {
     },
 
     rememberSidebarOpenMode(mode) {
-        try {
-            localStorage.setItem(this.sidebarOpenModeStorageKey, mode === 'floating' ? 'floating' : 'docked');
-        } catch (e) {}
+        safeStorage.setItem(this.sidebarOpenModeStorageKey, mode === 'floating' ? 'floating' : 'docked');
     },
 
     shouldOpenFromSidebarFloating() {
-        try {
-            return localStorage.getItem(this.sidebarOpenModeStorageKey) === 'floating';
-        } catch (e) {
-            return false;
-        }
+        return safeStorage.getItem(this.sidebarOpenModeStorageKey) === 'floating';
     },
 
     isVisible() {
@@ -415,10 +406,8 @@ export const dialogShellMethods = {
         const btn = document.getElementById('model-resolver-fullscreen-toggle');
         if (enable) {
             // Save current size
-            try {
-                const rect = el.getBoundingClientRect();
-                localStorage.setItem('model_resolver_modal_size_before_fs', JSON.stringify({ w: Math.round(rect.width), h: Math.round(rect.height) }));
-            } catch (e) {}
+            const rect = el.getBoundingClientRect();
+            safeStorage.setItem('model_resolver_modal_size_before_fs', JSON.stringify({ w: Math.round(rect.width), h: Math.round(rect.height) }));
             el.style.top = '0';
             el.style.left = '0';
             el.style.transform = 'none';
@@ -433,7 +422,7 @@ export const dialogShellMethods = {
                 btn.setAttribute('aria-label', 'Exit full screen');
                 this.setTooltip(btn, 'Exit full screen');
             }
-            try { localStorage.setItem('model_resolver_modal_fullscreen', '1'); } catch (e) {}
+            safeStorage.setItem('model_resolver_modal_fullscreen', '1');
         } else {
             this.returnToDockedAfterFullscreen = false;
             // Restore centered sizing
@@ -443,7 +432,7 @@ export const dialogShellMethods = {
             el.style.resize = 'both';
             // Restore saved pre-FS size if available
             let wh = null;
-            try { wh = JSON.parse(localStorage.getItem('model_resolver_modal_size_before_fs') || 'null'); } catch (e) {}
+            try { wh = JSON.parse(safeStorage.getItem('model_resolver_modal_size_before_fs') || 'null'); } catch (e) {}
             if (wh && wh.w && wh.h) {
                 el.style.width = `${wh.w}px`;
                 el.style.height = `${wh.h}px`;
@@ -452,18 +441,12 @@ export const dialogShellMethods = {
                 el.style.height = '700px';
             }
             // Restore last known position if available, else center
-            try {
-                const pos = JSON.parse(localStorage.getItem('model_resolver_modal_pos') || 'null');
-                if (pos && Number.isFinite(pos.top) && Number.isFinite(pos.left)) {
-                    el.style.top = `${pos.top}px`;
-                    el.style.left = `${pos.left}px`;
-                    el.style.transform = 'none';
-                } else {
-                    el.style.top = '50%';
-                    el.style.left = '50%';
-                    el.style.transform = 'translate(-50%, -50%)';
-                }
-            } catch (e) {
+            const pos = JSON.parse(safeStorage.getItem('model_resolver_modal_pos') || 'null');
+            if (pos && Number.isFinite(pos.top) && Number.isFinite(pos.left)) {
+                el.style.top = `${pos.top}px`;
+                el.style.left = `${pos.left}px`;
+                el.style.transform = 'none';
+            } else {
                 el.style.top = '50%';
                 el.style.left = '50%';
                 el.style.transform = 'translate(-50%, -50%)';
@@ -474,7 +457,7 @@ export const dialogShellMethods = {
                 this.setTooltip(btn, 'Enter full screen');
             }
             this.ensureModalHandleInViewport({ persist: true });
-            try { localStorage.setItem('model_resolver_modal_fullscreen', '0'); } catch (e) {}
+            safeStorage.setItem('model_resolver_modal_fullscreen', '0');
 
             if (shouldReturnToDocked) {
                 this.dockToSidebar();
@@ -518,12 +501,10 @@ export const dialogShellMethods = {
     saveModalPosition() {
         if (this.docked) return;
 
-        try {
-            const el = this.element;
-            if (!el) return;
-            const rect = el.getBoundingClientRect();
-            localStorage.setItem('model_resolver_modal_pos', JSON.stringify({ top: Math.round(rect.top), left: Math.round(rect.left) }));
-        } catch (e) { /* ignore */ }
+        const el = this.element;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        safeStorage.setItem('model_resolver_modal_pos', JSON.stringify({ top: Math.round(rect.top), left: Math.round(rect.left) }));
     },
 
     ensureModalHandleInViewport({ persist = false } = {}) {

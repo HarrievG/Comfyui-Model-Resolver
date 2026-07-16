@@ -855,7 +855,7 @@ def _resolve_aria2c_executable(settings: Optional[Dict[str, Any]] = None) -> str
     configured = str(active_settings.get("aria2c_path") or "").strip()
     candidate = os.path.expandvars(os.path.expanduser(configured or "aria2c"))
     expected_names = {"aria2c", "aria2c.exe"}
-    candidate_name = os.path.basename(candidate).lower()
+    candidate_name = get_filename_from_path(candidate).lower()
     has_path_component = bool(
         os.path.isabs(candidate)
         or os.path.dirname(candidate)
@@ -877,7 +877,7 @@ def _resolve_aria2c_executable(settings: Optional[Dict[str, Any]] = None) -> str
 
     if candidate_name in expected_names:
         resolved = shutil.which(candidate)
-        if resolved and os.path.basename(resolved).lower() in expected_names:
+        if resolved and get_filename_from_path(resolved).lower() in expected_names:
             return os.path.realpath(os.path.abspath(resolved))
 
     raise Aria2Error(

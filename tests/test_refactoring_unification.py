@@ -212,6 +212,14 @@ class TestRefactoringUnification(unittest.TestCase):
         self.assertEqual(state["status"], "running")
         self.assertEqual(state["percent"], 50)
 
+    def test_get_filename_from_path(self):
+        from core.path_utils import get_filename_from_path
+        self.assertEqual(get_filename_from_path("some/path/to/model.safetensors"), "model.safetensors")
+        self.assertEqual(get_filename_from_path("some\\path\\to\\model.safetensors"), "model.safetensors")
+        self.assertEqual(get_filename_from_path("model.safetensors"), "model.safetensors")
+        self.assertEqual(get_filename_from_path(""), "")
+        self.assertEqual(get_filename_from_path(None), "")
+
 
 if __name__ == "__main__":
     unittest.main()

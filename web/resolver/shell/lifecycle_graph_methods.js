@@ -2,6 +2,7 @@ import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
+import { safeStorage } from "../utils/html_utils.js";
 export const lifecycleGraphMethods = {
     async show(workflow = null) {
         this.undockToFloating({ persist: false });
@@ -36,11 +37,8 @@ export const lifecycleGraphMethods = {
         await this.ensureAllModelsLoaded();
         await this.ensureDownloadDirectoriesLoaded();
 
-        // Restore fullscreen state if enabled
-        try {
-            const fs = localStorage.getItem('model_resolver_modal_fullscreen');
-            if (!this.docked && restoreFullscreen && fs === '1') this.setFullScreen(true);
-        } catch (e) { }
+        const fs = safeStorage.getItem('model_resolver_modal_fullscreen');
+        if (!this.docked && restoreFullscreen && fs === '1') this.setFullScreen(true);
 
         // Attach drag handle event listener (only once)
         this.attachDragHandleIfNeeded();

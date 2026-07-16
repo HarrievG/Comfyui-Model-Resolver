@@ -45,6 +45,7 @@ from ..type_utils import (
     normalize_model_file_info,
     build_search_result,
     normalize_sha256,
+    prepare_remote_size_probe_url,
 )
 from ..progress import report_progress, get_progress_reporter
 from ..log_system import create_module_logger
@@ -541,15 +542,13 @@ def _prepare_size_probe_url(url: Any) -> Optional[str]:
     if not normalized:
         return None
 
+    normalized = prepare_remote_size_probe_url(normalized)
+    if not normalized:
+        return None
+
     parsed = urlparse(normalized)
     host = parsed.hostname
     path = parsed.path or ""
-
-    if host_matches_domain(host, "huggingface.co") and "/blob/" in path:
-        normalized = normalized.replace("/blob/", "/resolve/", 1)
-        parsed = urlparse(normalized)
-        host = parsed.hostname
-        path = parsed.path or ""
 
     if host_matches_domain(host, "civarchive.com") and not path.startswith("/api/download/"):
         return None

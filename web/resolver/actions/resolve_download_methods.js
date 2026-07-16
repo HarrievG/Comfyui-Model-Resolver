@@ -5,6 +5,7 @@ import { createModuleLogger } from "../../log_system/log_funcs.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
 import { getModelCardUrl } from "../utils/url_utils.js";
 import { getCivitaiModelUrl } from "../globals.js";
+import { normalizePathIdentity } from "../utils/html_utils.js";
 
 const log = createModuleLogger('resolve_download_methods');
 
@@ -595,11 +596,7 @@ export const resolveDownloadMethods = {
     },
 
     normalizeLocalMatchPathIdentity(value = '') {
-        return String(value || '')
-            .trim()
-            .replace(/\\/g, '/')
-            .replace(/\/+/g, '/')
-            .toLowerCase();
+        return normalizePathIdentity(value);
     },
 
     getLocalMatchAbsolutePathIdentity(match = {}) {

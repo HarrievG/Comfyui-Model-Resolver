@@ -2,7 +2,8 @@ import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
-import { sanitizeDescriptionHtml } from "../utils/html_utils.js";
+import { sanitizeDescriptionHtml, pollBackgroundTask, safeStorage } from "../utils/html_utils.js";
+const localStorage = safeStorage;
 import { getModelCardUrl } from "../utils/url_utils.js";
 import { getCivitaiModelUrl } from "../globals.js";
 export const modelInfoMethods = {
@@ -691,30 +692,43 @@ export const modelInfoMethods = {
 
         onStart(progressId);
 
-        for (;;) {
-            await new Promise(resolve => setTimeout(resolve, 250));
-            if (checkAbort()) {
-                await onAbort(progressId);
-                throw new Error('Hash calculation cancelled');
-            }
-            const progress = await this.fetchJson(
-                `/model_resolver/calculate-file-hash/progress/${encodeURIComponent(progressId)}`,
-                { silent: true },
-                'Get model hash progress'
-            );
+        let finalResult = null;
 
-            onProgress(progress?.percent || 0, progress?.message || '');
+        await pollBackgroundTask({
+            endpoint: `/model_resolver/calculate-file-hash/progress/${encodeURIComponent(progressId)}`,
+            tokenCheck: () => {
+                if (checkAbort()) {
+                    onAbort(progressId);
+                    return false;
+                }
+                return true;
+            },
+            onProgress: (progress) => {
+                onProgress(progress?.percent || 0, progress?.message || '');
+            },
+            isTerminal: (progress) => {
+                return ['done', 'cancelled', 'error'].includes(progress?.status);
+            },
+            onTerminal: (progress) => {
+                if (progress.status === 'done') {
+                    finalResult = progress;
+                } else if (progress.status === 'cancelled') {
+                    throw new Error('Hash calculation cancelled');
+                } else if (progress.status === 'error') {
+                    throw new Error(progress.error || progress.message || 'Hash calculation failed');
+                }
+            },
+            onError: (err) => {
+                throw err;
+            },
+            fetchJson: this.fetchJson.bind(this)
+        });
 
-            if (progress?.status === 'done') {
-                return progress;
-            }
-            if (progress?.status === 'cancelled') {
-                throw new Error('Hash calculation cancelled');
-            }
-            if (progress?.status === 'error') {
-                throw new Error(progress.error || progress.message || 'Hash calculation failed');
-            }
+        if (checkAbort()) {
+            throw new Error('Hash calculation cancelled');
         }
+
+        return finalResult;
     },
 
     async calculateLocalHashCandidatesForCompare(model = {}) {

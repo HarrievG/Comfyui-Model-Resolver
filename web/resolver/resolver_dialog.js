@@ -1,5 +1,6 @@
 import { $el, ComfyDialog } from "../../../../scripts/ui.js";
 import { api } from "../../../../scripts/api.js";
+import { safeStorage } from "./utils/html_utils.js";
 import { dialogShellMethods } from "./shell/dialog_shell_methods.js";
 import { lifecycleGraphMethods } from "./shell/lifecycle_graph_methods.js";
 import { workflowStateMethods } from "./shell/workflow_state_methods.js";
@@ -73,24 +74,12 @@ export class ResolverManagerDialog extends ComfyDialog {
         this.showResolvedModelsStorageKey = "model_resolver_show_resolved_models";
         this.showAutoDownloadModelsStorageKey = "model_resolver_show_auto_download_models";
         this.localMatchAlternativesCollapsedStorageKey = "model_resolver_local_match_alternatives_collapsed";
-        try {
-            this.showResolvedModels = localStorage.getItem(this.showResolvedModelsStorageKey) === '1';
-        } catch (e) {
-            this.showResolvedModels = false;
-        }
-        try {
-            const storedShowAutoDownload = localStorage.getItem(this.showAutoDownloadModelsStorageKey);
-            this.showAutoDownloadModels = storedShowAutoDownload === null
-                ? true
-                : storedShowAutoDownload === '1';
-        } catch (e) {
-            this.showAutoDownloadModels = true;
-        }
-        try {
-            this.localMatchAlternativesCollapsed = localStorage.getItem(this.localMatchAlternativesCollapsedStorageKey) === '1';
-        } catch (e) {
-            this.localMatchAlternativesCollapsed = false;
-        }
+        this.showResolvedModels = safeStorage.getItem(this.showResolvedModelsStorageKey) === '1';
+        const storedShowAutoDownload = safeStorage.getItem(this.showAutoDownloadModelsStorageKey);
+        this.showAutoDownloadModels = storedShowAutoDownload === null
+            ? true
+            : storedShowAutoDownload === '1';
+        this.localMatchAlternativesCollapsed = safeStorage.getItem(this.localMatchAlternativesCollapsedStorageKey) === '1';
         this.dockButton = null;
         this.undockButton = null;
         this._floatingRectBeforeDock = null;
