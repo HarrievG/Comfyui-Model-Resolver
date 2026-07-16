@@ -27,6 +27,7 @@ if not __package__ or __package__ == "":
             current_module.__path__ = [this_dir]
 from .core.log_system import LogLevel, create_module_logger, logger as backend_log_controller
 from .core.log_system.config import LOG_LEVEL as BACKEND_DEFAULT_LOG_LEVEL
+from .core.path_utils import get_filename_from_path
 
 # Web directory for JavaScript interface
 WEB_DIRECTORY = "./web"
@@ -1104,7 +1105,7 @@ class ModelResolverExtension:
                     if not isinstance(metadata, dict):
                         metadata = {}
 
-                    filename = _os.path.basename(normalized_path)
+                    filename = get_filename_from_path(normalized_path)
                     stem, _ext = _os.path.splitext(filename)
                     hashes = metadata.get("hashes")
                     if not isinstance(hashes, dict):
@@ -2133,14 +2134,14 @@ class ModelResolverExtension:
                 def result_filename_matches(result):
                     if not isinstance(result, dict):
                         return False
-                    expected = _os.path.basename(filename or "").lower()
+                    expected = get_filename_from_path(filename).lower()
                     candidates = [
                         result.get("filename"),
                         result.get("path"),
                         result.get("file_path"),
                     ]
                     for candidate in candidates:
-                        basename = _os.path.basename(str(candidate or "")).lower()
+                        basename = get_filename_from_path(candidate).lower()
                         if basename and basename == expected:
                             return True
                     return False
@@ -2777,7 +2778,7 @@ class ModelResolverExtension:
                 if not candidates:
                     return {}
 
-                expected = os.path.basename(str(expected_filename or "")).lower()
+                expected = get_filename_from_path(expected_filename).lower()
 
                 def file_name(file_info):
                     return str(
@@ -2796,7 +2797,7 @@ class ModelResolverExtension:
 
                 if expected:
                     for file_info in candidates:
-                        if os.path.basename(file_name(file_info)).lower() == expected:
+                        if get_filename_from_path(file_name(file_info)).lower() == expected:
                             return file_info
 
                 for file_info in candidates:
@@ -2839,7 +2840,7 @@ class ModelResolverExtension:
                 filename = (
                     file_info.get("name")
                     or file_info.get("filename")
-                    or os.path.basename(str(expected_filename or ""))
+                    or get_filename_from_path(expected_filename)
                     or details.get("name")
                     or f"civitai-{version_id or model_id}"
                 )
@@ -2961,7 +2962,7 @@ class ModelResolverExtension:
                 filename = (
                     file_info.get("name")
                     or file_info.get("filename")
-                    or os.path.basename(str(expected_filename or ""))
+                    or get_filename_from_path(expected_filename)
                     or f"civitai-{version_id}"
                 )
                 download_url = (
@@ -3026,7 +3027,7 @@ class ModelResolverExtension:
                 filename = (
                     file_info.get("name")
                     or file_info.get("filename")
-                    or os.path.basename(str(expected_filename or ""))
+                    or get_filename_from_path(expected_filename)
                     or details.get("name")
                     or "model"
                 )
@@ -3096,7 +3097,7 @@ class ModelResolverExtension:
                 if not repo_id or not file_path:
                     return None
 
-                filename = os.path.basename(file_path.replace("\\", "/"))
+                filename = get_filename_from_path(file_path)
                 download_url = get_huggingface_download_url(repo_id, file_path, branch)
                 if not looks_like_model_file(download_url, expected_filename or filename):
                     return None
@@ -3137,12 +3138,12 @@ class ModelResolverExtension:
 
                 parsed = urlparse(url)
                 filename = (
-                    os.path.basename(parsed.path)
-                    or os.path.basename(str(expected_filename or ""))
+                    get_filename_from_path(parsed.path)
+                    or get_filename_from_path(expected_filename)
                     or "model"
                 )
-                if expected_filename and "." in os.path.basename(str(expected_filename)):
-                    filename = os.path.basename(str(expected_filename))
+                if expected_filename and "." in get_filename_from_path(expected_filename):
+                    filename = get_filename_from_path(expected_filename)
                 source = str(source or "custom").strip().lower()
                 source_label = {
                     "civarchive": "CivArchive",
