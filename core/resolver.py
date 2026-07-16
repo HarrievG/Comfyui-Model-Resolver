@@ -24,7 +24,7 @@ from .workflow_analyzer import (
     should_scan_as_model_reference,
 )
 from .matcher import find_matches, strip_known_model_extension
-from .type_utils import as_dict, as_list, MODEL_EXTENSIONS as _MODEL_EXTENSIONS, unique_ordered_strings, extract_sha256_from_metadata, normalize_sha256
+from .type_utils import as_dict, as_list, MODEL_EXTENSIONS as _MODEL_EXTENSIONS, unique_ordered_strings, extract_sha256_from_metadata, normalize_sha256, prepare_remote_size_probe_url
 from .workflow_updater import update_workflow_nodes
 from .sources.civitai import resolve_urn
 from .sources.huggingface import parse_huggingface_url as parse_hf_url
@@ -499,18 +499,10 @@ def workflow_has_potential_model_references(workflow_json: Dict[str, Any]) -> bo
         for node in iter_active_workflow_nodes(workflow_json)
     )
 
-
 def normalize_workflow_download_url(url: str) -> str:
     """Convert workflow file-page URLs into direct download URLs when possible."""
-    if not isinstance(url, str) or not url:
-        return url
-
-    # HuggingFace /blob/ pages return HTML. /resolve/ returns the actual file.
-    return re.sub(
-        r"(https?://huggingface\.co/[^/]+/[^/]+)/blob/([^/]+)/(.+)",
-        r"\1/resolve/\2/\3",
-        url,
-    )
+    normalized = prepare_remote_size_probe_url(url)
+    return normalized if normalized is not None else url
 
 
 def workflow_url_points_to_file(url: str, filename: str) -> bool:

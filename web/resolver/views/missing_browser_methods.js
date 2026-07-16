@@ -1347,12 +1347,12 @@ export const missingBrowserMethods = {
         const getLocalModelDedupeIdentity = (entry = {}) => {
             const path = String(entry.fullPath || entry.model?.path || '').trim();
             if (path) {
-                return path.replace(/[\\/]+/g, '/').toLowerCase();
+                return normalizePathIdentity(path);
             }
             return [
                 entry.baseDirectory || '',
                 entry.relativePath || entry.model?.relative_path || entry.model?.filename || ''
-            ].map(value => String(value || '').trim().replace(/[\\/]+/g, '/').toLowerCase()).join('::');
+            ].map(normalizePathIdentity).join('::');
         };
         const getLocalModelCategoryRank = (category = '', preferredCategory = '') => {
             const normalized = this.normalizeDownloadCategory(category || '');
