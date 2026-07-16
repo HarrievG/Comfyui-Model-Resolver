@@ -188,7 +188,52 @@ export const searchPanelMethods = {
         return this.getMissingAutoBaseModelInfo(missing).value;
     },
 
+    getBaseModelIndependentSearchType(missing = {}) {
+        const normalizeType = (value) => String(value || '')
+            .trim()
+            .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+        const typeLabels = {
+            sam: 'SAM',
+            sams: 'SAM',
+            sam_model: 'SAM',
+            sam_models: 'SAM',
+            ultralytics: 'Ultralytics',
+            ultralytics_bbox: 'Ultralytics',
+            ultralytics_segm: 'Ultralytics',
+            yolo: 'Ultralytics'
+        };
+        const candidates = [
+            missing?.category,
+            missing?.model_type,
+            missing?.urn_type
+        ];
+        for (const candidate of candidates) {
+            const label = typeLabels[normalizeType(candidate)];
+            if (label) return label;
+        }
+
+        const nodeType = normalizeType(missing?.node_type);
+        if (nodeType === 'samloader' || nodeType === 'sam_loader') return 'SAM';
+        if (nodeType === 'ultralyticsdetectorprovider' || nodeType === 'ultralytics_detector_provider') {
+            return 'Ultralytics';
+        }
+        return '';
+    },
+
     getMissingAutoBaseModelInfo(missing = {}) {
+        const independentType = this.getBaseModelIndependentSearchType(missing);
+        if (independentType) {
+            return {
+                value: '',
+                source: 'independent model type',
+                usesAnyModel: true,
+                message: `${independentType} models are not tied to a base model, so Auto uses Any model.`
+            };
+        }
+
         const searchSuggestion = this.getCachedSearchSuggestionData?.(missing) || {};
         const directCandidates = [
             { value: missing?.civitai_info?.base_model, source: 'model metadata' },
@@ -408,9 +453,9 @@ export const searchPanelMethods = {
 
     getSearchBaseModelLabel(value = 'auto', missing = {}) {
         if (value === 'auto') {
-            const detected = missing
-                ? this.getMissingAutoBaseModel(missing)
-                : this.getDominantWorkflowBaseModel();
+            const autoInfo = missing ? this.getMissingAutoBaseModelInfo(missing) : null;
+            if (autoInfo?.usesAnyModel) return 'Auto (Any model)';
+            const detected = autoInfo ? autoInfo.value : this.getDominantWorkflowBaseModel();
             return detected ? `Auto (${detected})` : 'Auto';
         }
         const option = this.getKnownBaseModelOptions().find(item => item.value === value);

@@ -148,6 +148,48 @@ test('base model alias resolves FLUX KREA as Flux.1 Krea', () => {
   assert.equal(resolveBaseModelAlias.call(dialog, 'KREA'), 'Krea 2');
 });
 
+test('auto base model uses Any model for standalone SAM and Ultralytics models', () => {
+  const getBaseModelIndependentSearchType = eval(`(${extractMethod(searchPanelMethodsSource, 'getBaseModelIndependentSearchType')})`);
+  const getMissingAutoBaseModelInfo = eval(`(${extractMethod(searchPanelMethodsSource, 'getMissingAutoBaseModelInfo')})`);
+  const getMissingAutoBaseModel = eval(`(${extractMethod(searchPanelMethodsSource, 'getMissingAutoBaseModel')})`);
+  const getSearchBaseModelLabel = eval(`(${extractMethod(searchPanelMethodsSource, 'getSearchBaseModelLabel')})`);
+  const getSearchBaseModelContext = eval(`(${extractMethod(searchPanelMethodsSource, 'getSearchBaseModelContext')})`);
+  const state = { selectedBaseModel: 'auto' };
+  const dialog = {
+    getBaseModelIndependentSearchType,
+    getMissingAutoBaseModelInfo,
+    getMissingAutoBaseModel,
+    getSearchBaseModelLabel,
+    getSearchBaseModelContext,
+    getSearchState() {
+      return state;
+    },
+    getDefaultSearchBaseModel() {
+      return 'auto';
+    },
+    getDominantWorkflowBaseModel() {
+      return 'SDXL 1.0';
+    }
+  };
+
+  for (const missing of [
+    { category: 'sams', node_type: 'SAMLoader' },
+    { category: 'ultralytics', node_type: 'UltralyticsDetectorProvider' }
+  ]) {
+    assert.equal(getMissingAutoBaseModel.call(dialog, missing), '');
+    assert.equal(getSearchBaseModelLabel.call(dialog, 'auto', missing), 'Auto (Any model)');
+    assert.equal(getSearchBaseModelContext.call(dialog, missing), '');
+    assert.match(getMissingAutoBaseModelInfo.call(dialog, missing).message, /Auto uses Any model/);
+  }
+
+  state.selectedBaseModel = 'SDXL 1.0';
+  assert.equal(
+    getSearchBaseModelContext.call(dialog, { category: 'sams' }),
+    'SDXL 1.0',
+    'Manual base model selection should remain available'
+  );
+});
+
 test('base model path mapping ignores conflicting full-path base model', () => {
   const normalizeBaseModelToken = eval(`(${extractMethod(searchPanelMethodsSource, 'normalizeBaseModelToken')})`);
   const getBaseModelTokenVariants = eval(`(${extractMethod(searchPanelMethodsSource, 'getBaseModelTokenVariants')})`);
