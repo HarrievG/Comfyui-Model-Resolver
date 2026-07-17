@@ -911,6 +911,9 @@ class UnifiedHelpersTests(unittest.TestCase):
         self.assertEqual(normalize_sha256("sha256:" + h), h)
         self.assertEqual(normalize_sha256("sha256=" + h), h)
         self.assertEqual(normalize_sha256("SHA256:" + h.upper()), h)
+        self.assertEqual(normalize_sha256("0x" + h), h)
+        self.assertEqual(normalize_sha256("sha256:0x" + h), h)
+        self.assertEqual(normalize_sha256("SHA256:0X" + h.upper()), h)
         self.assertEqual(normalize_sha256("invalid_hash"), "")
         self.assertEqual(normalize_sha256(None), "")
 

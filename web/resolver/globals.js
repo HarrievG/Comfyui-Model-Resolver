@@ -1,3 +1,5 @@
+import { copyTextWithFeedback } from "./utils/html_utils.js";
+
 export function registerGlobalHelpers() {
     // Global helper functions for inline onclick handlers
     window.MLToggleHidden = function(id, trigger, collapsedText, expandedText) {
@@ -97,17 +99,15 @@ export function registerGlobalHelpers() {
     };
 
     window.MLCopy = function(text, btn) {
-        navigator.clipboard.writeText(text).then(() => {
-            window.MLSetCopyButtonFeedback(btn, 'Copied');
-        });
+        copyTextWithFeedback(text, btn, { successText: 'Copied', successClass: '' });
     };
 
     window.MLCopyCode = function(sectionId, btn) {
         const section = document.getElementById(sectionId);
-        const codeEl = section.querySelector('code');
-        navigator.clipboard.writeText(codeEl.textContent).then(() => {
-            window.MLSetCopyButtonFeedback(btn, 'Copied');
-        });
+        const codeEl = section ? section.querySelector('code') : null;
+        if (codeEl) {
+            copyTextWithFeedback(codeEl.textContent, btn, { successText: 'Copied', successClass: '' });
+        }
     };
 
     window.MLOpenContextMenu = function(event, element) {

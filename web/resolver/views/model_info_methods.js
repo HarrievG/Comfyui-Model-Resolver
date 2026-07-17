@@ -2,8 +2,7 @@ import { app } from "../../../../../scripts/app.js";
 import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
-import { sanitizeDescriptionHtml, pollBackgroundTask, safeStorage } from "../utils/html_utils.js";
-const localStorage = safeStorage;
+import { sanitizeDescriptionHtml, pollBackgroundTask, safeStorage, copyTextWithFeedback } from "../utils/html_utils.js";
 import { getModelCardUrl } from "../utils/url_utils.js";
 import { getCivitaiModelUrl } from "../globals.js";
 export const modelInfoMethods = {
@@ -1758,19 +1757,12 @@ export const modelInfoMethods = {
 
                 if (!words.length) return;
 
-                try {
-                    await navigator.clipboard.writeText(words.join(', '));
-                    copyBtn.textContent = 'Copied';
-                } catch (error) {
-                    console.error('Model Resolver: Failed to copy trained words:', error);
-                    copyBtn.textContent = 'Failed';
-                }
-
-                setTimeout(() => {
-                    if (copyBtn.isConnected) {
-                        copyBtn.textContent = 'Copy';
-                    }
-                }, 1200);
+                await copyTextWithFeedback(words.join(', '), copyBtn, {
+                    successText: 'Copied',
+                    errorText: 'Failed',
+                    duration: 1200,
+                    successClass: ''
+                });
                 return;
             }
 
@@ -1794,7 +1786,7 @@ export const modelInfoMethods = {
         if (!panel) return;
 
         try {
-            const saved = JSON.parse(localStorage.getItem('model_resolver_info_dialog_size') || 'null');
+            const saved = JSON.parse(safeStorage.getItem('model_resolver_info_dialog_size') || 'null');
             if (!saved || typeof saved !== 'object') return;
 
             const width = Number(saved.w);
@@ -1823,7 +1815,7 @@ export const modelInfoMethods = {
         if (!width || !height) return;
 
         try {
-            localStorage.setItem('model_resolver_info_dialog_size', JSON.stringify({ w: width, h: height }));
+            safeStorage.setItem('model_resolver_info_dialog_size', JSON.stringify({ w: width, h: height }));
         } catch (error) {
             console.warn('Model Resolver: Failed to save info dialog size:', error);
         }
@@ -2593,21 +2585,12 @@ export const modelInfoMethods = {
 
         if (!text) return;
 
-        try {
-            await navigator.clipboard.writeText(String(text));
-            button.classList.add('is-copied');
-            button.innerHTML = `${getSvgIcon('copy')} Copied`;
-        } catch (error) {
-            console.error('Model Resolver: Failed to copy image metadata:', error);
-            button.innerHTML = `${getSvgIcon('copy')} Failed`;
-        }
-
-        setTimeout(() => {
-            if (button.isConnected) {
-                button.classList.remove('is-copied');
-                button.innerHTML = `${getSvgIcon('copy')} Copy${key === 'all' ? ' all' : ''}`;
-            }
-        }, 1200);
+        await copyTextWithFeedback(String(text), button, {
+            successClass: 'is-copied',
+            successHtml: `${getSvgIcon('copy')} Copied`,
+            errorText: 'Failed',
+            duration: 1200
+        });
     },
 
     closeInfoImagePreview(preview = null) {

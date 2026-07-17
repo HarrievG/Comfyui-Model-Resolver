@@ -708,6 +708,9 @@ def normalize_sha256(value: Any) -> str:
         if text.lower().startswith(prefix):
             text = text[len(prefix):].strip()
 
+    if text.lower().startswith("0x"):
+        text = text[2:].strip()
+
     return text.lower() if SHA256_PATTERN.match(text) else ""
 
 

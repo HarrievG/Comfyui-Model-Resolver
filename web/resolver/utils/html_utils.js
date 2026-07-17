@@ -223,3 +223,44 @@ export function normalizePathIdentity(value = '') {
         .toLowerCase();
 }
 
+/**
+ * Copies text to clipboard and handles time-based button visual feedback.
+ * @param {string} text - The text content to copy.
+ * @param {HTMLElement} button - The button to apply feedback to.
+ * @param {Object} options - Customization parameters.
+ */
+export async function copyTextWithFeedback(text, button, options = {}) {
+    if (!button) return;
+    const successText = options.successText || 'Copied';
+    const errorText = options.errorText || 'Failed';
+    const duration = options.duration || 1200;
+    const successClass = options.successClass || 'is-copied';
+    const successHtml = options.successHtml || null;
+
+    const originalHtml = button.innerHTML;
+
+    try {
+        await navigator.clipboard.writeText(text);
+        if (successClass) {
+            button.classList.add(successClass);
+        }
+        if (successHtml) {
+            button.innerHTML = successHtml;
+        } else {
+            button.textContent = successText;
+        }
+    } catch (err) {
+        console.error('Model Resolver: Copy failed:', err);
+        button.textContent = errorText;
+    }
+
+    setTimeout(() => {
+        if (button.isConnected) {
+            if (successClass) {
+                button.classList.remove(successClass);
+            }
+            button.innerHTML = originalHtml;
+        }
+    }, duration);
+}
+

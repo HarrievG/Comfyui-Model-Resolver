@@ -292,29 +292,6 @@ SAFETENSORS_METADATA_TEXT_MAX_CHARS = 20000
 SAFETENSORS_METADATA_THUMBNAIL_MAX_CHARS = 512 * 1024
 
 
-def _normalize_header_sha256(value: Any) -> str:
-    if not isinstance(value, str):
-        return ""
-
-    candidate = value.strip()
-    lower_candidate = candidate.lower()
-    if lower_candidate.startswith("sha256:") or lower_candidate.startswith("sha256="):
-        if ":" in candidate:
-            candidate = candidate.split(":", 1)[-1]
-        else:
-            candidate = candidate.split("=", 1)[-1]
-        candidate = candidate.strip()
-        lower_candidate = candidate.lower()
-
-    if lower_candidate.startswith("0x"):
-        candidate = candidate[2:].strip()
-
-    if len(candidate) != 64:
-        return ""
-    if any(char not in _SHA256_HEX_CHARS for char in candidate):
-        return ""
-    return candidate.lower()
-
 
 def read_safetensors_header(
     file_path: str,
@@ -368,6 +345,8 @@ def extract_safetensors_header_sha256(
     max_header_size: int = SAFETENSORS_HEADER_MAX_BYTES,
 ) -> Optional[str]:
     """Return an embedded SHA256 from a safetensors metadata header when present."""
+    from .type_utils import normalize_sha256
+
     header_json = read_safetensors_header(file_path, max_header_size=max_header_size)
     if not isinstance(header_json, dict):
         return None
@@ -382,7 +361,7 @@ def extract_safetensors_header_sha256(
         "sha256",
         "SHA256",
     ):
-        sha256 = _normalize_header_sha256(metadata.get(key))
+        sha256 = normalize_sha256(metadata.get(key))
         if sha256:
             return sha256
 
@@ -396,7 +375,7 @@ def extract_safetensors_header_sha256(
             continue
         if any(part in key_lower for part in _NON_SHA256_HASH_KEY_PARTS):
             continue
-        sha256 = _normalize_header_sha256(value)
+        sha256 = normalize_sha256(value)
         if sha256:
             return sha256
 

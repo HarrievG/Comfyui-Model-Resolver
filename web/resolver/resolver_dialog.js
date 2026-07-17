@@ -1,6 +1,7 @@
 import { $el, ComfyDialog } from "../../../../scripts/ui.js";
 import { api } from "../../../../scripts/api.js";
 import { safeStorage } from "./utils/html_utils.js";
+import { showNotification as showNotificationUtils } from "../utils/notification_utils.js";
 import { dialogShellMethods } from "./shell/dialog_shell_methods.js";
 import { lifecycleGraphMethods } from "./shell/lifecycle_graph_methods.js";
 import { workflowStateMethods } from "./shell/workflow_state_methods.js";
@@ -257,6 +258,15 @@ export class ResolverManagerDialog extends ComfyDialog {
             }
             throw error;
         }
+    }
+
+    showNotification(message, type = 'success', options = {}) {
+        const duration = options?.duration || (type === 'success' ? 4000 : (type === 'error' ? 6000 : 3000));
+        return showNotificationUtils(message, type, {
+            ...options,
+            duration,
+            deduplicate: options?.deduplicate || false
+        });
     }
 }
 

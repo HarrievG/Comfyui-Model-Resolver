@@ -3,11 +3,9 @@ import { api } from "../../../../../scripts/api.js";
 import { $el } from "../../../../../scripts/ui.js";
 import { getSvgIcon } from "../../utils/icon_utils.js";
 import { createFloatingTreePicker } from "../utils/tree_picker.js";
-import { showNotification as showNotificationUtils } from "../../utils/notification_utils.js";
 import { startSplitterDrag } from "../utils/splitter_drag.js";
 import { getCivitaiModelUrl } from "../globals.js";
 import { safeStorage, normalizePathIdentity } from "../utils/html_utils.js";
-const localStorage = safeStorage;
 
 export const missingBrowserMethods = {
     getMissingFilename(missing = {}) {
@@ -678,7 +676,7 @@ export const missingBrowserMethods = {
             showResolvedToggle.addEventListener('change', () => {
                 this.showResolvedModels = Boolean(showResolvedToggle.checked);
                 try {
-                    localStorage.setItem(this.showResolvedModelsStorageKey, this.showResolvedModels ? '1' : '0');
+                    safeStorage.setItem(this.showResolvedModelsStorageKey, this.showResolvedModels ? '1' : '0');
                 } catch (e) {}
                 this.displayMissingModels(container, data);
             });
@@ -690,7 +688,7 @@ export const missingBrowserMethods = {
             showAutoDownloadToggle.addEventListener('change', () => {
                 this.showAutoDownloadModels = Boolean(showAutoDownloadToggle.checked);
                 try {
-                    localStorage.setItem(this.showAutoDownloadModelsStorageKey, this.showAutoDownloadModels ? '1' : '0');
+                    safeStorage.setItem(this.showAutoDownloadModelsStorageKey, this.showAutoDownloadModels ? '1' : '0');
                 } catch (e) {}
                 this.displayMissingModels(container, data);
             });
@@ -811,7 +809,7 @@ export const missingBrowserMethods = {
             this._missingBrowserLastDetailWidth = null;
             this.cancelMissingBrowserSplitWidthPersist();
             try {
-                localStorage.removeItem(this.missingBrowserSplitStorageKey);
+                safeStorage.removeItem(this.missingBrowserSplitStorageKey);
             } catch (e) {}
         });
 
@@ -863,7 +861,7 @@ export const missingBrowserMethods = {
 
         let savedWidth = null;
         try {
-            const storedWidth = parseInt(localStorage.getItem(this.missingBrowserSplitStorageKey) || '', 10);
+            const storedWidth = parseInt(safeStorage.getItem(this.missingBrowserSplitStorageKey) || '', 10);
             savedWidth = Number.isFinite(storedWidth) && storedWidth > 0 ? storedWidth : null;
         } catch (e) {}
 
@@ -1228,7 +1226,7 @@ export const missingBrowserMethods = {
             this._missingBrowserSplitPersistIdle = null;
             this._missingBrowserSplitPersistTimer = null;
             try {
-                localStorage.setItem(this.missingBrowserSplitStorageKey, String(nextWidth));
+                safeStorage.setItem(this.missingBrowserSplitStorageKey, String(nextWidth));
             } catch (e) {}
         };
 
@@ -2174,17 +2172,7 @@ export const missingBrowserMethods = {
         return html;
     },
 
-    /**
-     * Show a notification banner (similar to ComfyUI's "Reconnecting" banner)
-     */
-    showNotification(message, type = 'success', options = {}) {
-        const duration = options?.duration || (type === 'success' ? 4000 : (type === 'error' ? 6000 : 3000));
-        return showNotificationUtils(message, type, {
-            ...options,
-            duration,
-            deduplicate: options?.deduplicate || false
-        });
-    },
+
 
     refreshMissingListRow(missing, options = {}) {
         if (!missing || !this.contentElement) return;

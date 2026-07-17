@@ -5,7 +5,6 @@ import { getSvgIcon } from "../../utils/icon_utils.js";
 import { LOG_LEVEL as DEFAULT_FRONTEND_LOG_LEVEL } from "../../log_system/config.js";
 import { logger as frontendLogger } from "../../log_system/logger.js";
 import { pollBackgroundTask, safeStorage } from "../utils/html_utils.js";
-const localStorage = safeStorage;
 const SETTINGS_MAP = [
     { serverKey: 'civitai_key', localKey: 'ModelResolver.civitaiApiKey', type: 'string', default: '' },
     { serverKey: 'civitai_session_token', localKey: 'ModelResolver.civitaiSessionToken', type: 'string', default: '' },
@@ -1222,7 +1221,7 @@ export const optionsMethods = {
             }
             if (persist) {
                 try {
-                    localStorage.setItem(
+                    safeStorage.setItem(
                         this.metadataSizeControlsCollapsedStorageKey || 'model_resolver_metadata_size_controls_collapsed',
                         isCollapsed ? '1' : '0'
                     );
@@ -1237,7 +1236,7 @@ export const optionsMethods = {
         }
         if (typeof this.metadataSizeControlsCollapsed !== 'boolean') {
             try {
-                this.metadataSizeControlsCollapsed = localStorage.getItem(this.metadataSizeControlsCollapsedStorageKey) === '1';
+                this.metadataSizeControlsCollapsed = safeStorage.getItem(this.metadataSizeControlsCollapsedStorageKey) === '1';
             } catch (error) {
                 this.metadataSizeControlsCollapsed = false;
             }
@@ -1427,7 +1426,7 @@ export const optionsMethods = {
             }
             if (persist) {
                 try {
-                    localStorage.setItem(
+                    safeStorage.setItem(
                         this.metadataBuildControlsCollapsedStorageKey || 'model_resolver_metadata_build_controls_collapsed',
                         isCollapsed ? '1' : '0'
                     );
@@ -1442,7 +1441,7 @@ export const optionsMethods = {
         }
         if (typeof this.metadataBuildControlsCollapsed !== 'boolean') {
             try {
-                this.metadataBuildControlsCollapsed = localStorage.getItem(this.metadataBuildControlsCollapsedStorageKey) === '1';
+                this.metadataBuildControlsCollapsed = safeStorage.getItem(this.metadataBuildControlsCollapsedStorageKey) === '1';
             } catch (error) {
                 this.metadataBuildControlsCollapsed = false;
             }
@@ -2304,8 +2303,8 @@ export const optionsMethods = {
 
                 tokens.aria2c_path = data.aria2c_path;
                 tokens.download_backend = 'aria2';
-                localStorage.setItem('ModelResolver.aria2cPath', data.aria2c_path);
-                localStorage.setItem('ModelResolver.downloadBackend', 'aria2');
+                safeStorage.setItem('ModelResolver.aria2cPath', data.aria2c_path);
+                safeStorage.setItem('ModelResolver.downloadBackend', 'aria2');
 
                 setAria2Status('');
                 renderAria2Summary({
@@ -3469,25 +3468,25 @@ export const optionsMethods = {
                     search_source_enabled: sourceEnabled,
                 };
 
-                // 1. Write to localStorage (fast local cache)
+                // 1. Write to safeStorage (fast local cache)
                 for (const opt of SETTINGS_MAP) {
                     const val = newSettings[opt.serverKey];
                     if (opt.type === 'boolean' || opt.type === 'frontendLogsEnabled' || opt.type === 'backendLogsEnabled') {
-                        localStorage.setItem(opt.localKey, val ? 'true' : 'false');
+                        safeStorage.setItem(opt.localKey, val ? 'true' : 'false');
                     } else if (opt.type === 'json') {
-                        localStorage.setItem(opt.localKey, JSON.stringify(val));
+                        safeStorage.setItem(opt.localKey, JSON.stringify(val));
                     } else {
-                        localStorage.setItem(opt.localKey, String(val ?? ''));
+                        safeStorage.setItem(opt.localKey, String(val ?? ''));
                     }
                 }
                 defaultRootSelectInputs.forEach((select) => {
                     const storageKey = select.dataset.storageKey;
                     if (storageKey) {
-                        localStorage.setItem(storageKey, select.value || '');
+                        safeStorage.setItem(storageKey, select.value || '');
                     }
                 });
                 Object.entries(sourceEnabled).forEach(([key, val]) => {
-                    localStorage.setItem(key, val ? 'true' : 'false');
+                    safeStorage.setItem(key, val ? 'true' : 'false');
                 });
                 if (civitaiLimitInput) civitaiLimitInput.value = `${civitaiCandidateLimit}`;
                 this.applyFrontendLoggingPreference(newSettings.frontend_logs_enabled, newSettings.frontend_log_level);
@@ -3523,7 +3522,7 @@ export const optionsMethods = {
     getStoredTokens() {
         const tokens = {};
         for (const opt of SETTINGS_MAP) {
-            const raw = localStorage.getItem(opt.localKey);
+            const raw = safeStorage.getItem(opt.localKey);
             if (opt.type === 'boolean') {
                 tokens[opt.serverKey] = raw === null ? opt.default : raw !== 'false';
             } else if (opt.type === 'json') {
@@ -3578,29 +3577,29 @@ export const optionsMethods = {
                 if (serverValue === undefined) continue;
 
                 if (opt.type === 'boolean' || opt.type === 'frontendLogsEnabled' || opt.type === 'backendLogsEnabled') {
-                    localStorage.setItem(opt.localKey, serverValue ? 'true' : 'false');
+                    safeStorage.setItem(opt.localKey, serverValue ? 'true' : 'false');
                 } else if (opt.type === 'json') {
-                    localStorage.setItem(opt.localKey, JSON.stringify(serverValue || {}));
+                    safeStorage.setItem(opt.localKey, JSON.stringify(serverValue || {}));
                 } else if (opt.type === 'backend') {
-                    localStorage.setItem(opt.localKey, this.normalizeDownloadBackend(serverValue));
+                    safeStorage.setItem(opt.localKey, this.normalizeDownloadBackend(serverValue));
                 } else if (opt.type === 'pathMode') {
-                    localStorage.setItem(opt.localKey, this.normalizeDownloadPathMode(serverValue));
+                    safeStorage.setItem(opt.localKey, this.normalizeDownloadPathMode(serverValue));
                 } else {
                     if (serverValue !== null && serverValue !== '') {
-                        localStorage.setItem(opt.localKey, String(serverValue));
+                        safeStorage.setItem(opt.localKey, String(serverValue));
                     }
                 }
             }
             this.getDefaultRootCategoryDefinitions().forEach((item) => {
                 if (data[item.settingKey] !== undefined) {
-                    localStorage.setItem(item.storageKey, String(data[item.settingKey] || ''));
+                    safeStorage.setItem(item.storageKey, String(data[item.settingKey] || ''));
                 }
             });
 
             // Source-enabled flags stored as a nested object
             if (data.search_source_enabled && typeof data.search_source_enabled === 'object') {
                 Object.entries(data.search_source_enabled).forEach(([key, val]) => {
-                    if (key) localStorage.setItem(key, val ? 'true' : 'false');
+                    if (key) safeStorage.setItem(key, val ? 'true' : 'false');
                 });
             }
             const tokens = this.getStoredTokens();
