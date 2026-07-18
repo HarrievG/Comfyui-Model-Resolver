@@ -568,19 +568,22 @@ class CivitaiRedSearchTests(unittest.TestCase):
         response.text = ""
         mock_get.return_value = response
 
-        _search_civitai_red_candidates("ae.safetensors", model_type="vae")
+        _search_civitai_red_candidates(
+            r"models\diffusion_models\Anima_baseV10.safetensors",
+            model_type="diffusion_models",
+        )
 
         url = mock_get.call_args.args[0]
         self.assertTrue(url.startswith("https://civitai.red/search/models?"))
         self.assertIn("sortBy=models_v9", url)
-        self.assertIn("query=ae.safetensors", url)
-        self.assertIn("modelType=VAE", url)
+        self.assertIn("query=Anima_baseV10", url)
+        self.assertIn("modelType=Checkpoint", url)
 
 
 class CivitaiTrpcSearchTests(unittest.TestCase):
 
     @patch("core.sources.civitai.requests.get")
-    def test_retries_without_type_filter_when_typed_search_is_empty(self, mock_get):
+    def test_does_not_retry_without_type_filter_when_typed_search_is_empty(self, mock_get):
         empty_response = MagicMock()
         empty_response.status_code = 200
         empty_response.headers = {"content-type": "application/json"}
@@ -589,35 +592,19 @@ class CivitaiTrpcSearchTests(unittest.TestCase):
             "result": {"data": {"json": {"items": []}}}
         }
 
-        fallback_response = MagicMock()
-        fallback_response.status_code = 200
-        fallback_response.headers = {"content-type": "application/json"}
-        fallback_response.text = '{"result":{"data":{"json":{"items":[{"id":10,"version":{"id":20}}]}}}}'
-        fallback_response.json.return_value = {
-            "result": {
-                "data": {
-                    "json": {
-                        "items": [
-                            {"id": 10, "version": {"id": 20}},
-                        ]
-                    }
-                }
-            }
-        }
-        mock_get.side_effect = [empty_response, fallback_response]
+        mock_get.return_value = empty_response
 
         result = _search_civitai_trpc_candidates(
-            "ae.safetensors",
-            model_type="vae",
+            "Anima_baseV10.safetensors",
+            model_type="diffusion_models",
             limit=5,
         )
 
-        self.assertEqual(result, [{"model_id": 10, "version_id": 20}])
-        self.assertEqual(mock_get.call_count, 2)
-        first_url = mock_get.call_args_list[0].args[0]
-        second_url = mock_get.call_args_list[1].args[0]
-        self.assertIn("types", first_url)
-        self.assertNotIn("types", second_url)
+        self.assertEqual(result, [])
+        mock_get.assert_called_once()
+        url = mock_get.call_args.args[0]
+        self.assertIn("Anima_baseV10", url)
+        self.assertIn("Checkpoint", url)
 
     def test_html_fallback_not_used_to_top_up_trpc_candidates(self):
         clear_search_cache()
@@ -713,7 +700,7 @@ class CivitaiTrpcSearchTests(unittest.TestCase):
         self.assertEqual(result, [{"model_id": 101, "version_id": 202}])
         params = mock_get.call_args.kwargs.get("params", {})
         headers = mock_get.call_args.kwargs.get("headers", {})
-        self.assertEqual(params.get("query"), "realistic.safetensors")
+        self.assertEqual(params.get("query"), "realistic")
         self.assertEqual(params.get("types"), "Checkpoint")
         self.assertEqual(headers.get("Authorization"), "Bearer api-key")
         self.assertIn("__Secure-civitai-token=session-token", headers.get("Cookie", ""))

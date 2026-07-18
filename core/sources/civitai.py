@@ -371,11 +371,14 @@ def _search_civitai_trpc_candidates(
 ) -> List[Dict[str, Optional[int]]]:
     """Try CivitAI.red tRPC search endpoint and log the raw outcome for diagnostics."""
     civitai_type = CIVITAI_API_TYPE_MAP.get(str(model_type).lower()) if model_type else None
+    search_query = get_filename_from_path(filename)
+    if _has_known_model_extension(search_query):
+        search_query = os.path.splitext(search_query)[0]
 
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
-        "referer": f"https://civitai.red/models?query={quote(filename)}",
+        "referer": f"https://civitai.red/models?query={quote(search_query)}",
         "user-agent": DEFAULT_BROWSER_USER_AGENT,
         "x-client": "web",
         "x-client-version": "5.0.1657",
@@ -389,7 +392,7 @@ def _search_civitai_trpc_candidates(
                 "period": "Month",
                 "periodMode": "stats",
                 "sort": "Highest Rated",
-                "query": filename,
+                "query": search_query,
                 "pending": False,
                 "browsingLevel": 28,
                 "excludedTagIds": [
@@ -423,43 +426,35 @@ def _search_civitai_trpc_candidates(
             + quote(json.dumps(input_payload, separators=(",", ":")))
         )
 
-    type_filters = [civitai_type] if civitai_type else [None]
-    if civitai_type:
-        type_filters.append(None)
+    url = build_url(civitai_type)
+    log.info(
+        f"CivitAI tRPC search start: filename={filename}, model_type={model_type}, type_filter={civitai_type or 'none'}, session_token={'yes' if session_token else 'no'}, url={url}"
+    )
 
-    for type_filter in type_filters:
-        url = build_url(type_filter)
-        log.info(
-            f"CivitAI tRPC search start: filename={filename}, model_type={model_type}, type_filter={type_filter or 'none'}, session_token={'yes' if session_token else 'no'}, url={url}"
-        )
+    response = request_source_response(url, headers=headers, timeout=timeout, log_name="CivitAI tRPC")
+    if response is None:
+        log.warning(f"CivitAI tRPC request failed for filename={filename}: no response")
+        return []
 
-        response = request_source_response(url, headers=headers, timeout=timeout, log_name="CivitAI tRPC")
-        if response is None:
-            log.warning(f"CivitAI tRPC request failed for filename={filename}: no response")
-            return []
+    text_preview = response.text[:800].replace("\n", " ").replace("\r", " ")
+    log.info(
+        f"CivitAI tRPC response: status={response.status_code}, content_type={response.headers.get('content-type')}, text_preview={text_preview}"
+    )
 
-        text_preview = response.text[:800].replace("\n", " ").replace("\r", " ")
-        log.info(
-            f"CivitAI tRPC response: status={response.status_code}, content_type={response.headers.get('content-type')}, text_preview={text_preview}"
-        )
+    if response.status_code != 200:
+        return []
 
-        if response.status_code != 200:
-            return []
+    try:
+        payload = response.json()
+    except Exception as e:
+        log.warning(f"CivitAI tRPC JSON parse failed for filename={filename}: {e}")
+        return []
 
-        try:
-            payload = response.json()
-        except Exception as e:
-            log.warning(f"CivitAI tRPC JSON parse failed for filename={filename}: {e}")
-            return []
-
-        candidates = _extract_trpc_model_candidates(payload, limit=limit)
-        log.info(
-            f"CivitAI tRPC extracted {len(candidates)} candidates for filename={filename}: {candidates}"
-        )
-        if candidates or not type_filter:
-            return candidates
-
-    return []
+    candidates = _extract_trpc_model_candidates(payload, limit=limit)
+    log.info(
+        f"CivitAI tRPC extracted {len(candidates)} candidates for filename={filename}: {candidates}"
+    )
+    return candidates
 
 
 def _search_civitai_red_candidates(
@@ -470,9 +465,12 @@ def _search_civitai_red_candidates(
     limit: int = 5,
 ) -> List[Dict[str, int]]:
     """Search civitai.red by full filename and return model/version candidates."""
+    search_query = get_filename_from_path(filename)
+    if _has_known_model_extension(search_query):
+        search_query = os.path.splitext(search_query)[0]
     params = {
         "sortBy": "models_v9",
-        "query": filename,
+        "query": search_query,
     }
     civitai_type = CIVITAI_API_TYPE_MAP.get(str(model_type).lower()) if model_type else None
     if civitai_type:
@@ -547,8 +545,11 @@ def _search_civitai_public_api_candidates(
     limit: int = 5,
 ) -> List[Dict[str, Optional[int]]]:
     """Search the public CivitAI API by model name and return model/version candidates."""
+    search_query = get_filename_from_path(filename)
+    if _has_known_model_extension(search_query):
+        search_query = os.path.splitext(search_query)[0]
     params = {
-        "query": filename,
+        "query": search_query,
         "limit": max(1, min(int(limit), MAX_CIVITAI_CANDIDATE_LIMIT)),
         "sort": "Highest Rated",
         "period": "AllTime",

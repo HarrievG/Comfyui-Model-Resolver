@@ -213,6 +213,10 @@ CATEGORY_MAP = {
 CIVITAI_API_TYPE_MAP = {
     "checkpoint": "Checkpoint",
     "checkpoints": "Checkpoint",
+    "diffusion_model": "Checkpoint",
+    "diffusion_models": "Checkpoint",
+    "unet": "Checkpoint",
+    "unet_gguf": "Checkpoint",
     "lora": "LORA",
     "loras": "LORA",
     "vae": "VAE",

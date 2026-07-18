@@ -1195,6 +1195,7 @@ class UnifiedHelpersTests(unittest.TestCase):
         self.assertEqual(resolve_model_category("checkpoints", target_format="folder"), "checkpoints")
         self.assertEqual(resolve_model_category("lora", target_format="folder"), "loras")
         self.assertEqual(resolve_model_category("checkpoint", target_format="civitai"), "Checkpoint")
+        self.assertEqual(resolve_model_category("diffusion_models", target_format="civitai"), "Checkpoint")
         self.assertEqual(resolve_model_category("loras", target_format="civitai"), "LORA")
         self.assertEqual(resolve_model_category("locon", target_format="civarchive"), "LoCon")
         self.assertEqual(resolve_model_category("loras", target_format="urn"), "loras")
@@ -1224,7 +1225,6 @@ class UnifiedHelpersTests(unittest.TestCase):
         self.assertTrue(len(updates) >= 1)
         self.assertEqual(updates[-1]["current"], 2)
         self.assertEqual(updates[-1]["total"], 10)
-
 
 
 
