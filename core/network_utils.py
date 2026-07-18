@@ -285,3 +285,18 @@ def request_source_json(
         return None
 
 
+def fetch_json_from_public_url(
+    url: str,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: int = 30,
+) -> Dict[str, Any]:
+    """
+    Convenience wrapper to fetch and parse JSON from a public HTTP(S) URL.
+    """
+    res = request_source_json(url, headers=headers, timeout=timeout, raise_on_error=True)
+    if not isinstance(res, dict):
+        raise ValueError(f"URL did not return a valid JSON object: {url}")
+    return res
+
+
+

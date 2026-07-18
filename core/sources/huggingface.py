@@ -28,6 +28,7 @@ from ..type_utils import (
     looks_like_model_file,
     prepare_remote_size_probe_url,
 )
+from .common import build_unified_search_result
 
 HF_API_URL = "https://huggingface.co/api"
 HF_AUTHOR_FALLBACKS = ["Comfy-Org"]
@@ -371,7 +372,7 @@ def _build_huggingface_result(
     size = extract_file_size(file_info)
     if not size:
         size = _fetch_remote_file_size_bytes(download_url, headers=headers)
-    return build_search_result(
+    return build_unified_search_result(
         "huggingface",
         model_id=repo_id,
         version_id=None,

@@ -5,6 +5,10 @@ import { getSvgIcon } from "../../utils/icon_utils.js";
 import { escapeHtml, escapeJsString, getFilenameFromPath, pollBackgroundTask } from "./html_utils.js";
 
 export const renderFormatMethods = {
+    escapeHtml,
+    escapeJsString,
+    getFilenameFromPath,
+
     encodeContextMenuModel(context = null) {
         if (!context) return '';
         try {

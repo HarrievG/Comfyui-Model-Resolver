@@ -33,7 +33,6 @@ from ..progress import get_progress_reporter
 from ..type_utils import (
     CIVARCHIVE_API_TYPE_MAP,
     DEFAULT_BROWSER_USER_AGENT,
-    build_search_result,
     clear_remote_size_cache,
     extract_file_size,
     extract_trained_words,
@@ -46,6 +45,7 @@ from ..type_utils import (
     select_primary_model_file,
     to_int,
 )
+from .common import build_unified_search_result
 
 log = create_module_logger(__name__)
 
@@ -1155,7 +1155,7 @@ def _build_result_from_normalized_version(
     if size is None:
         size = _resolve_file_size_bytes(file_info, download_urls)
 
-    return build_search_result(
+    return build_unified_search_result(
         source="civarchive",
         model_id=model_id,
         version_id=version_id,
@@ -1612,7 +1612,7 @@ def _build_result_from_payload(
         else ""
     )
 
-    return build_search_result(
+    return build_unified_search_result(
         source="civarchive",
         model_id=model_id,
         version_id=version_id,
@@ -1769,7 +1769,7 @@ def _build_result_from_search_candidate(
 
     open_url = urljoin(CIVARCHIVE_BASE_URL, str(candidate.get("url") or ""))
     sha256 = (parsed or {}).get("sha256")
-    return build_search_result(
+    return build_unified_search_result(
         source="civarchive",
         model_id=candidate.get("model_id") or candidate.get("modelId"),
         version_id=candidate.get("version_id") or candidate.get("modelVersionId"),

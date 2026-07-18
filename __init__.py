@@ -166,7 +166,28 @@ class JobProgressTracker:
                 "updated_at": now,
             }
 
+    def update_from_payload(
+        self,
+        progress_id: Optional[str],
+        progress_payload: Dict[str, Any],
+        default_stage: str = "running",
+    ) -> None:
+        if not progress_id or not isinstance(progress_payload, dict):
+            return
+        data = dict(progress_payload)
+        status = data.pop("status", None)
+        stage = data.pop("stage", None) or default_stage
+        if not status:
+            if stage in ("done", "completed"):
+                status = "completed"
+            elif stage == "cancelled":
+                status = "cancelled"
+            else:
+                status = "running"
+        self.update(progress_id, status=status, stage=stage, **data)
+
     def is_cancelled(self, progress_id) -> bool:
+
         if not progress_id:
             return False
         with self.lock:
@@ -214,29 +235,15 @@ class ModelResolverExtension:
         analysis_id: Optional[str],
         payload: Dict[str, Any]
     ) -> None:
-        if not analysis_id:
-            return
-        status = "running" if payload.get("stage") != "completed" else "completed"
-        self.analysis_progress.update(analysis_id, status=status, **payload)
+        self.analysis_progress.update_from_payload(analysis_id, payload)
 
     def _update_metadata_build_progress(
         self,
         progress_id: Optional[str],
         progress_payload: Dict[str, Any]
     ) -> None:
-        if not progress_id or not isinstance(progress_payload, dict):
-            return
-        data = dict(progress_payload)
-        status = data.pop("status", None)
-        stage = data.get("stage") or ""
-        if not status:
-            if stage == "done":
-                status = "done"
-            elif stage == "cancelled":
-                status = "cancelled"
-            else:
-                status = "running"
-        self.metadata_builder_progress.update(progress_id, status=status, **data)
+        self.metadata_builder_progress.update_from_payload(progress_id, progress_payload)
+
 
     def _update_loaded_progress(
         self,
@@ -334,9 +341,18 @@ class ModelResolverExtension:
                 )
                 from .core.path_templates import infer_download_path_templates
                 from .core.path_utils import (
+                    HashCalculationCancelled,
+                    calculate_file_sha256,
+                    dedupe_local_base_directories,
                     extract_safetensors_header_sha256,
+                    get_comfy_root_path,
                     get_filename_from_path,
+                    get_path_abs,
+                    get_path_identity,
+                    get_path_key,
                     is_path_in_configured_model_roots,
+                    is_path_within,
+                    prefer_local_base_directory,
                     read_json_safe,
                     write_json_atomic,
                 )
@@ -352,6 +368,7 @@ class ModelResolverExtension:
                 from .core.settings import (
                     TEMPLATE_KEY_ALIASES,
                     get_default_root_for_category,
+                    get_settings_schema,
                     resolve_download_subfolder,
                 )
                 from .core.settings import (
@@ -378,7 +395,11 @@ class ModelResolverExtension:
                     to_bool,
                     to_int,
                 )
-                from .core.workflow_analyzer import analyze_workflow_models
+                from .core.workflow_analyzer import (
+                    NODE_TYPE_MODEL_WIDGET_CATEGORIES,
+                    URN_TYPE_MAP,
+                    analyze_workflow_models,
+                )
             except ImportError as e:
                 self.logger.error(f"Model Resolver: Could not import core modules: {e}")
                 return False
@@ -422,6 +443,8 @@ class ModelResolverExtension:
                     check_civitai_session_token,
                     get_civitai_download_url,
                     get_civitai_model_details,
+                    get_model_info_by_hash,
+                    get_model_info_for_file,
                     parse_civitai_url,
                     resolve_civitai_version_custom_result,
                     resolve_urn,
@@ -459,8 +482,11 @@ class ModelResolverExtension:
                     update_model_list_from_remote,
                 )
                 from .core.sources.popular import (
+                    get_base_models_config,
+                    get_base_models_status,
                     get_popular_model_url,
                     search_popular_models,
+                    update_base_models_from_remote,
                 )
                 from .core.sources.popular import (
                     reload_databases as reload_popular_databases,
@@ -583,12 +609,12 @@ class ModelResolverExtension:
             @routes.get("/model_resolver/base-models")
             @json_api_endpoint("base-models")
             async def get_base_models(request):
-                """Return the base models config from metadata/base-models.json.
+                """
+                Return popular base models configuration dictionary.
                 
                 Returns {base_models: [{name, aliases}]} so the frontend
                 dropdown can populate correctly via baseModels.base_models.
                 """
-                from .core.sources.popular import get_base_models_config
                 data = get_base_models_config()
                 return web.json_response(data)
 
@@ -597,7 +623,6 @@ class ModelResolverExtension:
             async def get_base_models_status_route(request):
                 """Get local and optional remote base models status."""
                 check_remote = request.query.get("check_remote") == "1"
-                from .core.sources.popular import get_base_models_status
                 status = await asyncio.to_thread(get_base_models_status, check_remote)
                 return web.json_response(status)
 
@@ -605,7 +630,6 @@ class ModelResolverExtension:
             @json_api_endpoint("base-models update")
             async def update_base_models_route(request):
                 """Update base models list from CivitAI."""
-                from .core.sources.popular import update_base_models_from_remote
                 status = await asyncio.to_thread(update_base_models_from_remote)
                 return web.json_response(status)
 

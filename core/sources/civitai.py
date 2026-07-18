@@ -43,7 +43,6 @@ from ..type_utils import (
     DEFAULT_BROWSER_USER_AGENT,
     as_dict,
     as_list,
-    build_search_result,
     check_credential_http,
     extract_trained_words,
     first_non_empty,
@@ -150,6 +149,9 @@ def check_civitai_api_key(api_key: Optional[str]) -> Dict[str, Any]:
     )
 
 
+from .common import build_unified_search_result
+
+
 def _build_civitai_result_from_version(
     model_id: int,
     model_name: str,
@@ -165,7 +167,7 @@ def _build_civitai_result_from_version(
     sha256 = file_info.get("sha256") or hashes.get("SHA256") or hashes.get("sha256")
     size = file_info.get("sizeKB", 0) * 1024 if file_info.get("sizeKB") else file_info.get("size")
     download_url = file_info.get("downloadUrl") or get_civitai_download_url(version_id)
-    return build_search_result(
+    return build_unified_search_result(
         source="civitai",
         model_id=model_id,
         version_id=version_id,

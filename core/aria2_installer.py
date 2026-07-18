@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from .network_utils import fetch_json_from_public_url
 from .path_utils import is_path_within
 
 ARIA2_RELEASE_API_URL = "https://api.github.com/repos/aria2/aria2/releases/latest"
@@ -178,18 +179,17 @@ def _select_release_asset(release: Dict[str, Any], tokens: Dict[str, str]) -> Di
 
 def _fetch_latest_release() -> Dict[str, Any]:
     try:
-        response = requests.get(ARIA2_RELEASE_API_URL, headers=REQUEST_HEADERS, timeout=(10, 30))
-        response.raise_for_status()
-    except requests.RequestException as exc:
+        data = fetch_json_from_public_url(ARIA2_RELEASE_API_URL, headers=REQUEST_HEADERS, timeout=30)
+    except Exception as exc:
         raise Aria2InstallError(
             "Could not contact GitHub to check the latest aria2 release. "
             "Check your internet connection or firewall/proxy settings. "
             f"Details: {exc}"
         ) from exc
-    data = response.json()
     if not isinstance(data, dict):
         raise Aria2InstallError("GitHub returned an invalid aria2 release response.")
     return data
+
 
 
 def _assert_within_install_root(path: Path) -> None:
