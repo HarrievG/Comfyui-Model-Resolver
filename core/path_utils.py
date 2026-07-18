@@ -1076,3 +1076,50 @@ def split_path_segments(path_value: Any, filter_dots: bool = True) -> list[str]:
 
     return parts
 
+
+def _metadata_sidecar_paths(model_path: str) -> List[str]:
+    directory = os.path.dirname(model_path)
+    filename = get_filename_from_path(model_path)
+    base_name = os.path.splitext(filename)[0]
+    candidates = [
+        os.path.join(directory, f"{base_name}.metadata.json"),
+        os.path.join(directory, f"{filename}.metadata.json"),
+    ]
+
+    result: List[str] = []
+    seen = set()
+    for candidate in candidates:
+        try:
+            key = os.path.normcase(os.path.abspath(candidate))
+        except (OSError, ValueError):
+            key = os.path.normcase(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(candidate)
+    return result
+
+
+def get_metadata_sidecar_path(model_path: str) -> str:
+    """Return the canonical local metadata sidecar path for a model file."""
+    return _metadata_sidecar_paths(model_path)[0]
+
+
+def get_safe_metadata_sidecar_path(file_path: str) -> str:
+    """Return the canonical sidecar path without allowing caller-selected targets."""
+    raw_model_path = str(file_path or "").strip()
+    if not raw_model_path:
+        raise ValueError("A model path is required")
+    model_path = os.path.realpath(os.path.abspath(raw_model_path))
+    model_dir = os.path.realpath(os.path.dirname(model_path))
+    metadata_path = os.path.realpath(get_metadata_sidecar_path(model_path))
+    if (
+        not model_dir
+        or os.path.dirname(metadata_path) != model_dir
+        or metadata_path == model_path
+        or not is_path_within(metadata_path, model_dir)
+    ):
+        raise ValueError("Metadata path is outside the model directory")
+    return metadata_path
+
+

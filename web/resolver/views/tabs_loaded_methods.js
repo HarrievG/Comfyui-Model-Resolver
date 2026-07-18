@@ -158,7 +158,7 @@ export const tabsLoadedMethods = {
     },
 
     getModelNameAndStrength(model) {
-        const fullName = model.name || model.original_path?.split(/[\/\\]/).pop() || 'Unknown';
+        const fullName = model.name || this.getFilenameFromPath(model.original_path) || 'Unknown';
         const name = this.stripModelExtension(fullName);
         const strength = model.strength !== null && model.strength !== undefined 
             ? model.strength.toFixed(2) 

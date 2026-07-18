@@ -24,6 +24,7 @@ from ..type_utils import (
     clear_remote_size_cache,
     extract_file_size,
     fetch_remote_file_size_cached,
+    looks_like_model_file,
     prepare_remote_size_probe_url,
 )
 
@@ -1030,3 +1031,59 @@ def get_repo_files(repo: str, token: Optional[str] = None) -> List[Dict[str, Any
         log.error(f"Error getting repo files: {e}")
 
     return files
+
+
+def build_huggingface_custom_result(
+    url: str,
+    expected_filename: str = "",
+    token: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    from urllib.parse import quote, unquote
+
+    parsed = parse_huggingface_url(url)
+    if not parsed:
+        return None
+
+    repo_id = parsed.get("repo") or ""
+    branch = parsed.get("branch") or "main"
+    file_path = unquote(parsed.get("filename") or "")
+    if not repo_id or not file_path:
+        return None
+
+    filename = get_filename_from_path(file_path)
+    download_url = get_huggingface_download_url(repo_id, file_path, branch)
+    if not looks_like_model_file(download_url, expected_filename or filename):
+        return None
+
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    size = fetch_remote_file_size_cached(
+        download_url,
+        headers=headers,
+        timeout=10,
+    )
+
+    def quote_url_path(val):
+        return quote(str(val or "").replace("\\", "/"), safe="/")
+
+    page_url = (
+        f"https://huggingface.co/{repo_id}/blob/{branch}/{quote_url_path(file_path)}"
+    )
+    return {
+        "source": "huggingface",
+        "details_source": "huggingface",
+        "repo_id": repo_id,
+        "repo": repo_id,
+        "path": file_path,
+        "filename": filename,
+        "name": repo_id,
+        "url": download_url,
+        "download_url": download_url,
+        "page_url": page_url,
+        "version_url": page_url,
+        "size": size,
+        "match_type": "custom_url",
+        "custom_url": True,
+    }
+

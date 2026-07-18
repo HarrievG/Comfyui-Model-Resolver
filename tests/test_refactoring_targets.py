@@ -1,8 +1,8 @@
-import sys
-import os
-import unittest
-from unittest.mock import MagicMock, patch, AsyncMock
 import importlib
+import os
+import sys
+import unittest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Make sure parent package directory is in sys.path
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -52,9 +52,13 @@ mock_routes.post = post_decorator
 # Import the module so that routes register
 node_mod = importlib.import_module("comfyui-model-resolver")
 
-# Instantiating the extension and initializing routes to register them
-extension = node_mod.ModelResolverExtension()
-extension.setup_routes()
+# Force setup_routes to run to populate routes_registered mock registry
+node_mod.extension.routes_setup = False
+node_mod.extension.setup_routes()
+
+extension = node_mod.extension
+
+
 
 class TestRefactoringTargets(unittest.IsolatedAsyncioTestCase):
     
@@ -64,8 +68,9 @@ class TestRefactoringTargets(unittest.IsolatedAsyncioTestCase):
         patch_get_aria2_status.stop()
 
     def test_downloader_calculate_file_sha256(self):
-        from core.downloader import calculate_file_sha256
         import tempfile
+
+        from core.downloader import calculate_file_sha256
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = os.path.join(tmpdir, "test.txt")
             with open(file_path, "wb") as f:
@@ -143,10 +148,20 @@ class TestRefactoringTargets(unittest.IsolatedAsyncioTestCase):
 
     async def test_search_progress_route(self):
         progress_id = "test_search_job"
-        extension.search_tracker.update(progress_id, status="running", stage="civitai", message="Searching Civitai", percent=50)
         
         get_handler = routes_registered.get(("GET", "/model_resolver/search-progress/{progress_id}"))
         self.assertIsNotNone(get_handler)
+        
+        bound_extension = None
+        if hasattr(get_handler, "__closure__") and get_handler.__closure__:
+            for cell in get_handler.__closure__:
+                val = cell.cell_contents
+                if hasattr(val, "search_tracker"):
+                    bound_extension = val
+                    break
+                    
+        target_extension = bound_extension or extension
+        target_extension.search_tracker.update(progress_id, status="running", stage="civitai", message="Searching Civitai", percent=50)
         
         mock_request = MagicMock()
         mock_request.match_info = {"progress_id": progress_id}
@@ -161,10 +176,20 @@ class TestRefactoringTargets(unittest.IsolatedAsyncioTestCase):
 
     async def test_search_cancel_route(self):
         progress_id = "test_cancel_job"
-        extension.search_tracker.update(progress_id, status="running")
         
         cancel_handler = routes_registered.get(("POST", "/model_resolver/search-cancel/{progress_id}"))
         self.assertIsNotNone(cancel_handler)
+        
+        bound_extension = None
+        if hasattr(cancel_handler, "__closure__") and cancel_handler.__closure__:
+            for cell in cancel_handler.__closure__:
+                val = cell.cell_contents
+                if hasattr(val, "search_tracker"):
+                    bound_extension = val
+                    break
+                    
+        target_extension = bound_extension or extension
+        target_extension.search_tracker.update(progress_id, status="running")
         
         mock_request = MagicMock()
         mock_request.match_info = {"progress_id": progress_id}
@@ -175,7 +200,8 @@ class TestRefactoringTargets(unittest.IsolatedAsyncioTestCase):
             response_data = mock_json_res.call_args[0][0]
             self.assertTrue(response_data.get("success"))
             self.assertTrue(response_data.get("cancelled"))
-            self.assertTrue(extension.search_tracker.is_cancelled(progress_id))
+            self.assertTrue(target_extension.search_tracker.is_cancelled(progress_id))
+
 
     async def test_root_directories_route_skips_non_model_categories(self):
         import tempfile
@@ -234,3 +260,43 @@ class TestRefactoringTargets(unittest.IsolatedAsyncioTestCase):
         self.assertIn("my_new_cat", categories)
         self.assertNotIn("custom_nodes", categories)
         self.assertNotIn("unet", categories)
+
+    def test_metadata_sidecar_paths_behavior(self):
+        from core.metadata_audit import _metadata_sidecar_paths as ma_sidecars
+        from core.metadata_builder import _metadata_sidecar_paths as mb_sidecars
+        from core.path_utils import get_metadata_sidecar_path, get_safe_metadata_sidecar_path
+
+        model_path = os.path.abspath("e:/models/checkpoints/sd15.safetensors")
+        expected_sidecar = os.path.abspath("e:/models/checkpoints/sd15.metadata.json")
+
+        self.assertEqual(get_metadata_sidecar_path(model_path), expected_sidecar)
+        
+        # Safe sidecar path checks
+        safe_path = get_safe_metadata_sidecar_path(model_path)
+        self.assertEqual(os.path.normcase(safe_path), os.path.normcase(expected_sidecar))
+        
+        # Test MB and MA sidecar candidates
+        mb_candidates = mb_sidecars(model_path)
+        ma_candidates = ma_sidecars(model_path)
+        self.assertEqual(mb_candidates, ma_candidates)
+        self.assertIn(expected_sidecar, mb_candidates)
+
+    def test_select_primary_model_file_extended(self):
+        from core.type_utils import select_primary_model_file
+        
+        files = [
+            {"id": 1, "name": "other.safetensors", "primary": False, "type": "model", "url": "http://x"},
+            {"id": 2, "name": "main.safetensors", "primary": True, "type": "model"},
+            {"id": 3, "name": "config.json", "primary": False, "type": "config"}
+        ]
+        
+        # Original logic matches primary: True
+        self.assertEqual(select_primary_model_file(files)["id"], 2)
+
+        # Expected filename matches by name
+        self.assertEqual(select_primary_model_file(files, expected_filename="other.safetensors")["id"], 1)
+
+        # Require download excludes main.safetensors because it has no download url
+        self.assertEqual(select_primary_model_file(files, require_download=True)["id"], 1)
+
+

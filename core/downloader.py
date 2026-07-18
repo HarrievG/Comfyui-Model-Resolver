@@ -32,6 +32,7 @@ from .path_utils import (
     calculate_file_sha256,
     get_comfy_root_path,
     get_filename_from_path,
+    get_metadata_sidecar_path,
     get_path_identity,
     is_path_within,
     read_json_safe,
@@ -344,30 +345,6 @@ def _coerce_size(value: Any) -> int:
 
 def _normalise_metadata_file_path(path_value: str) -> str:
     return str(path_value or "").replace(os.sep, "/")
-
-
-def get_metadata_sidecar_path(file_path: str) -> str:
-    """Return the LoRA Manager-compatible sidecar path for a model file."""
-    base_path, _extension = os.path.splitext(file_path)
-    return f"{base_path}.metadata.json"
-
-
-def get_safe_metadata_sidecar_path(file_path: str) -> str:
-    """Return the canonical sidecar path without allowing caller-selected targets."""
-    raw_model_path = str(file_path or "").strip()
-    if not raw_model_path:
-        raise ValueError("A model path is required")
-    model_path = os.path.realpath(os.path.abspath(raw_model_path))
-    model_dir = os.path.realpath(os.path.dirname(model_path))
-    metadata_path = os.path.realpath(get_metadata_sidecar_path(model_path))
-    if (
-        not model_dir
-        or os.path.dirname(metadata_path) != model_dir
-        or metadata_path == model_path
-        or not is_path_within(metadata_path, model_dir)
-    ):
-        raise ValueError("Metadata path is outside the model directory")
-    return metadata_path
 
 
 def _resolve_lora_manager_model_type(category: str, source_type: Any = "") -> str:

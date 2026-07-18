@@ -264,3 +264,15 @@ export async function copyTextWithFeedback(text, button, options = {}) {
     }, duration);
 }
 
+
+/**
+ * Extracts a filename from a path (handling both windows and unix slash styles).
+ * @param {string} path 
+ * @returns {string}
+ */
+export function getFilenameFromPath(path) {
+    if (!path) return '';
+    return path.split(/[\/\\]/).pop() || path;
+}
+
+

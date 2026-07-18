@@ -386,8 +386,8 @@ export const modelInfoMethods = {
     getContextMenuSourceLookupFilename(model = {}) {
         return model?.filename
             || model?.name
-            || model?.original_path?.split(/[\/\\]/).pop()
-            || String(this.getContextMenuSourceLookupPath(model) || '').split(/[\/\\]/).pop()
+            || this.getFilenameFromPath(model?.original_path)
+            || this.getFilenameFromPath(this.getContextMenuSourceLookupPath(model))
             || '';
     },
 
@@ -643,7 +643,7 @@ export const modelInfoMethods = {
     getHashCompareFilename(model = {}) {
         return model.filename
             || model.name
-            || String(this.getLocalHashComparePath(model) || '').split(/[\/\\]/).pop()
+            || this.getFilenameFromPath(this.getLocalHashComparePath(model))
             || 'Selected local model';
     },
 
@@ -1071,7 +1071,7 @@ export const modelInfoMethods = {
             return;
         }
 
-        const name = model.name || model.original_path?.split(/[\/\\]/).pop() || '';
+        const name = model.name || this.getFilenameFromPath(model.original_path) || '';
         if (!name) return;
 
         try {
@@ -1125,7 +1125,7 @@ export const modelInfoMethods = {
     async showModelInfo(model) {
         if (!model) return;
 
-        const name = model.name || model.original_path?.split(/[\/\\]/).pop() || '';
+        const name = model.name || this.getFilenameFromPath(model.original_path) || '';
         if (!name) return;
 
         // Create and show the info dialog

@@ -283,31 +283,60 @@ def normalize_download_category(category: str) -> str:
     return CATEGORY_MAP.get(token, token or "checkpoints")
 
 
-def select_primary_model_file(files: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def select_primary_model_file(
+    files: List[Dict[str, Any]],
+    expected_filename: Optional[str] = None,
+    require_download: bool = False,
+) -> Optional[Dict[str, Any]]:
     """
-    Selects the primary file from a list of model version files.
+    Selects the primary file from a list of model version files,
+    optionally filtering by expected filename or requiring a download URL.
     """
-    valid_files = [f for f in files if isinstance(f, dict) and (f.get("name") or f.get("filename"))]
+    if not isinstance(files, list):
+        files = [files] if files else []
+    valid_files = [f for f in files if isinstance(f, dict)]
     if not valid_files:
         return None
 
+    def file_name(item):
+        return str(item.get("name") or item.get("filename") or "")
+
+    def has_download(item):
+        return bool(item.get("downloadUrl") or item.get("download_url") or item.get("url"))
+
+    if require_download:
+        candidates = [f for f in valid_files if has_download(f)]
+    else:
+        candidates = [f for f in valid_files if file_name(f)]
+
+    if not candidates:
+        candidates = valid_files
+
+    expected = str(expected_filename or "").strip().lower()
+    if expected:
+        from .path_utils import get_filename_from_path
+        for file_info in candidates:
+            if get_filename_from_path(file_name(file_info)).lower() == expected:
+                return file_info
+
     # 1. Look for file marked primary and of type Model
-    for file_info in valid_files:
+    for file_info in candidates:
         if file_info.get("primary") and str(file_info.get("type") or "").lower() == "model":
             return file_info
 
     # 2. Look for any file marked primary
-    for file_info in valid_files:
+    for file_info in candidates:
         if file_info.get("primary"):
             return file_info
 
     # 3. Look for any file of type Model
-    for file_info in valid_files:
+    for file_info in candidates:
         if str(file_info.get("type") or "").lower() == "model":
             return file_info
 
-    # 4. Fallback to the first file
-    return valid_files[0]
+    # 4. Fallback to the first candidate
+    return candidates[0]
+
 
 
 def parse_size_to_bytes(value: Any) -> Optional[int]:

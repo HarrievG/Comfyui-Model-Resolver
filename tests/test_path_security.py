@@ -1,5 +1,5 @@
-import os
 import io
+import os
 import tarfile
 import tempfile
 import unittest
@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import requests
+
 import core.downloader as downloader_module
 from core.aria2_installer import Aria2InstallError, _safe_extract_tar
 from core.downloader import (
@@ -18,7 +19,6 @@ from core.downloader import (
     download_file,
     download_file_with_aria2,
     download_model,
-    get_safe_metadata_sidecar_path,
     is_allowed_model_download_filename,
     sanitize_download_filename,
 )
@@ -28,7 +28,7 @@ from core.network_utils import (
     request_public_url,
     validate_public_http_url,
 )
-from core.path_utils import is_path_in_configured_model_roots
+from core.path_utils import get_safe_metadata_sidecar_path, is_path_in_configured_model_roots
 
 
 class DummyFolderPaths:

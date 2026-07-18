@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from .log_system import create_module_logger
-from .path_utils import get_filename_from_path, get_path_identity, read_json_safe
+from .path_utils import _metadata_sidecar_paths, get_filename_from_path, get_path_identity, read_json_safe
 from .type_utils import MODEL_EXTENSIONS, format_size_bytes
 
 log = create_module_logger(__name__)
@@ -160,28 +160,6 @@ def _is_model_file_path(path: str) -> bool:
 
     return os.path.splitext(filename)[1].lower() in MODEL_EXTENSIONS
 
-
-def _metadata_sidecar_paths(model_path: str) -> List[str]:
-    directory = os.path.dirname(model_path)
-    filename = get_filename_from_path(model_path)
-    base_name = os.path.splitext(filename)[0]
-    candidates = [
-        os.path.join(directory, f"{base_name}.metadata.json"),
-        os.path.join(directory, f"{filename}.metadata.json"),
-    ]
-
-    result: List[str] = []
-    seen = set()
-    for candidate in candidates:
-        try:
-            key = os.path.normcase(os.path.abspath(candidate))
-        except (OSError, ValueError):
-            key = os.path.normcase(candidate)
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append(candidate)
-    return result
 
 
 def _format_signed_size(bytes_value: int) -> str:

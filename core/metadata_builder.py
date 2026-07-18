@@ -15,9 +15,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .log_system import create_module_logger
 from .path_utils import (
     HashCalculationCancelled,
+    _metadata_sidecar_paths,
     calculate_file_sha256,
     extract_safetensors_header_metadata,
     get_filename_from_path,
+    get_metadata_sidecar_path,
     get_path_identity,
     read_json_safe,
     read_safetensors_header,
@@ -42,34 +44,6 @@ LOCAL_HEADER_MAX_CHARS = 20000
 MIN_METADATA_BUILD_WORKERS = 1
 MAX_METADATA_BUILD_WORKERS = 64
 DEFAULT_METADATA_BUILD_WORKER_LIMIT = 4
-
-
-def _metadata_sidecar_paths(model_path: str) -> List[str]:
-    directory = os.path.dirname(model_path)
-    filename = get_filename_from_path(model_path)
-    base_name = os.path.splitext(filename)[0]
-    candidates = [
-        os.path.join(directory, f"{base_name}.metadata.json"),
-        os.path.join(directory, f"{filename}.metadata.json"),
-    ]
-
-    result: List[str] = []
-    seen = set()
-    for candidate in candidates:
-        try:
-            key = os.path.normcase(os.path.abspath(candidate))
-        except (OSError, ValueError):
-            key = os.path.normcase(candidate)
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append(candidate)
-    return result
-
-
-def get_metadata_sidecar_path(model_path: str) -> str:
-    """Return the canonical local metadata sidecar path for a model file."""
-    return _metadata_sidecar_paths(model_path)[0]
 
 
 def _select_metadata_path(model_path: str) -> Tuple[str, bool]:

@@ -10,7 +10,7 @@ import re
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote, urlencode
 
-import requests  # noqa: F401 - used indirectly via unittest.mock patch targets
+import requests
 
 from ..log_system import create_module_logger
 from ..matcher import (
@@ -1972,3 +1972,135 @@ def get_model_info_for_file(
         return result
 
     return _build_local_model_info(file_path, require_inferred=True)
+
+
+def build_civitai_custom_result(
+    details: Dict[str, Any],
+    expected_filename: str = "",
+    api_key: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(details, dict):
+        return None
+
+    selected_version = (
+        details.get("selected_version")
+        if isinstance(details.get("selected_version"), dict)
+        else {}
+    )
+    version_id = details.get("version_id") or selected_version.get("id")
+    model_id = details.get("model_id")
+    file_info = select_primary_model_file(
+        selected_version.get("files") or [],
+        expected_filename, require_download=True
+    ) or {}
+    filename = (
+        file_info.get("name")
+        or file_info.get("filename")
+        or get_filename_from_path(expected_filename)
+        or details.get("name")
+        or f"civitai-{version_id or model_id}"
+    )
+    download_url = (
+        file_info.get("download_url")
+        or file_info.get("downloadUrl")
+        or (get_civitai_download_url(version_id, api_key) if version_id else "")
+    )
+    if not download_url:
+        return None
+
+    hashes = (
+        file_info.get("hashes")
+        if isinstance(file_info.get("hashes"), dict)
+        else {}
+    )
+    sha256 = (
+        file_info.get("sha256")
+        or file_info.get("hash")
+        or hashes.get("SHA256")
+        or hashes.get("sha256")
+    )
+    version_url = (
+        details.get("version_url")
+        or selected_version.get("url")
+        or (
+            f"https://civitai.com/models/{model_id}?modelVersionId={version_id}"
+            if model_id and version_id
+            else details.get("url")
+        )
+    )
+    return {
+        "source": "civitai",
+        "details_source": "civitai",
+        "model_id": model_id,
+        "version_id": version_id,
+        "name": details.get("name") or filename,
+        "version_name": selected_version.get("name") or "",
+        "type": details.get("type") or file_info.get("type") or "",
+        "filename": filename,
+        "url": version_url or details.get("url"),
+        "version_url": version_url or details.get("url"),
+        "download_url": download_url,
+        "size": file_info.get("size"),
+        "base_model": selected_version.get("base_model"),
+        "tags": details.get("tags") or [],
+        "trained_words": selected_version.get("trained_words") or [],
+        "images": details.get("images") or selected_version.get("images") or [],
+        "description": selected_version.get("description")
+        or details.get("description")
+        or "",
+        "model_description": details.get("description") or "",
+        "sha256": sha256,
+        "hashes": hashes,
+        "match_type": "custom_url",
+        "custom_url": True,
+    }
+
+
+def resolve_civitai_version_custom_result(
+    version_id: int,
+    expected_filename: str = "",
+    api_key: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    if not version_id:
+        return None
+
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    try:
+        response = requests.get(
+            f"https://civitai.com/api/v1/model-versions/{version_id}",
+            headers=headers,
+            timeout=20,
+        )
+        try:
+            if response.status_code != 200:
+                return None
+            data = response.json()
+        finally:
+            response.close()
+    except Exception as e:
+        log.warning(
+            f"CivitAI custom URL version lookup failed: version_id={version_id}, error={e}"
+        )
+        return None
+
+    model_block = data.get("model") if isinstance(data.get("model"), dict) else {}
+    model_id = data.get("modelId") or data.get("model_id") or model_block.get("id")
+    if model_id:
+        try:
+            details = get_civitai_model_details(model_id, version_id, api_key)
+            result = build_civitai_custom_result(
+                details,
+                expected_filename=expected_filename,
+                api_key=api_key,
+            )
+            if result:
+                return result
+        except Exception as e:
+            log.warning(
+                f"CivitAI custom URL details lookup failed: model_id={model_id}, version_id={version_id}, error={e}"
+            )
+    return None
+

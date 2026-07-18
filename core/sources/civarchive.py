@@ -2284,3 +2284,92 @@ def search_civarchive_for_file(
         candidate_limit=detail_limit,
     )
     return best_match
+
+
+def build_civarchive_custom_result(
+    details: Dict[str, Any],
+    expected_filename: str = "",
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(details, dict):
+        return None
+
+    selected_version = (
+        details.get("selected_version")
+        if isinstance(details.get("selected_version"), dict)
+        else {}
+    )
+    file_info = select_primary_model_file(
+        selected_version.get("files") or [],
+        expected_filename, require_download=True
+    ) or {}
+    download_urls = file_info.get("download_urls") or []
+    if not isinstance(download_urls, list):
+        download_urls = [download_urls]
+    download_url = (
+        file_info.get("download_url")
+        or file_info.get("downloadUrl")
+        or (download_urls[0] if download_urls else "")
+    )
+    if not download_url:
+        return None
+
+    filename = (
+        file_info.get("name")
+        or file_info.get("filename")
+        or get_filename_from_path(expected_filename)
+        or details.get("name")
+        or "model"
+    )
+    hashes = (
+        file_info.get("hashes")
+        if isinstance(file_info.get("hashes"), dict)
+        else {}
+    )
+    sha256 = (
+        file_info.get("sha256")
+        or file_info.get("hash")
+        or hashes.get("SHA256")
+        or hashes.get("sha256")
+    )
+    version_id = details.get("version_id") or selected_version.get("id")
+    model_id = details.get("model_id")
+    version_url = (
+        details.get("version_url")
+        or selected_version.get("url")
+        or (
+            f"https://civarchive.com/models/{model_id}?modelVersionId={version_id}"
+            if model_id and version_id
+            else details.get("url")
+        )
+    )
+    return {
+        "source": "civarchive",
+        "details_source": "civarchive",
+        "model_id": model_id,
+        "version_id": version_id,
+        "name": details.get("name") or filename,
+        "version_name": selected_version.get("name") or "",
+        "type": details.get("type") or file_info.get("type") or "",
+        "filename": filename,
+        "url": version_url or details.get("url"),
+        "version_url": version_url or details.get("url"),
+        "platform_url": details.get("platform_url")
+        or selected_version.get("platform_url"),
+        "download_url": download_url,
+        "download_urls": [url for url in download_urls if url],
+        "size": file_info.get("size"),
+        "base_model": selected_version.get("base_model"),
+        "tags": details.get("tags") or [],
+        "trained_words": selected_version.get("trained_words") or [],
+        "images": details.get("images") or selected_version.get("images") or [],
+        "description": selected_version.get("description")
+        or details.get("description")
+        or "",
+        "sha256": sha256,
+        "hash": sha256,
+        "hashes": hashes,
+        "platform": details.get("platform"),
+        "match_type": "custom_url",
+        "custom_url": True,
+    }
+

@@ -28,7 +28,7 @@ if not __package__ or __package__ == "":
 from .core.log_system import LogLevel, create_module_logger
 from .core.log_system import logger as backend_log_controller
 from .core.log_system.config import LOG_LEVEL as BACKEND_DEFAULT_LOG_LEVEL
-from .core.path_utils import get_filename_from_path
+from .core.path_utils import get_filename_from_path, get_metadata_sidecar_path, get_safe_metadata_sidecar_path
 
 # Web directory for JavaScript interface
 WEB_DIRECTORY = "./web"
@@ -373,6 +373,7 @@ class ModelResolverExtension:
                     looks_like_model_file,
                     normalize_category_to_model_type,
                     normalize_sha256,
+                    select_primary_model_file,
                     to_bool,
                     to_int,
                 )
@@ -389,9 +390,7 @@ class ModelResolverExtension:
                     get_all_progress,
                     get_aria2_status,
                     get_download_directory,
-                    get_metadata_sidecar_path,
                     get_progress,
-                    get_safe_metadata_sidecar_path,
                     is_allowed_model_download_filename,
                     normalize_download_category,
                     pause_download,
@@ -405,6 +404,7 @@ class ModelResolverExtension:
                 from .core.sources import clear_all_search_caches
                 from .core.sources.civarchive import (
                     CivArchiveSearchError,
+                    build_civarchive_custom_result,
                     get_civarchive_model_details,
                     is_civarchive_available,
                     parse_civarchive_url,
@@ -416,11 +416,13 @@ class ModelResolverExtension:
                     clear_search_cache as clear_civarchive_search_cache,
                 )
                 from .core.sources.civitai import (
+                    build_civitai_custom_result,
                     check_civitai_api_key,
                     check_civitai_session_token,
                     get_civitai_download_url,
                     get_civitai_model_details,
                     parse_civitai_url,
+                    resolve_civitai_version_custom_result,
                     resolve_urn,
                     search_civitai,
                     search_civitai_for_file,
@@ -429,6 +431,7 @@ class ModelResolverExtension:
                     clear_search_cache as clear_civitai_search_cache,
                 )
                 from .core.sources.huggingface import (
+                    build_huggingface_custom_result,
                     check_brave_search_api_key,
                     check_huggingface_token,
                     get_author_fallback_index_status,
@@ -2796,50 +2799,7 @@ class ModelResolverExtension:
                         )
                 return web.json_response(response)
 
-            def _select_custom_url_file(files, expected_filename=""):
-                """Pick the most likely downloadable model file from provider details."""
-                if not isinstance(files, list):
-                    files = [files] if files else []
 
-                candidates = [item for item in files if isinstance(item, dict)]
-                if not candidates:
-                    return {}
-
-                expected = get_filename_from_path(expected_filename).lower()
-
-                def file_name(file_info):
-                    return str(
-                        file_info.get("name")
-                        or file_info.get("filename")
-                        or file_info.get("path")
-                        or ""
-                    ).strip()
-
-                def has_download(file_info):
-                    return bool(
-                        file_info.get("download_url")
-                        or file_info.get("downloadUrl")
-                        or file_info.get("url")
-                    )
-
-                if expected:
-                    for file_info in candidates:
-                        if get_filename_from_path(file_name(file_info)).lower() == expected:
-                            return file_info
-
-                for file_info in candidates:
-                    if file_info.get("primary") and has_download(file_info):
-                        return file_info
-
-                for file_info in candidates:
-                    if str(file_info.get("type") or "").lower() == "model" and has_download(file_info):
-                        return file_info
-
-                for file_info in candidates:
-                    if has_download(file_info):
-                        return file_info
-
-                return candidates[0]
 
             def _custom_result_timestamp():
                 return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -2849,313 +2809,11 @@ class ModelResolverExtension:
 
                 return _quote(str(value or "").replace("\\", "/"), safe="/")
 
-            def _build_civitai_custom_result(details, expected_filename="", api_key=None):
-                if not isinstance(details, dict):
-                    return None
 
-                selected_version = (
-                    details.get("selected_version")
-                    if isinstance(details.get("selected_version"), dict)
-                    else {}
-                )
-                version_id = details.get("version_id") or selected_version.get("id")
-                model_id = details.get("model_id")
-                file_info = _select_custom_url_file(
-                    selected_version.get("files") or [],
-                    expected_filename,
-                )
-                filename = (
-                    file_info.get("name")
-                    or file_info.get("filename")
-                    or get_filename_from_path(expected_filename)
-                    or details.get("name")
-                    or f"civitai-{version_id or model_id}"
-                )
-                download_url = (
-                    file_info.get("download_url")
-                    or file_info.get("downloadUrl")
-                    or (get_civitai_download_url(version_id, api_key) if version_id else "")
-                )
-                if not download_url:
-                    return None
 
-                hashes = (
-                    file_info.get("hashes")
-                    if isinstance(file_info.get("hashes"), dict)
-                    else {}
-                )
-                sha256 = (
-                    file_info.get("sha256")
-                    or file_info.get("hash")
-                    or hashes.get("SHA256")
-                    or hashes.get("sha256")
-                )
-                version_url = (
-                    details.get("version_url")
-                    or selected_version.get("url")
-                    or (
-                        f"https://civitai.com/models/{model_id}?modelVersionId={version_id}"
-                        if model_id and version_id
-                        else details.get("url")
-                    )
-                )
-                return {
-                    "source": "civitai",
-                    "details_source": "civitai",
-                    "model_id": model_id,
-                    "version_id": version_id,
-                    "name": details.get("name") or filename,
-                    "version_name": selected_version.get("name") or "",
-                    "type": details.get("type") or file_info.get("type") or "",
-                    "filename": filename,
-                    "url": version_url or details.get("url"),
-                    "version_url": version_url or details.get("url"),
-                    "download_url": download_url,
-                    "size": file_info.get("size"),
-                    "base_model": selected_version.get("base_model"),
-                    "tags": details.get("tags") or [],
-                    "trained_words": selected_version.get("trained_words") or [],
-                    "images": details.get("images") or selected_version.get("images") or [],
-                    "description": selected_version.get("description")
-                    or details.get("description")
-                    or "",
-                    "model_description": details.get("description") or "",
-                    "sha256": sha256,
-                    "hashes": hashes,
-                    "match_type": "custom_url",
-                    "custom_url": True,
-                }
 
-            def _resolve_civitai_version_custom_result(version_id, expected_filename="", api_key=None):
-                try:
-                    import requests
-                except Exception:
-                    requests = None
 
-                if not requests or not version_id:
-                    return None
 
-                headers = {}
-                if api_key:
-                    headers["Authorization"] = f"Bearer {api_key}"
-
-                try:
-                    response = requests.get(
-                        f"https://civitai.com/api/v1/model-versions/{version_id}",
-                        headers=headers,
-                        timeout=20,
-                    )
-                    try:
-                        if response.status_code != 200:
-                            return None
-                        data = response.json()
-                    finally:
-                        response.close()
-                except Exception as e:
-                    self.logger.warning(
-                        f"CivitAI custom URL version lookup failed: version_id={version_id}, error={e}"
-                    )
-                    return None
-
-                model_block = data.get("model") if isinstance(data.get("model"), dict) else {}
-                model_id = data.get("modelId") or data.get("model_id") or model_block.get("id")
-                if model_id:
-                    try:
-                        details = get_civitai_model_details(model_id, version_id, api_key)
-                        result = _build_civitai_custom_result(
-                            details,
-                            expected_filename=expected_filename,
-                            api_key=api_key,
-                        )
-                        if result:
-                            return result
-                    except Exception as e:
-                        self.logger.warning(
-                            f"CivitAI custom URL details lookup failed: model_id={model_id}, version_id={version_id}, error={e}"
-                        )
-
-                file_info = _select_custom_url_file(data.get("files") or [], expected_filename)
-                hashes = (
-                    file_info.get("hashes")
-                    if isinstance(file_info.get("hashes"), dict)
-                    else {}
-                )
-                sha256 = (
-                    file_info.get("sha256")
-                    or file_info.get("hash")
-                    or hashes.get("SHA256")
-                    or hashes.get("sha256")
-                )
-                filename = (
-                    file_info.get("name")
-                    or file_info.get("filename")
-                    or get_filename_from_path(expected_filename)
-                    or f"civitai-{version_id}"
-                )
-                download_url = (
-                    file_info.get("downloadUrl")
-                    or file_info.get("download_url")
-                    or get_civitai_download_url(version_id, api_key)
-                )
-                model_url = (
-                    f"https://civitai.com/models/{model_id}?modelVersionId={version_id}"
-                    if model_id
-                    else f"https://civitai.com/api/download/models/{version_id}"
-                )
-                return {
-                    "source": "civitai",
-                    "details_source": "civitai",
-                    "model_id": model_id,
-                    "version_id": version_id,
-                    "name": model_block.get("name") or data.get("modelName") or filename,
-                    "version_name": data.get("name") or "",
-                    "type": model_block.get("type") or data.get("modelType") or file_info.get("type") or "",
-                    "filename": filename,
-                    "url": model_url,
-                    "version_url": model_url,
-                    "download_url": download_url,
-                    "size": file_info.get("size")
-                    or ((file_info.get("sizeKB") or 0) * 1024 if file_info.get("sizeKB") else None),
-                    "base_model": data.get("baseModel"),
-                    "tags": model_block.get("tags") or [],
-                    "trained_words": data.get("trainedWords") or data.get("trained_words") or [],
-                    "images": data.get("images") or [],
-                    "description": data.get("description") or "",
-                    "sha256": sha256,
-                    "hashes": hashes,
-                    "match_type": "custom_url",
-                    "custom_url": True,
-                }
-
-            def _build_civarchive_custom_result(details, expected_filename=""):
-                if not isinstance(details, dict):
-                    return None
-
-                selected_version = (
-                    details.get("selected_version")
-                    if isinstance(details.get("selected_version"), dict)
-                    else {}
-                )
-                file_info = _select_custom_url_file(
-                    selected_version.get("files") or [],
-                    expected_filename,
-                )
-                download_urls = file_info.get("download_urls") or []
-                if not isinstance(download_urls, list):
-                    download_urls = [download_urls]
-                download_url = (
-                    file_info.get("download_url")
-                    or file_info.get("downloadUrl")
-                    or (download_urls[0] if download_urls else "")
-                )
-                if not download_url:
-                    return None
-
-                filename = (
-                    file_info.get("name")
-                    or file_info.get("filename")
-                    or get_filename_from_path(expected_filename)
-                    or details.get("name")
-                    or "model"
-                )
-                hashes = (
-                    file_info.get("hashes")
-                    if isinstance(file_info.get("hashes"), dict)
-                    else {}
-                )
-                sha256 = (
-                    file_info.get("sha256")
-                    or file_info.get("hash")
-                    or hashes.get("SHA256")
-                    or hashes.get("sha256")
-                )
-                version_id = details.get("version_id") or selected_version.get("id")
-                model_id = details.get("model_id")
-                version_url = (
-                    details.get("version_url")
-                    or selected_version.get("url")
-                    or (
-                        f"https://civarchive.com/models/{model_id}?modelVersionId={version_id}"
-                        if model_id and version_id
-                        else details.get("url")
-                    )
-                )
-                return {
-                    "source": "civarchive",
-                    "details_source": "civarchive",
-                    "model_id": model_id,
-                    "version_id": version_id,
-                    "name": details.get("name") or filename,
-                    "version_name": selected_version.get("name") or "",
-                    "type": details.get("type") or file_info.get("type") or "",
-                    "filename": filename,
-                    "url": version_url or details.get("url"),
-                    "version_url": version_url or details.get("url"),
-                    "platform_url": details.get("platform_url")
-                    or selected_version.get("platform_url"),
-                    "download_url": download_url,
-                    "download_urls": [url for url in download_urls if url],
-                    "size": file_info.get("size"),
-                    "base_model": selected_version.get("base_model"),
-                    "tags": details.get("tags") or [],
-                    "trained_words": selected_version.get("trained_words") or [],
-                    "images": details.get("images") or selected_version.get("images") or [],
-                    "description": selected_version.get("description")
-                    or details.get("description")
-                    or "",
-                    "sha256": sha256,
-                    "hash": sha256,
-                    "hashes": hashes,
-                    "platform": details.get("platform"),
-                    "match_type": "custom_url",
-                    "custom_url": True,
-                }
-
-            def _build_huggingface_custom_result(url, expected_filename="", token=None):
-                from urllib.parse import unquote
-
-                parsed = parse_huggingface_url(url)
-                if not parsed:
-                    return None
-
-                repo_id = parsed.get("repo") or ""
-                branch = parsed.get("branch") or "main"
-                file_path = unquote(parsed.get("filename") or "")
-                if not repo_id or not file_path:
-                    return None
-
-                filename = get_filename_from_path(file_path)
-                download_url = get_huggingface_download_url(repo_id, file_path, branch)
-                if not looks_like_model_file(download_url, expected_filename or filename):
-                    return None
-
-                headers = {}
-                if token:
-                    headers["Authorization"] = f"Bearer {token}"
-                size = fetch_remote_file_size_cached(
-                    download_url,
-                    headers=headers,
-                    timeout=10,
-                )
-                page_url = (
-                    f"https://huggingface.co/{repo_id}/blob/{branch}/{_quote_url_path(file_path)}"
-                )
-                return {
-                    "source": "huggingface",
-                    "details_source": "huggingface",
-                    "repo_id": repo_id,
-                    "repo": repo_id,
-                    "path": file_path,
-                    "filename": filename,
-                    "name": repo_id,
-                    "url": download_url,
-                    "download_url": download_url,
-                    "page_url": page_url,
-                    "version_url": page_url,
-                    "size": size,
-                    "match_type": "custom_url",
-                    "custom_url": True,
-                }
 
             def _build_direct_custom_download_result(url, source, expected_filename=""):
                 from urllib.parse import urlparse
@@ -3275,14 +2933,14 @@ class ModelResolverExtension:
                             version_id,
                             civitai_key or None,
                         )
-                        result = _build_civitai_custom_result(
+                        result = build_civitai_custom_result(
                             details,
                             expected_filename=expected_filename,
                             api_key=civitai_key or None,
                         )
                     elif version_id:
                         result = await asyncio.to_thread(
-                            _resolve_civitai_version_custom_result,
+                            resolve_civitai_version_custom_result,
                             version_id,
                             expected_filename,
                             civitai_key or None,
@@ -3332,7 +2990,7 @@ class ModelResolverExtension:
                                     version_id,
                                     True,
                                 )
-                                result = _build_civarchive_custom_result(
+                                result = build_civarchive_custom_result(
                                     details,
                                     expected_filename=expected_filename,
                                 )
@@ -3359,7 +3017,7 @@ class ModelResolverExtension:
                         )
                     else:
                         result = await asyncio.to_thread(
-                            _build_huggingface_custom_result,
+                            build_huggingface_custom_result,
                             normalized_url,
                             expected_filename,
                             hf_token or None,
