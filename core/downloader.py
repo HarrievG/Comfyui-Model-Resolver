@@ -233,15 +233,6 @@ def build_download_headers(
     return request_headers
 
 
-def _is_civitai_api_download_url(url: str) -> bool:
-    parsed = urlparse(str(url or ""))
-    host = parsed.hostname
-    return (
-        host_matches_domain(host, "civitai.com", "civitai.red")
-        and parsed.path.startswith("/api/download/")
-    )
-
-
 def _resolve_download_url_for_aria2(
     url: str,
     headers: Optional[Dict[str, str]] = None,

@@ -317,17 +317,10 @@ export const workflowStateMethods = {
         }
     },
 
-    rememberActiveWorkflow(workflow = null) {
-        const currentWorkflow = workflow || this.getCurrentWorkflow();
-        this.activeWorkflowRouteKey = this.getActiveWorkflowRouteKey();
-        this.activeWorkflowSignature = this.getWorkflowSignature(currentWorkflow);
-    },
-
     getWorkflowScopedQueueKey(route = this.activeWorkflowRouteKey, signature = this.activeWorkflowSignature) {
         if (route && signature) return `${route}\n${signature}`;
         return route || signature || null;
     },
-
     clonePendingResolutions(list = this.pendingResolutions) {
         try {
             return JSON.parse(JSON.stringify(Array.isArray(list) ? list : []));

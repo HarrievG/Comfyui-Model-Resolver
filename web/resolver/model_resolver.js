@@ -1059,6 +1059,13 @@ export class ModelResolver {
         // Run auto-resolve for 100% matches - returns the updated workflow
         const updatedWorkflow = await this.dialog.autoResolve100Percent();
         
+        return updatedWorkflow;
+    }
+
+    /**
+     * Check if auto-open preference is enabled
+     */
+    isAutoOpenEnabled() {
         return localStorage.getItem('ModelResolver.autoOpenOnMissing') !== 'false';
     }
 

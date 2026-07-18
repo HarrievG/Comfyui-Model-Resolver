@@ -480,15 +480,6 @@ export const missingBrowserMethods = {
         };
     },
 
-    getVisibleMissingModels(missingModels = []) {
-        const resolvedFilteredModels = this.showResolvedModels
-            ? missingModels
-            : missingModels.filter(missing => !this.isMissingModelResolved(missing));
-
-        if (this.showAutoDownloadModels) return resolvedFilteredModels;
-        return resolvedFilteredModels.filter(missing => !this.isAutoDownloadModel(missing));
-    },
-
     isAutoDownloadModel(missing = {}) {
         return Boolean(missing?.auto_download_capable || missing?.auto_download_candidate);
     },

@@ -1187,27 +1187,6 @@ export const downloadTargetMethods = {
         return definition ? (localStorage.getItem(definition.storageKey) || '') : '';
     },
 
-    formatBaseModelMappingsForInput(mappings = {}) {
-        return Object.entries(mappings || {})
-            .map(([key, value]) => `${key}=${value}`)
-            .join('\n');
-    },
-
-    parseBaseModelMappingsInput(value = '') {
-        const mappings = {};
-        String(value || '').split(/\r?\n/).forEach(line => {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('#')) return;
-            const separator = trimmed.includes('=>') ? '=>' : '=';
-            const index = trimmed.indexOf(separator);
-            if (index <= 0) return;
-            const key = trimmed.slice(0, index).trim();
-            const mapped = trimmed.slice(index + separator.length).trim();
-            if (key && mapped) mappings[key] = mapped;
-        });
-        return mappings;
-    },
-
     sanitizeDownloadPathSegment(value = '', fallback = '') {
         let text = String(value || '').trim() || fallback;
         text = text
@@ -2163,10 +2142,6 @@ export const downloadTargetMethods = {
         window.addEventListener('pointerup', releasePointerActive, true);
         window.addEventListener('mouseup', releasePointerActive, true);
         window.addEventListener('blur', clearPointerActive, true);
-    },
-
-    isDropdownListPointerActive(listEl) {
-        return listEl?.dataset?.mlPointerActive === 'true';
     },
 
     isPointerEventInsideElementBounds(event, element, tolerance = 0) {

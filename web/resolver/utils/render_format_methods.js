@@ -22,21 +22,6 @@ export const renderFormatMethods = {
         return ` data-model="${this.escapeHtml(data)}" oncontextmenu="window.MLOpenContextMenu(event, this)"${tooltipAttr}`;
     },
 
-    getContextMenuProps(context = null, tooltip = '') {
-        const data = this.encodeContextMenuModel(context);
-        if (!data) return {};
-        const props = {
-            "data-model": data,
-            oncontextmenu: (event) => {
-                window.MLOpenContextMenu?.(event, event.currentTarget);
-            }
-        };
-        if (tooltip) {
-            props["data-tooltip"] = tooltip;
-        }
-        return props;
-    },
-
     setContextMenuElement(element, context = null, tooltip = '') {
         if (!element) return;
         const data = this.encodeContextMenuModel(context);

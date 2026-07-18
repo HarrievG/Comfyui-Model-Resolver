@@ -1062,45 +1062,6 @@ export const modelInfoMethods = {
         window.open(sourceLink.url, '_blank', 'noopener,noreferrer');
     },
 
-    /**
-     * Open model in CivitAI
-     */
-    async openInCivitAI(model) {
-        if (!model) return;
-
-        const directUrl = this.getKnownCivitaiModelUrl(model);
-        if (directUrl) {
-            window.open(directUrl, '_blank');
-            return;
-        }
-
-        const name = model.name || this.getFilenameFromPath(model.original_path) || '';
-        if (!name) return;
-
-        try {
-            // Search CivitAI for this model using hash (pass resolved_path for hash lookup)
-            const data = await this.fetchJson('/model_resolver/civitai-search', {
-                method: 'POST',
-                body: JSON.stringify({
-                    filename: name,
-                    category: model.category,
-                    resolved_path: model.resolved_path || ''
-                })
-            }, 'Search CivitAI');
-
-            if (data && data.url) {
-                window.open(data.url, '_blank');
-            } else {
-                throw new Error('No URL in search result');
-            }
-        } catch (e) {
-            // Fall back to direct search
-            const searchName = this.stripModelExtension(name);
-            const searchUrl = `https://civitai.com/search?q=${encodeURIComponent(searchName)}`;
-            window.open(searchUrl, '_blank');
-        }
-    },
-
     getKnownCivitaiModelUrl(model = {}) {
         const candidates = [
             model.model_url,
