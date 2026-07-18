@@ -1003,41 +1003,6 @@ def search_huggingface(
     return results
 
 
-def get_repo_files(repo: str, token: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Get list of model files in a HuggingFace repo."""
-    files = []
-
-    try:
-        headers = {}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        items = _get_repo_tree(repo, headers=headers)
-        if items:
-            for item in items:
-                path = item.get("path", "")
-                if path.endswith(
-                    (".safetensors", ".ckpt", ".pt", ".bin", ".pth", ".onnx", ".gguf")
-                ):
-                    url = get_huggingface_download_url(repo, path)
-                    size = extract_file_size(item)
-                    if not size:
-                        size = _fetch_remote_file_size_bytes(url, headers=headers)
-                    files.append(
-                        {
-                            "filename": get_filename_from_path(path),
-                            "path": path,
-                            "url": url,
-                            "size": size,
-                        }
-                    )
-
-    except Exception as e:
-        log.error(f"Error getting repo files: {e}")
-
-    return files
-
-
 def build_huggingface_custom_result(
     url: str,
     expected_filename: str = "",

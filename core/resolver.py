@@ -17,7 +17,6 @@ log = create_module_logger(__name__)
 
 from .matcher import find_matches, strip_known_model_extension
 from .scanner import get_model_files
-from .sources.huggingface import parse_huggingface_url as parse_hf_url
 from .type_utils import MODEL_EXTENSIONS as _MODEL_EXTENSIONS
 from .type_utils import (
     as_dict,
@@ -879,22 +878,6 @@ def extract_workflow_urls(workflow_json: Dict[str, Any]) -> Dict[str, Dict[str, 
     return url_map
 
 
-def get_huggingface_repo_and_file_from_url(url: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Extract HuggingFace repo and path from URL.
-
-    Args:
-        url: HuggingFace URL
-
-    Returns:
-        Tuple of (repo_id, file_path) or (None, None) if not valid
-    """
-    parsed = parse_hf_url(url)
-    if parsed:
-        return parsed.get("repo"), parsed.get("filename")
-    return None, None
-
-
 def analyze_and_find_matches(
     workflow_json: Dict[str, Any],
     similarity_threshold: float = 0.0,
@@ -1320,18 +1303,3 @@ def apply_resolution(
     updated_workflow = update_workflow_nodes(workflow_json, mappings)
 
     return updated_workflow
-
-
-def get_resolution_summary(workflow_json: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Get summary of missing models and matches without applying resolutions.
-
-    This is a convenience method that calls analyze_and_find_matches with defaults.
-
-    Args:
-        workflow_json: Complete workflow JSON dictionary
-
-    Returns:
-        Same format as analyze_and_find_matches
-    """
-    return analyze_and_find_matches(workflow_json)

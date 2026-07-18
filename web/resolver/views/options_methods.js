@@ -1744,6 +1744,7 @@ export const optionsMethods = {
             this.metadataBuildHistoryFilteredCount = filteredItems.length;
             this.metadataBuildHistoryTotalCount = allItems.length;
             this.metadataBuildHistoryFilter = filter;
+            updateMetadataBuildActionFilterControl(filter);
             return counts;
         };
         const renderMetadataBuildActionFilterHeader = (counts = {}, filter = 'all', filteredCount = 0, totalCount = 0) => {

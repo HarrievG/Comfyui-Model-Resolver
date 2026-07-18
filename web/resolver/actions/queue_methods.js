@@ -1238,11 +1238,6 @@ export const queueMethods = {
         });
     },
 
-    renderQueueDownloads(downloads) {
-        this.queueList.innerHTML = this.renderQueueDownloadsHtml(downloads);
-        this.wireDownloadsPanelControls();
-    },
-
     renderQueueDownloadsHtml(downloads) {
         if (!downloads.length) {
             return '<div class="mr-queue-empty">No active downloads.</div>';

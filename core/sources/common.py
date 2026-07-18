@@ -4,12 +4,7 @@ Common utilities and result builder functions for external model metadata source
 
 from typing import Any, Dict, List, Optional
 
-from ..type_utils import build_search_result, normalize_sha256, resolve_model_category
-
-
-def map_category_to_provider_type(category: Any, provider: str = "civitai") -> str:
-    """Map a generic model category or folder name to provider API type string."""
-    return resolve_model_category(category, target_format=provider)
+from ..type_utils import build_search_result, normalize_sha256
 
 
 def normalize_hashes_dict(hashes: Optional[Dict[str, Any]]) -> Dict[str, str]:

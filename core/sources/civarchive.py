@@ -1509,25 +1509,6 @@ def _build_result_from_hash_page_file(
     return result
 
 
-def _resolve_civarchive_model_title_match(
-    model_id: int,
-    title_query: str,
-    base_model_context: Optional[str] = None,
-    prefer_page: bool = False,
-) -> Optional[Dict[str, Any]]:
-    details = get_civarchive_model_details(model_id, prefer_page=prefer_page)
-    if not details:
-        return None
-
-    return _find_model_title_match_in_model_details(
-        model_id=model_id,
-        model_details=details,
-        title_query=title_query,
-        base_model_context=base_model_context,
-    )
-
-
-
 def _build_result_from_payload(
     payload: Dict[str, Any],
     query: str = "",

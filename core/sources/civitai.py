@@ -67,16 +67,6 @@ MAX_CIVITAI_CANDIDATE_LIMIT = 20
 MODEL_TITLE_MATCH_THRESHOLD = 82.0
 
 
-def _is_civitai_host(host: Optional[str]) -> bool:
-    host = str(host or "").lower().strip(".")
-    return (
-        host == "civitai.com"
-        or host.endswith(".civitai.com")
-        or host == "civitai.red"
-        or host.endswith(".civitai.red")
-    )
-
-
 
 
 

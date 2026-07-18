@@ -409,6 +409,7 @@ class ModelResolverExtension:
                 from .core.aria2_installer import Aria2InstallError, install_aria2_engine
                 from .core.downloader import (
                     cancel_download,
+                    clear_completed_downloads,
                     get_all_progress,
                     get_aria2_status,
                     get_download_directory,
@@ -2829,11 +2830,6 @@ class ModelResolverExtension:
             def _custom_result_timestamp():
                 return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-            def _quote_url_path(value):
-                from urllib.parse import quote as _quote
-
-                return _quote(str(value or "").replace("\\", "/"), safe="/")
-
 
 
 
@@ -4570,6 +4566,13 @@ class ModelResolverExtension:
                     result = resume_download(download_id)
                     status = 200 if result.get("success") else 400
                     return web.json_response(result, status=status)
+
+                @routes.post("/model_resolver/clear_completed_downloads")
+                @json_api_endpoint("clear_completed_downloads", return_success_on_error=True)
+                async def clear_completed_downloads_route(request):
+                    """Clear completed and failed downloads from progress memory."""
+                    clear_completed_downloads()
+                    return web.json_response({"success": True})
 
                 @routes.get("/model_resolver/aria2/status")
                 @routes.post("/model_resolver/aria2/status")

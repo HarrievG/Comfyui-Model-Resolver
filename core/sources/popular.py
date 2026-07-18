@@ -193,11 +193,6 @@ def search_popular_models(query: str, limit: int = 10) -> List[Dict[str, Any]]:
     return results
 
 
-def get_all_popular_models() -> Dict[str, Any]:
-    """Get all popular models."""
-    return _load_popular_models().copy()
-
-
 def reload_databases():
     """Force reload of all databases."""
     global _popular_models_cache, _model_aliases_cache, _base_models_aliases_cache, _raw_base_models_cache
