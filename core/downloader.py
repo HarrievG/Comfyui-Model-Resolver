@@ -1425,7 +1425,7 @@ def _run_huggingface_xet_transfer(
                 xet_transfers.pop(progress_adapter.download_id, None)
         return
 
-    supports_detailed_progress = all(
+    supports_detailed_progress = refresh_xet_connection_info is not None and all(
         hasattr(hf_xet, name)
         for name in (
             "PyItemProgressUpdate",
