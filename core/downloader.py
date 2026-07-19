@@ -1380,7 +1380,7 @@ def _run_huggingface_xet_transfer(
     try:
         from huggingface_hub.utils import refresh_xet_connection_info
     except ImportError:
-        refresh_xet_connection_info = lambda *a, **kw: None
+        refresh_xet_connection_info = None
 
     supports_session_progress = all(
         hasattr(hf_xet, name)
